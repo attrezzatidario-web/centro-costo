@@ -130,3 +130,22 @@
 .tbl td.ed:hover::after { content: ""; }
 .cell-in { height: 34px !important; min-height: 34px !important; padding: 4px 8px; font-size: 14px !important; border-radius: 8px; border-color: var(--accent); text-align: right; min-width: 90px; }
 select.cell-in { text-align: left; min-width: 150px; padding-right: 28px; }
+
+/* =========================================================
+   SPLASH — S.V.CAR che diventa il logo
+   ========================================================= */
+.spx { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer; --wm: #3362ab; }
+.spx-bg { position: absolute; inset: 0; background: radial-gradient(120% 80% at 50% 42%, var(--surface) 0%, var(--bg) 70%); }
+.spx-stage { position: relative; display: grid; justify-items: center; width: min(560px, 90vw); transform-origin: 0 0; will-change: transform; }
+.spx-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.spx-l.b { fill: var(--wm); }
+.spx-l.r, .spx-m { fill: #e22726; }
+.spx-m { stroke: #e22726; stroke-linejoin: round; stroke-width: 0; }
+.spx-l { transform-box: fill-box; transform-origin: 50% 50%; }
+#spx-ic, #spx-sq, #spx-ring, #spx-hand, #spx-slice, .spx-m { opacity: 0; }
+#spx-sq { transform-box: fill-box; transform-origin: 50% 50%; }
+#spx-ring, #spx-hand { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.spx-t { display: grid; justify-items: center; gap: 4px; margin-top: -18px; opacity: 0; }
+.spx-t b { font-size: clamp(20px, 5.4vw, 26px); font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
+.spx-t span { font-size: 11.5px; font-weight: 600; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
+@media (prefers-color-scheme: dark) { .spx { --wm: #6d93db; } }

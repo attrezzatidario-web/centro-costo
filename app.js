@@ -946,7 +946,87 @@
 
   bind();
   start();
-  const sp = $('#splash');
-  setTimeout(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 500); }, reduced() ? 0 : 1100);
+  intro();
+
+  /* ================= Splash: S.V.CAR → logo ================= */
+  function intro() {
+    const sp = $('#splash'); if (!sp) return;
+    const q = id => document.getElementById('spx-' + id);
+    const E = {
+      out3: t => 1 - Math.pow(1 - t, 3), out5: t => 1 - Math.pow(1 - t, 5), in3: t => t * t * t,
+      io: t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+      back: t => { const c = 1.55; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+    };
+    let skip = false, t0 = performance.now();
+    const tw = (delay, dur, ease, fn) => new Promise(res => {
+      const step = now => {
+        if (skip) { fn(1); return res(); }
+        const k = Math.min(1, Math.max(0, (now - t0 - delay) / dur));
+        if (now - t0 >= delay) fn(ease(k));
+        k < 1 ? requestAnimationFrame(step) : res();
+      };
+      requestAnimationFrame(step);
+    });
+    const lerp = (a, b, k) => a + (b - a) * k;
+    const letters = ['S', 'C', 'A', 'R'].map(q), V = q('V'), Ln = q('L'), dots = [q('D1'), q('D2')];
+    const ic = q('ic'), sq = q('sq'), ring = q('ring'), hand = q('hand'), slice = q('slice');
+    const title = $('.spx-t', sp), stage = $('.spx-stage', sp), bg = $('.spx-bg', sp);
+
+    // campiona una forma in N punti nel sistema dell'SVG
+    const N = 140;
+    const sample = (el, sx, sy, tx, ty) => { const L = el.getTotalLength(), pts = []; for (let i = 0; i < N; i++) { const p = el.getPointAtLength(L * i / N); pts.push([p.x * sx + tx, p.y * sy + ty]); } return pts; };
+    const area = P => P.reduce((a, p, i) => { const n = P[(i + 1) % P.length]; return a + p[0] * n[1] - n[0] * p[1]; }, 0);
+    const align = (A, B) => { if (Math.sign(area(A)) !== Math.sign(area(B))) B = B.slice().reverse(); let best = 0, bd = Infinity; for (let o = 0; o < N; o += 2) { let d = 0; for (let i = 0; i < N; i += 4) { const b = B[(i + o) % N]; d += (A[i][0] - b[0]) ** 2 + (A[i][1] - b[1]) ** 2; } if (d < bd) { bd = d; best = o; } } return B.map((_, i) => B[(i + best) % N]); };
+    const poly = (A, B, k) => 'M' + A.map((a, i) => `${lerp(a[0], B[i][0], k).toFixed(2)} ${lerp(a[1], B[i][1], k).toFixed(2)}`).join('L') + 'Z';
+    const set = (el, o) => Object.entries(o).forEach(([k, v]) => (el.style[k] = v));
+
+    const finish = () => {
+      if (finish.done) return; finish.done = true;
+      const target = [...$$('.nav .brand img, .top-logo')].find(e => e.offsetParent && e.getBoundingClientRect().width > 0);
+      const a = ic.getBoundingClientRect(), dur = reduced() ? 1 : 620;
+      title.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(6px)' }], { duration: dur * .45, fill: 'forwards' });
+      bg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur, delay: dur * .25, easing: 'ease', fill: 'forwards' });
+      if (target && a.width) {
+        const b = target.getBoundingClientRect(), w = stage.getBoundingClientRect(), s = b.width / a.width;
+        const tx = b.left - w.left - (a.left - w.left) * s, ty = b.top - w.top - (a.top - w.top) * s;
+        stage.animate([{ transform: 'none' }, { transform: `translate(${tx}px,${ty}px) scale(${s})` }], { duration: dur, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'forwards' });
+      } else stage.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(1.04)' }], { duration: dur, fill: 'forwards' });
+      setTimeout(() => sp.remove(), dur + 80);
+    };
+    sp.addEventListener('click', () => { skip = true; });
+
+    if (reduced()) { ['wm'].forEach(id => (q(id).style.opacity = 0)); set(ic, { opacity: 1 }); [sq, ring, hand, slice].forEach(e => set(e, { opacity: 1, strokeDashoffset: 0, transform: 'none' })); sq.setAttribute('rx', 116); set(title, { opacity: 1 }); return setTimeout(finish, 500); }
+
+    // 1 · comparsa del marchio
+    letters.forEach((el, i) => { set(el, { opacity: 0 }); tw(80 + i * 75, 650, E.out5, k => set(el, { opacity: k, transform: `translateY(${(1 - k) * 9}px)` })); });
+    set(V, { opacity: 0 }); tw(260, 520, E.out3, k => set(V, { opacity: k, transform: `translateY(${(1 - k) * -10}px) scale(${.8 + .2 * k})` }));
+    const sw = q('sweep-r'); tw(420, 620, E.io, k => sw.setAttribute('width', 130 * k));
+    dots.forEach((d, i) => { set(d, { opacity: 0 }); tw(820 + i * 90, 420, E.back, k => set(d, { opacity: Math.min(1, k * 2), transform: `scale(${k})` })); });
+    const sh = q('shine'); tw(1050, 650, E.io, k => { sh.setAttribute('opacity', .9); sh.setAttribute('x', lerp(-160, 620, k)); });
+
+    // 2 · il marchio si raccoglie nel logo
+    const wm = q('wm'), cx = (300 + 61.5) / 3, cy = (150 + 83.6) / 3;
+    const T2 = 1850;
+    letters.concat(dots).forEach((el, i) => {
+      const b = el.getBBox(), dx = cx - (b.x + b.width / 2), dy = cy - (b.y + b.height / 2);
+      tw(T2 + i * 25, 520, E.in3, k => set(el, { transform: `translate(${dx * k}px,${dy * k}px) scale(${1 - .85 * k})`, opacity: 1 - k }));
+    });
+    const tgt = sample(slice, .3125, .3125, 220, 70);
+    const s1 = sample(Ln, 3, 3, -61.5, -83.6), s2 = sample(V, 3, 3, -61.5, -83.6);
+    const t1 = align(s1, tgt), t2 = align(s2, tgt);
+    const m1 = q('m1'), m2 = q('m2');
+    tw(T2 + 60, 760, E.io, k => {
+      if (k > 0) { Ln.style.opacity = 0; V.style.opacity = 0; m1.style.opacity = 1; m2.style.opacity = 1 - k * .9; }
+      m1.setAttribute('d', poly(s1, t1, k)); m2.setAttribute('d', poly(s2, t2, k)); m1.style.strokeWidth = m2.style.strokeWidth = (8.1 * k).toFixed(2);
+    });
+    set(ic, { opacity: 1 });
+    tw(T2 + 220, 700, E.back, k => { set(sq, { opacity: Math.min(1, k * 3), transform: `scale(${Math.max(0, k)})` }); sq.setAttribute('rx', lerp(256, 116, Math.min(1, Math.max(0, k)))); });
+    tw(T2 + 820, 10, E.out3, () => { set(slice, { opacity: 1 }); m1.style.opacity = 0; m2.style.opacity = 0; });
+    tw(T2 + 640, 620, E.io, k => set(ring, { opacity: 1, strokeDashoffset: 1 - k }));
+    tw(T2 + 860, 420, E.out3, k => set(hand, { opacity: 1, strokeDashoffset: 1 - k }));
+    tw(T2 + 1000, 600, E.out5, k => set(title, { opacity: k, transform: `translateY(${(1 - k) * 12}px)` }))
+      .then(() => setTimeout(finish, skip ? 0 : 650));
+    void wm;
+  }
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

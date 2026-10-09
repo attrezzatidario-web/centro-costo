@@ -1,5 +1,5 @@
 /* Centro di Costo — service worker: app utilizzabile anche offline */
-const CACHE = 'centro-costo-v3';
+const CACHE = 'centro-costo-v4';
 const SHELL = ['./', 'index.html', 'style.css', 'cdc.css', 'app.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'logo.svg'];
 
 self.addEventListener('install', e => {
