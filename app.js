@@ -370,7 +370,7 @@
     fillFilters();
     const list = filtered();
     const T = sumT(list);
-    sub(soc ? soc : '');
+    sub(isDesk() ? 'Clic su prezzo, quantità, centro o categoria per modificarli al volo' : (soc || ''));
     $('#m-count').textContent = `${fmtNum(list.length, 0)} righe`;
     countTo($('#m-sum'), T);
     // con data prima (più recenti), poi senza data nell'ordine di inserimento
@@ -385,7 +385,7 @@
     if (isDesk()) {
       $('#m-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th>Descrizione</th><th>Centro</th><th>Categoria</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">Totale</th></tr></thead><tbody>${shown.map(r => {
         const z = !num(r.prezzo);
-        return `<tr data-id="${esc(r.id)}"><td><div class="tcell">${ccIc(r.centro)}<div class="tt"><b>${esc(r.descrizione)}</b><small>${[r.codice ? 'Cod. ' + r.codice : '', r.ndoc ? 'Doc. ' + r.ndoc : '', shortDate(r.data), r.fornitore].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div></div></td><td class="m2">${esc(r.centro || '—')}</td><td><span class="chip">${esc(r.categoria || 'Altro')}</span></td><td class="num">${qtyFmt(r.quantita)} <span class="muted small">${esc(r.um || '')}</span></td><td class="num">${z ? '<span class="chip soon">mancante</span>' : eurP(r.prezzo)}</td><td class="num amt">${eur(tot(r))}</td></tr>`;
+        return `<tr data-id="${esc(r.id)}"><td><div class="tcell">${ccIc(r.centro)}<div class="tt"><b>${esc(r.descrizione)}</b><small>${[r.codice ? 'Cod. ' + r.codice : '', r.ndoc ? 'Doc. ' + r.ndoc : '', shortDate(r.data), r.fornitore].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div></div></td><td class="m2 ed" data-ed="centro" title="Clic per cambiare">${esc(r.centro || '—')}</td><td class="ed" data-ed="categoria" title="Clic per cambiare"><span class="chip">${esc(r.categoria || 'Altro')}</span></td><td class="num ed" data-ed="quantita" title="Clic per modificare">${qtyFmt(r.quantita)} <span class="muted small">${esc(r.um || '')}</span></td><td class="num ed" data-ed="prezzo" title="Clic per modificare">${z ? '<span class="chip soon">mancante</span>' : eurP(r.prezzo)}</td><td class="num amt">${eur(tot(r))}</td></tr>`;
       }).join('')}</tbody></table></div>${more}`;
     } else {
       $('#m-list').innerHTML = `<div class="day">${shown.map(itemHtml).join('')}</div>${more}`;
@@ -471,8 +471,8 @@
         ${x.var > 0.02 ? `<div><span>Variazione prezzo</span><strong class="up">${eurP(x.min)} → ${eurP(x.max)} (+${fmtNum(x.var * 100, 0)}%)</strong></div>` : ''}
       </div>
       <div class="hist"><div class="muted small" style="margin-bottom:4px">${rows.length} acquisti</div>${rows.map(r => `<div class="item" data-id="${esc(r.id)}" style="cursor:pointer">${ccIc(r.centro)}<div class="main"><div class="t">${esc(r.centro)}</div><div class="s">${qtyFmt(r.quantita)} × ${num(r.prezzo) ? eurP(r.prezzo) : 'prezzo mancante'}${r.data && validD(r.data) ? ' · ' + esc(shortDate(r.data)) : ''}${r.ndoc ? ' · Doc. ' + esc(r.ndoc) : ''}</div></div><div class="amt">${eur(tot(r))}</div></div>`).join('')}</div>`,
-      null, null, 'Chiudi');
-    $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
+      null, null, 'Modifica articolo');
+    $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = () => { closeSheet(); setTimeout(() => formArt(k), 250); };
   }
 
   /* ================= ASSISTENTE ================= */
@@ -780,6 +780,71 @@
       }, null, 'Aggiungi righe');
   }
 
+  /* ---------- Modifica veloce in tabella ---------- */
+  function inlineEdit(td) {
+    const id = td.closest('tr').dataset.id, f0 = td.dataset.ed;
+    const r = db.movimenti.find(x => String(x.id) === id); if (!r) return;
+    let el;
+    if (f0 === 'centro' || f0 === 'categoria') {
+      el = document.createElement('select');
+      el.innerHTML = opt(f0 === 'centro' ? centri() : categorie(), r[f0] || (f0 === 'categoria' ? 'Altro' : ''));
+    } else {
+      el = document.createElement('input');
+      el.inputMode = 'decimal'; el.value = num(r[f0]) ? String(num(r[f0])).replace('.', ',') : ''; el.placeholder = '0,00';
+    }
+    el.className = 'cell-in';
+    td.innerHTML = ''; td.appendChild(el); el.focus(); if (el.select) el.select();
+    let done = false;
+    const commit = keep => {
+      if (done) return; done = true;
+      if (!keep) return renderMov();
+      const v = f0 === 'centro' || f0 === 'categoria' ? el.value : num(el.value);
+      if (String(v) === String(f0 === 'centro' || f0 === 'categoria' ? r[f0] : num(r[f0]))) return renderMov();
+      const row = { ...r, [f0]: v };
+      if (f0 === 'centro' && v === 'ATTREZZATI') row.societa = 'Attrezzati';
+      write([{ action: 'upsert', sheet: 'Movimenti', row }]);
+      toast(f0 === 'prezzo' ? 'Prezzo aggiornato' : f0 === 'quantita' ? 'Quantità aggiornata' : 'Salvato');
+    };
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(true); } if (e.key === 'Escape') commit(false); });
+    el.addEventListener('blur', () => commit(true));
+    if (el.tagName === 'SELECT') el.addEventListener('change', () => commit(true));
+  }
+
+  /* ---------- Modifica articolo (tutte le righe) ---------- */
+  function formArt(k) {
+    const x = articoli(db.movimenti).find(z => z.k === k); if (!x) return;
+    const last = [...x.rows].reverse().find(r => num(r.prezzo) > 0);
+    const zero = x.rows.filter(r => !num(r.prezzo)).length;
+    const cat = x.rows[x.rows.length - 1].categoria || autoCat(x.desc);
+    openSheet('Modifica articolo', `
+      <div class="ai-note">Le modifiche valgono per ${x.n === 1 ? 'l\'unica riga' : 'tutte le ' + x.n + ' righe'} di questo articolo</div>
+      <label class="f"><span>Descrizione</span><input name="descrizione" required data-focus value="${esc(x.desc)}"></label>
+      <div class="f-row">
+        <label class="f"><span>Codice articolo</span><input name="codice" value="${esc(x.codice)}"></label>
+        <label class="f"><span>Unità</span><select name="um">${opt(UM, x.um || 'PZ')}</select></label>
+      </div>
+      <label class="f"><span>Categoria</span><select name="categoria">${opt(categorie(), cat)}</select></label>
+      <div class="f-row">
+        <label class="f"><span>Nuovo prezzo unit. €</span><input name="prezzo" inputmode="decimal" value="${last ? esc(String(num(last.prezzo)).replace('.', ',')) : ''}" placeholder="0,00"></label>
+        <label class="f"><span>Applica il prezzo a</span><select name="dove">
+          <option value="no">Non cambiare i prezzi</option>
+          <option value="tutte">Tutte le righe</option>
+          ${zero ? `<option value="zero"${zero ? ' selected' : ''}>Solo righe senza prezzo (${zero})</option>` : ''}
+        </select></label>
+      </div>`,
+      fd => {
+        const desc = String(fd.get('descrizione')).trim(); if (!desc) return toast('Inserisci la descrizione');
+        const p = num(fd.get('prezzo')), dove = fd.get('dove');
+        const ops = x.rows.map(r => {
+          const row = { ...r, descrizione: desc, codice: String(fd.get('codice')).trim(), um: fd.get('um'), categoria: fd.get('categoria') };
+          if (dove === 'tutte' || (dove === 'zero' && !num(r.prezzo))) row.prezzo = p;
+          return { action: 'upsert', sheet: 'Movimenti', row };
+        });
+        write(ops); toast(`Articolo aggiornato su ${ops.length} righe`);
+        return true;
+      });
+  }
+
   /* ================= Eventi ================= */
   function bind() {
     window.addEventListener('hashchange', go);
@@ -800,6 +865,8 @@
       if (t.closest('#k-zero-card')) { Object.assign(f, { q: '', centro: '', cat: '', per: 'zero' }); location.hash = 'movimenti'; return; }
       const bc = t.closest('.bar-row[data-centro], .cc-card[data-centro]'); if (bc) { Object.assign(f, { q: '', cat: '', per: '', centro: bc.dataset.centro }); mLimit = 150; location.hash = 'movimenti'; return; }
       const bk = t.closest('.bar-row[data-cat]'); if (bk) { Object.assign(f, { q: '', centro: '', per: '', cat: bk.dataset.cat }); mLimit = 150; location.hash = 'movimenti'; return; }
+      const ed = t.closest('td.ed'); if (ed && !ed.querySelector('input,select')) { inlineEdit(ed); return; }
+      if (t.closest('td.ed')) return;
       const it = t.closest('[data-id]'); if (it && !t.closest('#sheet-body')) { const r = db.movimenti.find(x => String(x.id) === it.dataset.id); if (r) formMov(r); return; }
       if (it && t.closest('#sheet-body')) { const r = db.movimenti.find(x => String(x.id) === it.dataset.id); if (r) { closeSheet(); setTimeout(() => formMov(r), 250); } return; }
       const ar = t.closest('[data-art]'); if (ar) { openArt(ar.dataset.art); return; }

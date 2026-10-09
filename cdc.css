@@ -13,7 +13,7 @@
 
 .k-txt { font-size: 20px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (min-width: 900px) { .k-txt { font-size: 24px !important; } }
-.warn-ic { background: var(--warn-soft) !important; color: var(--warn) !important; }
+.warn-ic { background: var(--danger-soft) !important; color: var(--danger) !important; }
 
 /* barre con percentuale */
 .bar-top em { font-style: normal; color: var(--muted); font-weight: 500; margin-left: 6px; font-size: 12px; }
@@ -49,7 +49,7 @@
 @media (min-width: 640px) { .cc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1200px) { .cc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .cc-card { cursor: pointer; display: grid; gap: 10px; transition: transform .15s var(--out), box-shadow .2s; }
-@media (hover: hover) { .cc-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(17, 24, 39, .07); } }
+@media (hover: hover) { .cc-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(34, 34, 34, .07); } }
 .cc-top { display: flex; align-items: center; gap: 12px; }
 .cc-top .ic { width: 42px; height: 42px; border-radius: 12px; font-size: 13px; }
 .cc-top h3 { font-size: 16px; }
@@ -123,3 +123,10 @@
 .view { grid-template-columns: minmax(0, 1fr); }
 .view > * { min-width: 0; }
 .day { overflow: hidden; }
+
+/* modifica veloce in tabella */
+.tbl td.ed { cursor: text; }
+.tbl td.ed:hover { box-shadow: inset 0 0 0 1px var(--line); border-radius: 8px; }
+.tbl td.ed:hover::after { content: ""; }
+.cell-in { height: 34px !important; min-height: 34px !important; padding: 4px 8px; font-size: 14px !important; border-radius: 8px; border-color: var(--accent); text-align: right; min-width: 90px; }
+select.cell-in { text-align: left; min-width: 150px; padding-right: 28px; }
