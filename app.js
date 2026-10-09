@@ -34,7 +34,10 @@
     return 'Altro';
   }
 
-  let url = LS.get('cdc_url', '');
+  // collegamento fisso al Foglio Google: niente schermata iniziale
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxExGwxVNa08xHz1zp2BmoGkvT1LX7jj-yfdbzbWckqOBsMxPsISmDdKgDmx4uqwRiW/exec';
+  let url = SCRIPT_URL;
+  LS.set('cdc_url', url);
   let db = LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
@@ -893,7 +896,6 @@
     $('#chat-q').addEventListener('input', e => { e.target.style.height = ''; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
 
     $('#s-pull').onclick = () => pull(true);
-    $('#s-unlink').onclick = () => { if (!confirm('Scollegare l\'app? I dati restano sul Foglio Google.')) return; url = ''; LS.set('cdc_url', ''); db = { movimenti: [], config: {}, ai: false }; queue = []; save(); start(); };
     $('#s-key-go').onclick = async () => {
       const k = $('#s-key').value.trim(); if (!k) return;
       try { busy('Salvo la chiave…'); await api('setKey', { key: k }); db.ai = true; save(); $('#s-key').value = ''; toast('Chiave Gemini salvata'); render(); } catch (e) { toast(e.message); } finally { busy(); }
