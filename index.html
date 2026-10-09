@@ -15,8 +15,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=4">
-  <link rel="stylesheet" href="cdc.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="cdc.css?v=5">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -125,7 +125,15 @@
 
       <!-- CENTRI -->
       <section id="v-centri" class="view" data-v="centri" hidden>
-        <div class="cc-grid" id="c-grid"></div>
+        <div class="soc-bar" id="c-soc"></div>
+        <div class="cc-dash">
+          <div class="card cc-mapcard">
+            <div class="cc-hero" id="c-hero"></div>
+            <div class="cc-map" id="c-map"></div>
+          </div>
+          <div class="card cc-rankcard"><div class="card-h"><h3>Classifica centri</h3><span class="muted small">tocca per il dettaglio</span></div><div class="cc-rank" id="c-rank"></div><div class="cc-ins" id="c-ins"></div></div>
+        </div>
+        <div class="card cc-focus" id="c-focus"></div>
         <div class="card"><div class="card-h"><h3>Confronto per categoria</h3><span class="muted small">importi per centro</span></div><div class="mx-wrap" id="c-matrix"></div></div>
       </section>
 
@@ -213,6 +221,6 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
