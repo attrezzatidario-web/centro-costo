@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Centro di Costo</title>
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Centro di Costo">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="cdc.css?v=1">
+</head>
+<body>
+  <div id="splash" class="splash" aria-hidden="true">
+    <svg viewBox="0 0 512 512" class="sp-logo">
+      <rect class="sp-bg" width="512" height="512" rx="116"/>
+      <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+        <path class="sp-d sp-1" pathLength="1" d="M248 144 A120 120 0 1 0 368 264" stroke-width="34"/>
+        <path class="sp-d sp-2" pathLength="1" d="M248 144 V264 H368" stroke-width="22"/>
+        <path class="sp-d sp-3" pathLength="1" d="M290 222 V108 A114 114 0 0 1 404 222 Z" stroke-width="26"/>
+      </g>
+    </svg>
+    <div class="sp-name">Centro di Costo</div>
+  </div>
+
+  <!-- Collegamento -->
+  <section id="setup" class="setup" hidden>
+    <div class="setup-card">
+      <img src="logo.svg" alt="Centro di Costo" width="64" height="64">
+      <h1>Centro di Costo</h1>
+      <p class="muted">Incolla l'URL dell'App web di Google Apps Script per salvare i dati sul tuo Foglio Google.</p>
+      <input id="setup-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      <button id="setup-go" class="btn primary block">Collega</button>
+      <p id="setup-err" class="err" hidden></p>
+      <button id="setup-local" class="btn ghost block">Usa solo su questo dispositivo</button>
+    </div>
+  </section>
+
+  <div id="app" class="app" hidden>
+    <nav class="nav">
+      <div class="brand"><img src="logo.svg" alt="" width="34" height="34"><div><strong>Centro di Costo</strong><span>Soluzione Veicolare</span></div></div>
+      <a href="#home" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5"/></svg><span>Home</span></a>
+      <a href="#movimenti" data-view="movimenti"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Movimenti</span></a>
+      <a href="#centri" data-view="centri"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>Centri</span></a>
+      <a href="#articoli" data-view="articoli"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>Articoli</span></a>
+      <a href="#assistente" data-view="assistente"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span>Assistente</span></a>
+      <a href="#impostazioni" data-view="impostazioni" class="nav-desk"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Impostazioni</span></a>
+      <div class="nav-foot"><span id="sync-side" class="sync"></span></div>
+    </nav>
+
+    <main>
+      <header class="top">
+        <div class="top-l"><img class="top-logo" src="logo.svg" alt="Centro di Costo" width="32" height="32"><div><h2 id="title">Home</h2><span id="subtitle" class="subtitle"></span></div></div>
+        <div class="top-r">
+          <span id="sync" class="sync" title="Stato sincronizzazione"></span>
+          <button id="add-top" class="btn primary only-desk btn-ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Nuovo movimento</span></button>
+          <button id="gear" class="icon-btn mob-only" aria-label="Impostazioni"><svg viewBox="0 0 24 24" class="gear-ic"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+        </div>
+      </header>
+
+      <!-- HOME -->
+      <section id="v-home" class="view" data-v="home" hidden>
+        <div class="soc-bar" id="h-soc"></div>
+        <div class="kpis">
+          <div class="card kpi"><div class="kpi-h"><span class="label">Totale speso</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M17 6.5A7 7 0 1 0 17 17.5M4 10h9M4 14h9"/></svg></span></div><div class="big" id="k-tot">0 €</div><span class="muted small" id="k-tot-s"></span></div>
+          <div class="card kpi link-card" data-go="centri"><div class="kpi-h"><span class="label">Centro più costoso</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span></div><div class="big k-txt" id="k-top">—</div><span class="muted small" id="k-top-s"></span></div>
+          <div class="card kpi link-card" data-go="articoli"><div class="kpi-h"><span class="label">Articoli distinti</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></span></div><div class="big" id="k-art">0</div><span class="muted small" id="k-art-s"></span></div>
+          <div class="card kpi link-card" id="k-zero-card"><div class="kpi-h"><span class="label">Righe senza prezzo</span><span class="kpi-ic warn-ic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></svg></span></div><div class="big" id="k-zero">0</div><span class="muted small">da completare</span></div>
+        </div>
+        <div class="home-grid">
+          <div class="col-main">
+            <div class="card"><div class="card-h"><h3>Spesa per centro di costo</h3><a class="link" href="#centri">Dettaglio</a></div><div class="bars" id="h-centri"></div></div>
+            <div class="card"><div class="card-h"><h3>Spesa per categoria</h3><span class="muted small" id="h-cat-n"></span></div><div class="bars" id="h-cat"></div></div>
+            <div class="card" id="h-trend-card"><div class="card-h"><h3>Andamento mensile</h3><span class="muted small" id="h-trend-s"></span></div><div class="mbars" id="h-trend"></div></div>
+          </div>
+          <div class="col-side">
+            <div class="card" id="h-ai"></div>
+            <div class="card"><div class="card-h"><h3>Voci più costose</h3><a class="link" href="#movimenti">Tutti</a></div><div class="list" id="h-top"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MOVIMENTI -->
+      <section id="v-movimenti" class="view" data-v="movimenti" hidden>
+        <div class="filters f4">
+          <input id="f-q" type="search" placeholder="Cerca descrizione, codice, documento…">
+          <select id="f-centro"></select>
+          <select id="f-cat"></select>
+          <select id="f-per"></select>
+        </div>
+        <div class="sum-row"><span class="muted small" id="m-count"></span><strong id="m-sum">0 €</strong></div>
+        <div id="m-list"></div>
+      </section>
+
+      <!-- CENTRI -->
+      <section id="v-centri" class="view" data-v="centri" hidden>
+        <div class="cc-grid" id="c-grid"></div>
+        <div class="card"><div class="card-h"><h3>Confronto per categoria</h3><span class="muted small">importi per centro</span></div><div class="mx-wrap" id="c-matrix"></div></div>
+      </section>
+
+      <!-- ARTICOLI -->
+      <section id="v-articoli" class="view" data-v="articoli" hidden>
+        <div class="filters f3">
+          <input id="a-q" type="search" placeholder="Cerca articolo o codice…">
+          <select id="a-sort">
+            <option value="tot">Ordina per spesa</option>
+            <option value="qty">Ordina per quantità</option>
+            <option value="var">Prima i prezzi variati</option>
+            <option value="n">Ordina per n. acquisti</option>
+          </select>
+          <select id="a-centro"></select>
+        </div>
+        <div class="sum-row"><span class="muted small" id="a-count"></span><span class="chip soon" id="a-var" hidden></span></div>
+        <div id="a-list"></div>
+      </section>
+
+      <!-- ASSISTENTE -->
+      <section id="v-assistente" class="view" data-v="assistente" hidden>
+        <div class="chat card">
+          <div class="chat-log" id="chat-log"></div>
+          <form class="chat-in" id="chat-form" autocomplete="off">
+            <textarea id="chat-q" rows="1" placeholder="Chiedi qualcosa sui costi…"></textarea>
+            <button class="chat-send" aria-label="Invia"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+          </form>
+        </div>
+      </section>
+
+      <!-- IMPOSTAZIONI -->
+      <section id="v-impostazioni" class="view" data-v="impostazioni" hidden>
+        <div class="grid-2 settings-grid">
+          <div class="card">
+            <h3>Collegamento</h3>
+            <div class="kv" id="s-conn"></div>
+            <div class="row-btns" style="margin-top:12px"><button class="btn sm" id="s-pull">Aggiorna dati</button><button class="btn sm danger-ghost" id="s-unlink">Scollega</button></div>
+          </div>
+          <div class="card">
+            <h3 class="ai-title"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Intelligenza artificiale</h3>
+            <p class="muted small" id="s-ai-st"></p>
+            <div class="inline-add"><input id="s-key" type="password" placeholder="Chiave API Gemini"><button class="btn primary" id="s-key-go">Salva</button></div>
+            <button class="btn sm" id="s-classify">Classifica con IA le voci in «Altro»</button>
+          </div>
+          <div class="card">
+            <h3>Importa da Excel</h3>
+            <p class="muted small" style="margin:4px 0 12px">Carica l'export (fogli «SOLUZIONE VEICOLARE» e «ATTREZZATI»): categorie assegnate in automatico.</p>
+            <div class="row-btns"><button class="btn primary sm" id="s-imp-add">Aggiungi righe</button><button class="btn sm" id="s-imp-rep">Sostituisci tutto</button><button class="btn sm" id="s-exp">Esporta CSV</button></div>
+          </div>
+          <div class="card">
+            <h3>Budget annuale per centro</h3>
+            <p class="muted small" style="margin:4px 0 12px">Lascia vuoto per non usare il budget.</p>
+            <div id="s-budget"></div>
+          </div>
+          <div class="card">
+            <h3>Centri di costo</h3>
+            <div class="inline-add" style="margin-top:10px"><input id="s-cc-in" placeholder="Nuovo centro"><button class="btn" id="s-cc-add">Aggiungi</button></div>
+            <div class="chips" id="s-cc"></div>
+          </div>
+          <div class="card">
+            <h3>Categorie</h3>
+            <div class="inline-add" style="margin-top:10px"><input id="s-cat-in" placeholder="Nuova categoria"><button class="btn" id="s-cat-add">Aggiungi</button></div>
+            <div class="chips" id="s-cat"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <button id="fab" class="fab" aria-label="Nuovo movimento"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-bg" data-close></div>
+    <form id="sheet-form" class="sheet-panel" autocomplete="off">
+      <div class="sheet-h">
+        <h3 id="sheet-title"></h3>
+        <button type="button" class="icon-btn" data-close aria-label="Chiudi">✕</button>
+      </div>
+      <div id="sheet-body"></div>
+      <div class="sheet-f" id="sheet-f">
+        <button type="button" id="sheet-del" class="btn danger-ghost" hidden>Elimina</button>
+        <button type="submit" class="btn primary" id="sheet-ok">Salva</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js?v=1"></script>
+</body>
+</html>
