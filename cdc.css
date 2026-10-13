@@ -468,3 +468,6 @@ body.has-sel .fab { display: none; }
 .th-seg button.on svg { transform: scale(1.12) rotate(-8deg); }
 .th-seg i { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 16px) / 3); border-radius: 10px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.06); transform: translateX(calc(var(--i, 0) * (100% + 4px))); transition: transform .4s var(--spring); }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .35s; }
+.a-cnt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lb-m { display: none; }
+@media (max-width: 639px) { .lb-d { display: none; } .lb-m { display: inline; } }

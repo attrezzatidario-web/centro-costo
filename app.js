@@ -230,12 +230,11 @@
   const a = { q: '', sort: 'tot', centro: '' };
   let mLimit = 150, aLimit = 120;
   const sel = new Set(); let selMode = false;
-  let chat = LS.get('cdc_chat', []);
 
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Home', movimenti: 'Movimenti', centri: 'Centri di costo', articoli: 'Articoli', assistente: 'Assistente IA', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Home', movimenti: 'Movimenti', articoli: 'Articoli', impostazioni: 'Impostazioni' };
   function go() {
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
@@ -243,7 +242,7 @@
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'assistente' || view === 'impostazioni';
+    $('#fab').hidden = view === 'impostazioni';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -272,7 +271,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderHome, movimenti: renderMov, centri: renderCentri, articoli: renderArt, assistente: renderChat, impostazioni: renderSettings }[view];
+    const fn = { home: renderHome, movimenti: renderMov, articoli: renderArt, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -313,7 +312,8 @@
     countTo($('#k-zero'), zero, v => fmtNum(Math.round(v), 0));
     { const n = priceSuggest().out.length; $('#k-zero-s').textContent = n ? `${n} completabili in automatico` : 'da completare'; }
 
-    renderDash($('#v-home'), {});
+    renderDash($('#v-home'), { matrix: true });
+    $$('.k-ivalbl').forEach(e => (e.textContent = ivaLbl()));
 
     const byK = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => ({ k, v: sumT(v) })).sort((x, y) => y.v - x.v);
     $('#h-cat').innerHTML = barRows(byK, T, { click: 'cat' });
@@ -779,58 +779,6 @@
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = () => { closeSheet(); setTimeout(() => formArt(k), 250); };
   }
 
-  /* ================= ASSISTENTE ================= */
-  const QS = ['Quale centro spende di più e in cosa?', 'Quali articoli hanno avuto aumenti di prezzo?', 'Dove possiamo risparmiare?', 'Riassumi la spesa in DPI per centro', 'Quanto abbiamo speso in elettroutensili?'];
-  function md(t) {
-    const lines = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').split(/\n/);
-    let h = '', ul = false;
-    lines.forEach(l => {
-      const m = l.match(/^\s*[-*•]\s+(.*)/);
-      if (m) { if (!ul) { h += '<ul>'; ul = true; } h += `<li>${m[1]}</li>`; return; }
-      if (ul) { h += '</ul>'; ul = false; }
-      if (l.trim()) h += `<p>${l}</p>`;
-    });
-    return h + (ul ? '</ul>' : '');
-  }
-  function renderChat() {
-    sub(aiReady() ? 'Fai domande sui costi in linguaggio naturale' : '');
-    const log = $('#chat-log');
-    if (!aiReady()) {
-      log.innerHTML = `<div class="chat-hello"><span class="es-ic">${IC.spark}</span><p class="muted">Per usare l'assistente collega il Foglio Google e salva la chiave Gemini in <a class="link" href="#impostazioni">Impostazioni</a>.</p></div>`;
-      return;
-    }
-    if (!chat.length) {
-      log.innerHTML = `<div class="chat-hello"><span class="es-ic">${IC.spark}</span><p class="muted">Conosco tutti i movimenti di ${soc || 'Soluzione Veicolare e Attrezzati'}. Chiedimi quello che vuoi.</p><div class="qchips">${QS.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`;
-      return;
-    }
-    log.innerHTML = chat.map(m => `<div class="msg ${m.role === 'user' ? 'u' : 'a'}${m.err ? ' err' : ''}">${m.role === 'user' ? `<p>${esc(m.text)}</p>` : md(m.text)}</div>`).join('') +
-      (ask._busy ? '<div class="msg a typing"><i></i><i></i><i></i></div>' : '') +
-      `<div class="qchips" style="justify-content:flex-start"><button type="button" id="chat-reset">${IC.reset.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;fill:none;stroke:currentColor;stroke-width:2"')} Nuova conversazione</button></div>`;
-    log.scrollTop = log.scrollHeight;
-  }
-  function context(rows) { return netMode(() => context0(rows)); }
-  function context0(rows) {
-    const s = summary(rows);
-    const head = `TOTALE: ${s.totale} € su ${s.righe} righe (società: ${s.societa})\nPER CENTRO: ${s.perCentro.map(x => `${x.centro}=${x.totale}€`).join(', ')}\nPER CATEGORIA: ${s.perCategoria.map(x => `${x.categoria}=${x.totale}€`).join(', ')}\nBUDGET ANNUALI: ${JSON.stringify(s.budgetAnnuale)}\n\nRIGHE:\ncentro;societa;categoria;data;ndoc;codice;descrizione;qta;um;prezzo_unit;totale\n`;
-    return head + rows.map(r => [r.centro, r.societa === 'Attrezzati' ? 'ATT' : 'SV', r.categoria, validD(r.data) ? r.data : '', r.ndoc || '', r.codice || '', String(r.descrizione || '').replace(/[;\n]/g, ' ').slice(0, 70), num(r.quantita), r.um || '', num(r.prezzo), tot(r)].join(';')).join('\n');
-  }
-  async function ask(q) {
-    q = String(q || '').trim();
-    if (!q || ask._busy) return;
-    chat.push({ role: 'user', text: q });
-    ask._busy = true; LS.set('cdc_chat', chat); renderChat();
-    $('#chat-q').value = ''; $('#chat-q').style.height = '';
-    try {
-      const ans = await aiCall('chat', { question: q, context: context(rowsSoc()), history: chat.slice(0, -1).filter(m => !m.err) });
-      chat.push({ role: 'model', text: String(ans || '') });
-    } catch (e) {
-      chat.push({ role: 'model', text: 'Errore: ' + e.message, err: true });
-    }
-    ask._busy = false;
-    chat = chat.slice(-30); LS.set('cdc_chat', chat);
-    if (view === 'assistente') renderChat();
-  }
-
   /* ================= IMPOSTAZIONI ================= */
   function renderSettings() {
     themeUI();
@@ -873,7 +821,7 @@
     const out = [], now = new Date().toISOString();
     wb.SheetNames.forEach(name => {
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
-      if (/^(riepilogo|articoli|info|istruzioni|categorie|elenchi)/i.test(name)) return;
+      if (/^(riepilogo|articoli|prodotti|info|istruzioni|categorie|elenchi)/i.test(name)) return;
       const hi = aoa.findIndex(r => r.some(c => nh(c) === 'descrizione'));
       if (hi < 0) return;
       const H = aoa[hi].map(nh);
@@ -1077,12 +1025,12 @@
 
       // 4 · Articoli
       const arts = articoli(sorted);
-      const wa = U.aoa_to_sheet([['Codice', 'Articolo', 'Acquisti', 'Q.tà totale', 'Prezzo min', 'Prezzo max', 'Prezzo medio', 'Variazione', 'Spesa totale', 'Centri'],
-        ...arts.map(x => [x.codice, x.desc, x.n, x.qty, x.min || null, x.max || null, x.avg || null, x.var || null, x.tot, x.centri.join(', ')])]);
+      const wa = U.aoa_to_sheet([['Codici', 'Prodotto', 'Spedizioni', 'Q.tà totale', 'Prezzo min', 'Prezzo max', 'Prezzo medio', 'Variazione', 'Spesa totale', 'Centri'],
+        ...arts.map(x => [x.codes.join(', '), x.desc, x.n, x.qty, x.min || null, x.max || null, x.avg || null, x.var || null, x.tot, x.centri.join(', ')])]);
       arts.forEach((x, i) => { const R = i + 2; ['E', 'F', 'G'].forEach(L => wa[L + R] && (wa[L + R].z = EUR3)); if (wa['H' + R]) wa['H' + R].z = '0%'; wa['I' + R].z = EUR; wa['D' + R].z = QTY; });
       wa['!autofilter'] = { ref: `A1:J${arts.length + 1}` };
       fit(wa, [9, 56, 9, 11, 12, 12, 13, 10, 14, 34]);
-      U.book_append_sheet(wb, wa, 'Articoli');
+      U.book_append_sheet(wb, wa, 'Prodotti');
 
       // 5 · Info
       const wi = U.aoa_to_sheet([['Centro di Costo — Soluzione Veicolare'], [], ['Esportato il', new Date()], ['Società', soc || 'Tutte'], ['Movimenti', n], ['Spesa totale (IVA esclusa)', T], ['Spesa totale (IVA inclusa)', sumI(sorted)], [], ['I totali dei fogli «Riepilogo centri» e «Categorie x Centri» sono formule collegate al foglio «Movimenti».'], ['Il foglio «Movimenti» ha lo stesso formato del modello: correggi prezzi o aggiungi righe e reimporta con «Importa aggiornamenti».'], ['La colonna «ID» collega ogni riga al movimento nell\'app: non modificarla. Le righe nuove vanno lasciate con ID vuoto.']], { cellDates: true });
@@ -1335,7 +1283,6 @@
     $$('[data-close]').forEach(b => (b.onclick = closeSheet));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
     $('#fab').onclick = () => formMov(); $('#add-top').onclick = () => formMov();
-    $('#gear').onclick = () => (location.hash = 'impostazioni');
 
     document.addEventListener('click', e => {
       const t = e.target;
@@ -1358,6 +1305,8 @@
       if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
       const th = t.closest('[data-theme-set]'); if (th) { const v = th.dataset.themeSet; try { localStorage.setItem('cdc_theme', v); } catch {} applyTheme(v, true); toast(v === 'auto' ? 'Tema automatico' : v === 'dark' ? 'Tema scuro' : 'Tema chiaro'); return; }
       if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'centri' || view === 'home') ccAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
+      if (t.closest('#a-imp')) { importExcel(false); return; }
+      if (t.closest('#a-xls')) { exportXlsx(db.movimenti, 'prodotti'); return; }
       if (t.closest('#zb-auto')) { openAutoPrice(); return; }
       if (t.closest('#zb-xls')) { exportXlsx(filtered(), 'senza-prezzo'); return; }
       const ed = t.closest('td.ed'); if (ed && !ed.querySelector('input,select')) { inlineEdit(ed); return; }
@@ -1368,8 +1317,6 @@
       if (t.closest('#m-more')) { mLimit += 300; renderMov(); return; }
       if (t.closest('#a-more')) { aLimit += 200; renderArt(); return; }
       if (t.closest('#ai-gen')) { genInsights(); return; }
-      const qb = t.closest('[data-q]'); if (qb) { ask(qb.dataset.q); return; }
-      if (t.closest('#chat-reset')) { chat = []; LS.set('cdc_chat', chat); renderChat(); return; }
       const dc = t.closest('[data-delcc]'); if (dc) { const c = dc.dataset.delcc; if (db.movimenti.some(r => r.centro === c)) return toast('Centro in uso nei movimenti'); setConfig('centri', centri().filter(x => x !== c)); return; }
       const dk = t.closest('[data-delcat]'); if (dk) { const c = dk.dataset.delcat; if (db.movimenti.some(r => r.categoria === c)) return toast('Categoria in uso nei movimenti'); setConfig('categorie', categorie().filter(x => x !== c)); return; }
     });
@@ -1384,9 +1331,6 @@
     $('#a-centro').onchange = e => { a.centro = e.target.value; renderArt(); };
 
     $$('.k-map').forEach(m => { m.addEventListener('mousemove', mapTip); m.addEventListener('mouseleave', () => { const t = $('.cm-tip', m); if (t) t.remove(); }); });
-    $('#chat-form').addEventListener('submit', e => { e.preventDefault(); ask($('#chat-q').value); });
-    $('#chat-q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && isDesk()) { e.preventDefault(); ask(e.target.value); } });
-    $('#chat-q').addEventListener('input', e => { e.target.style.height = ''; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
 
     $('#s-pull').onclick = () => pull(true);
     $('#s-key-go').onclick = async () => {
