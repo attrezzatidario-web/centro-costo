@@ -70,7 +70,18 @@
   const shortDate = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const num = v => { if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(/\s|€/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
   const r2 = n => Math.round(n * 100) / 100;
-  const tot = r => r2(num(r.quantita) * num(r.prezzo));
+  // IVA: i dati restano sempre IVA esclusa; l'interruttore cambia solo la visualizzazione
+  let ivaOn = (() => { try { return localStorage.getItem('cdc_iva') === '1'; } catch { return false; } })();
+  const ivaRate = r => { const v = r && r.iva !== '' && r.iva != null ? num(r.iva) : 0.22; return v > 1 ? v / 100 : v; };
+  const mul = r => ivaOn ? 1 + ivaRate(r) : 1;
+  const totN = r => r2(num(r.quantita) * num(r.prezzo));
+  const tot = r => r2(num(r.quantita) * num(r.prezzo) * mul(r));
+  const pu = r => num(r.prezzo) * mul(r);
+  const sumN = arr => r2(arr.reduce((a, r) => a + totN(r), 0));
+  const sumI = arr => r2(arr.reduce((a, r) => a + r2(num(r.quantita) * num(r.prezzo) * (1 + ivaRate(r))), 0));
+  const budV = c => num((db.config.budget || {})[c]) * (ivaOn ? 1.22 : 1);
+  const netMode = fn => { const p = ivaOn; ivaOn = false; try { return fn(); } finally { ivaOn = p; } };
+  const ivaLbl = () => ivaOn ? 'IVA inclusa' : 'IVA esclusa';
   const sumT = arr => r2(arr.reduce((a, r) => a + tot(r), 0));
   const ccAbbr = s => { const w = String(s || '?').trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase(); };
   const ccIc = c => `<span class="ic cc${String(c).toUpperCase() === 'ATTREZZATI' ? ' cc-att' : ''}">${esc(ccAbbr(c))}</span>`;
@@ -237,7 +248,12 @@
     render();
     window.scrollTo(0, 0);
   }
+  function ivaUI() {
+    $$('.iva-tg').forEach(b => { b.classList.toggle('on', ivaOn); b.setAttribute('aria-pressed', ivaOn); });
+    document.body.classList.toggle('iva-on', ivaOn);
+  }
   function render() {
+    ivaUI();
     const fn = { home: renderHome, movimenti: renderMov, centri: renderCentri, articoli: renderArt, assistente: renderChat, impostazioni: renderSettings }[view];
     fn && fn();
   }
@@ -266,7 +282,7 @@
     sub(rows.length ? `${fmtNum(rows.length, 0)} righe di acquisto` : 'Nessun dato: importa il file Excel da Impostazioni');
     countTo($('#k-tot'), T, eur0);
     const noDate = rows.filter(r => !validD(r.data)).length;
-    $('#k-tot-s').textContent = `${fmtNum(rows.length, 0)} righe`;
+    $('#k-tot-s').innerHTML = ivaOn ? `IVA inclusa · imponibile ${eur0(sumN(rows))}` : `IVA esclusa · con IVA ${eur0(sumI(rows))}`;
 
     const byC = [...groupBy(rows, r => r.centro || '—')].map(([k, v]) => ({ k, v: sumT(v), n: v.length })).sort((x, y) => y.v - x.v);
     $('#k-top').textContent = byC[0] ? byC[0].k : '—';
@@ -274,7 +290,7 @@
 
     const arts = new Set(rows.map(prodKey));
     countTo($('#k-art'), arts.size, v => fmtNum(Math.round(v), 0));
-    $('#k-art-s').textContent = 'codici e voci uniche';
+    $('#k-art-s').textContent = 'prodotti unici, varianti incluse';
     const zero = rows.filter(r => !num(r.prezzo)).length;
     countTo($('#k-zero'), zero, v => fmtNum(Math.round(v), 0));
     { const n = priceSuggest().out.length; $('#k-zero-s').textContent = n ? `${n} completabili in automatico` : 'da completare'; }
@@ -309,7 +325,7 @@
   }
   function itemHtml(r) {
     const z = !num(r.prezzo);
-    return `<div class="item" data-id="${esc(r.id)}">${ccIc(r.centro)}<div class="main"><div class="t">${esc(r.descrizione)}</div><div class="s">${esc(r.centro || '—')} · ${esc(r.categoria || 'Altro')} · ${qtyFmt(r.quantita)} ${esc(r.um || '')} × ${z ? 'prezzo mancante' : eurP(r.prezzo)}</div></div><div class="amt${z ? ' zero' : ''}">${eur(tot(r))}</div></div>`;
+    return `<div class="item" data-id="${esc(r.id)}">${ccIc(r.centro)}<div class="main"><div class="t">${esc(r.descrizione)}</div><div class="s">${esc(r.centro || '—')} · ${esc(r.categoria || 'Altro')} · ${qtyFmt(r.quantita)} ${esc(r.um || '')} × ${z ? 'prezzo mancante' : eurP(pu(r))}</div></div><div class="amt${z ? ' zero' : ''}">${eur(tot(r))}</div></div>`;
   }
 
   /* ---------- Analisi IA ---------- */
@@ -331,7 +347,8 @@
     if (!ins) { el.innerHTML = head + '<p class="muted small" style="margin:0">Genera un\'analisi dei costi: concentrazioni di spesa, aumenti di prezzo, possibili risparmi.</p>'; return; }
     el.innerHTML = head + `<p class="ins-sum">${esc(ins.sintesi || '')}</p><ul class="ins">${(ins.punti || []).map(p => `<li class="${esc(p.tipo || '')}"><i></i><span>${esc(p.testo)}</span></li>`).join('')}</ul><div class="ins-date">Aggiornata il ${esc(shortDate(ins.data))}${ins.soc ? ' · ' + esc(ins.soc) : ''}</div>`;
   }
-  function summary(rows) {
+  function summary(rows) { return netMode(() => summary0(rows)); }
+  function summary0(rows) {
     const T = sumT(rows);
     const byC = [...groupBy(rows, r => r.centro || '—')].map(([k, v]) => ({ centro: k, totale: sumT(v), righe: v.length }));
     const byK = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => ({ categoria: k, totale: sumT(v) })).sort((x, y) => y.totale - x.totale);
@@ -414,10 +431,10 @@
     if (!list.length) { $('#m-list').innerHTML = `<div class="card empty-state"><p class="muted">${db.movimenti.length ? 'Nessun movimento con questi filtri.' : 'Ancora nessun movimento. Importa il file Excel da Impostazioni o aggiungi un movimento.'}</p></div>`; return; }
     if (isDesk()) {
       const allOn = shown.length && shown.every(r => sel.has(String(r.id)));
-      $('#m-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th class="ck"><input type="checkbox" class="cb" id="m-ckall"${allOn ? ' checked' : ''} aria-label="Seleziona tutte le righe visibili"></th><th>Descrizione</th><th>Centro</th><th>Categoria</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">Totale</th></tr></thead><tbody>${shown.map(r => {
+      $('#m-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th class="ck"><input type="checkbox" class="cb" id="m-ckall"${allOn ? ' checked' : ''} aria-label="Seleziona tutte le righe visibili"></th><th>Descrizione</th><th>Centro</th><th>Categoria</th><th class="r">Q.tà</th><th class="r">Prezzo${ivaOn ? ' + IVA' : ''}</th><th class="r">Totale${ivaOn ? ' + IVA' : ''}</th></tr></thead><tbody>${shown.map(r => {
         const z = !num(r.prezzo);
         const on = sel.has(String(r.id));
-        return `<tr data-id="${esc(r.id)}"${on ? ' class="sel"' : ''}><td class="ck"><input type="checkbox" class="cb" data-ck="${esc(r.id)}"${on ? ' checked' : ''}></td><td><div class="tcell">${ccIc(r.centro)}<div class="tt"><b>${esc(r.descrizione)}</b><small>${[r.codice ? 'Cod. ' + r.codice : '', r.ndoc ? 'Doc. ' + r.ndoc : '', shortDate(r.data), r.fornitore].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div></div></td><td class="m2 ed" data-ed="centro" title="Clic per cambiare">${esc(r.centro || '—')}</td><td class="ed" data-ed="categoria" title="Clic per cambiare"><span class="chip">${esc(r.categoria || 'Altro')}</span></td><td class="num ed" data-ed="quantita" title="Clic per modificare">${qtyFmt(r.quantita)} <span class="muted small">${esc(r.um || '')}</span></td><td class="num ed" data-ed="prezzo" title="Clic per modificare">${z ? '<span class="chip soon">mancante</span>' : eurP(r.prezzo)}</td><td class="num amt">${eur(tot(r))}</td></tr>`;
+        return `<tr data-id="${esc(r.id)}"${on ? ' class="sel"' : ''}><td class="ck"><input type="checkbox" class="cb" data-ck="${esc(r.id)}"${on ? ' checked' : ''}></td><td><div class="tcell">${ccIc(r.centro)}<div class="tt"><b>${esc(r.descrizione)}</b><small>${[r.codice ? 'Cod. ' + r.codice : '', r.ndoc ? 'Doc. ' + r.ndoc : '', shortDate(r.data), r.fornitore].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div></div></td><td class="m2 ed" data-ed="centro" title="Clic per cambiare">${esc(r.centro || '—')}</td><td class="ed" data-ed="categoria" title="Clic per cambiare"><span class="chip">${esc(r.categoria || 'Altro')}</span></td><td class="num ed" data-ed="quantita" title="Clic per modificare">${qtyFmt(r.quantita)} <span class="muted small">${esc(r.um || '')}</span></td><td class="num ed" data-ed="prezzo" title="Clic per modificare">${z ? '<span class="chip soon">mancante</span>' : eurP(pu(r))}</td><td class="num amt">${eur(tot(r))}</td></tr>`;
       }).join('')}</tbody></table></div>${more}`;
     } else {
       $('#m-list').innerHTML = `<div class="day${selMode ? ' selmode' : ''}">${shown.map(r => selMode ? itemHtml(r).replace('<div class="item"', `<div class="item${sel.has(String(r.id)) ? ' sel' : ''}" data-ck="${esc(r.id)}"`).replace(/ data-id="[^"]*"/, '') : itemHtml(r)).join('')}</div>${more}`;
@@ -453,7 +470,7 @@
   function openAutoPrice() {
     const { out } = priceSuggest();
     if (!out.length) return toast('Nessuna riga senza prezzo ha un codice già presente con prezzo');
-    const line = x => `${esc(x.r.centro || '—')} · ${qtyFmt(x.r.quantita)} ${esc(x.r.um || '')} × <b>${eurP(x.price)}</b> = ${eur(num(x.r.quantita) * x.price)}`;
+    const line = x => `${esc(x.r.centro || '—')} · ${qtyFmt(x.r.quantita)} ${esc(x.r.um || '')} × <b>${eurP(x.price * mul(x.r))}</b> = ${eur(num(x.r.quantita) * x.price * mul(x.r))}`;
     const srcTxt = x => `${x.src === 'codice' ? 'stesso codice ' + esc(x.r.codice) : 'stessa descrizione'} · da ${esc(x.from.centro || '—')}${validD(x.from.data) ? ' del ' + esc(shortDate(x.from.data)) : ''}${x.prices.length > 1 ? ` · prezzi trovati ${eurP(Math.min(...x.prices))} – ${eurP(Math.max(...x.prices))}, uso il più recente` : ''}`;
     const sec = (title, items, off) => items.length ? `<div class="rv-sec"><div class="rv-h"><b>${title}</b><span class="chip">${items.length}</span></div><div class="rv-list">${items.map(x => `<label class="rv-row"><input type="checkbox" class="cb" name="a${out.indexOf(x)}"${off ? '' : ' checked'}><span class="rv-m"><span class="t">${esc(x.r.descrizione)}</span><span class="s">${line(x)}</span><span class="s rv-src">${srcTxt(x)}</span></span></label>`).join('')}</div></div>` : '';
     const c1 = out.filter(x => x.src === 'codice'), c2 = out.filter(x => x.src === 'descrizione');
@@ -508,7 +525,7 @@
     const list = centri().map(c => ({ c, rows: by.get(c) || [] })).concat([...by.keys()].filter(k => !centri().includes(k)).map(k => ({ c: k, rows: by.get(k) })));
     list.forEach(x => (x.t = sumT(x.rows)));
     list.sort((p, q) => q.t - p.t);
-    return { T, list: list.filter(x => x.rows.length || num(budget()[x.c])) };
+    return { T, list: list.filter(x => x.rows.length || budV(x.c)) };
   }
 
   function renderCentri() { renderDash($('#v-centri'), { hero: true, matrix: true }); }
@@ -527,7 +544,7 @@
     // hero
     const top2 = list.slice(0, 2).reduce((s, x) => s + x.t, 0);
     if (opt.hero) K('hero', R).innerHTML = `
-      <div class="ch-main"><span class="label">Spesa totale dei centri</span><div class="ch-big k-tot">0 €</div><span class="muted small">${list.filter(x => x.rows.length).length} centri attivi · ${fmtNum(rows.length, 0)} righe</span></div>
+      <div class="ch-main"><span class="label">Spesa totale dei centri</span><div class="ch-big k-tot">0 €</div><span class="muted small">${ivaLbl()} · ${list.filter(x => x.rows.length).length} centri attivi · ${fmtNum(rows.length, 0)} righe</span></div>
       <div class="ch-kpis">
         <div><span>Concentrazione</span><b>${fmtNum(pct(top2, T), 1)}%</b><small>nei primi 2 centri</small></div>
         <div><span>Media per centro</span><b>${eur0(list.length ? T / list.filter(x => x.rows.length).length : 0)}</b><small>spesa media</small></div>
@@ -563,7 +580,7 @@
     // classifica
     const bud = budget();
     K('rank', R).innerHTML = list.map((x, i) => {
-      const b = num(bud[x.c]), over = b && x.t > b;
+      const b = budV(x.c), over = b && x.t > b;
       return `<button class="cr-row${x.c === selCC ? ' on' : ''}" data-centro="${esc(x.c)}" style="--d:${200 + i * 80}ms">
         <span class="cr-n">${i + 1}</span>
         <span class="cr-main"><span class="cr-top"><b>${esc(x.c)}</b><span><em>${fmtNum(pct(x.t, T), 1)}%</em><strong data-count="${x.t}">${eur0(x.t)}</strong></span></span>
@@ -581,7 +598,7 @@
       if (zr.n) ins.push({ ic: 'warn', t: `<b>${esc(zr.c)}</b> ha più righe senza prezzo`, v: fmtNum(zr.n, 0), go: zr.c });
       const big = rows.reduce((m, r) => tot(r) > tot(m) ? r : m, rows[0]);
       if (big) ins.push({ ic: 'top', t: `Voce più costosa: <b>${esc(String(big.descrizione).slice(0, 38))}</b> (${esc(big.centro)})`, v: eur0(tot(big)) });
-      const bs = act.filter(x => num(bud[x.c])); const ov = bs.filter(x => x.t > num(bud[x.c]));
+      const bs = act.filter(x => budV(x.c)); const ov = bs.filter(x => x.t > budV(x.c));
       if (bs.length) ins.push({ ic: ov.length ? 'warn' : 'ok', t: ov.length ? `Budget superato in <b>${ov.map(x => esc(x.c)).join(', ')}</b>` : 'Tutti i centri entro il budget', v: `${bs.length - ov.length}/${bs.length}` });
     }
     const II = { up: '<path d="M4 17l6-6 4 4 6-7M14 8h6v6"/>', warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', top: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.8 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>' };
@@ -611,7 +628,7 @@
     const cats = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => ({ k, v: sumT(v) })).sort((p, q) => q.v - p.v);
     const seg = cats.slice(0, 5); const rest = cats.slice(5).reduce((s, c) => s + c.v, 0);
     if (rest > 0) seg.push({ k: 'Altre categorie', v: rest, other: true });
-    const b = num(budget()[x.c]), rank = list.indexOf(x) + 1;
+    const b = budV(x.c), rank = list.indexOf(x) + 1;
     const zero = rows.filter(r => !num(r.prezzo)).length;
     const top = art.slice(0, 5), tmx = Math.max(1, ...top.map(a => a.tot));
     el.innerHTML = `
@@ -624,7 +641,7 @@
       <div class="cf-grid">
         <div class="cf-col">
           <div class="cf-kpis">
-            <div><span>Spesa</span><b class="k-cftot">0 €</b></div>
+            <div><span>Spesa ${ivaOn ? '(IVA incl.)' : '(IVA escl.)'}</span><b class="k-cftot">0 €</b></div>
             <div><span>Righe</span><b>${fmtNum(n, 0)}</b></div>
             <div><span>Articoli</span><b>${fmtNum(art.length, 0)}</b></div>
             <div><span>Media per riga</span><b>${eur(n ? x.t / n : 0)}</b></div>
@@ -684,7 +701,7 @@
   function articoli(rows) {
     const m = groupBy(rows, prodKey);
     return [...m].map(([k, v]) => {
-      const prices = v.map(r => num(r.prezzo)).filter(p => p > 0);
+      const prices = v.map(pu).filter(p => p > 0);
       const qty = v.reduce((s, r) => s + num(r.quantita), 0);
       const t = sumT(v);
       const min = prices.length ? Math.min(...prices) : 0, max = prices.length ? Math.max(...prices) : 0;
@@ -738,7 +755,7 @@
         <div class="ad-pz">${pz.map(p => `<div class="ad-pr">${ccIc(p.c)}<div class="ad-pm"><div class="ad-pt"><b>${esc(p.c)}</b><span>${qtyFmt(p.q)} ${esc(x.um)} · ${eur0(p.t)}</span></div><div class="ct-bar"><i style="width:${(p.q / mq * 100).toFixed(1)}%"></i></div><small>${p.v.length} ${p.v.length === 1 ? 'spedizione' : 'spedizioni'}${p.last ? ' · ultima il ' + esc(shortDate(p.last)) : ''}</small></div></div>`).join('')}</div></div>
       <div class="ad-sec"><span class="cf-sub">Cronologia spedizioni</span>
         <div class="tl">${groups.map(([d, v]) => `<div class="tl-g"><div class="tl-d">${d ? esc(parseD(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })) : 'Senza data'}</div>
-          ${v.map(r => `<div class="tl-i" data-id="${esc(r.id)}"><i></i><div class="tl-m"><div class="tl-t"><b>${esc(r.centro || '—')}</b><span>${eur(tot(r))}</span></div><div class="tl-s">${qtyFmt(r.quantita)} ${esc(r.um || '')} × ${num(r.prezzo) ? eurP(r.prezzo) : '<span class="up">prezzo mancante</span>'}${r.ndoc ? ' · Doc. ' + esc(r.ndoc) : ''}${x.codes.length > 1 && r.codice ? ' · cod. ' + esc(r.codice) : ''}${r.fornitore ? ' · ' + esc(r.fornitore) : ''}</div></div></div>`).join('')}</div>`).join('')}</div></div>`,
+          ${v.map(r => `<div class="tl-i" data-id="${esc(r.id)}"><i></i><div class="tl-m"><div class="tl-t"><b>${esc(r.centro || '—')}</b><span>${eur(tot(r))}</span></div><div class="tl-s">${qtyFmt(r.quantita)} ${esc(r.um || '')} × ${num(r.prezzo) ? eurP(pu(r)) : '<span class="up">prezzo mancante</span>'}${r.ndoc ? ' · Doc. ' + esc(r.ndoc) : ''}${x.codes.length > 1 && r.codice ? ' · cod. ' + esc(r.codice) : ''}${r.fornitore ? ' · ' + esc(r.fornitore) : ''}</div></div></div>`).join('')}</div>`).join('')}</div></div>`,
       null, null, 'Modifica prodotto');
     $('#sheet-form').classList.add('wide');
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = () => { closeSheet(); setTimeout(() => formArt(k), 250); };
@@ -773,7 +790,8 @@
       `<div class="qchips" style="justify-content:flex-start"><button type="button" id="chat-reset">${IC.reset.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;fill:none;stroke:currentColor;stroke-width:2"')} Nuova conversazione</button></div>`;
     log.scrollTop = log.scrollHeight;
   }
-  function context(rows) {
+  function context(rows) { return netMode(() => context0(rows)); }
+  function context0(rows) {
     const s = summary(rows);
     const head = `TOTALE: ${s.totale} € su ${s.righe} righe (società: ${s.societa})\nPER CENTRO: ${s.perCentro.map(x => `${x.centro}=${x.totale}€`).join(', ')}\nPER CATEGORIA: ${s.perCategoria.map(x => `${x.categoria}=${x.totale}€`).join(', ')}\nBUDGET ANNUALI: ${JSON.stringify(s.budgetAnnuale)}\n\nRIGHE:\ncentro;societa;categoria;data;ndoc;codice;descrizione;qta;um;prezzo_unit;totale\n`;
     return head + rows.map(r => [r.centro, r.societa === 'Attrezzati' ? 'ATT' : 'SV', r.categoria, validD(r.data) ? r.data : '', r.ndoc || '', r.codice || '', String(r.descrizione || '').replace(/[;\n]/g, ' ').slice(0, 70), num(r.quantita), r.um || '', num(r.prezzo), tot(r)].join(';')).join('\n');
@@ -857,7 +875,7 @@
         out.push({
           id: (c.id >= 0 && String(r[c.id] ?? '').trim()) || uid() + out.length.toString(36), _hasId: c.id >= 0 && !!String(r[c.id] ?? '').trim(), data: d, ndoc: c.doc >= 0 ? String(r[c.doc] ?? '') : '', codice: c.cod >= 0 ? String(r[c.cod] ?? '').trim() : '',
           descrizione: desc.replace(/\s+/g, ' '), um: c.um >= 0 ? String(r[c.um] || '').trim().toUpperCase() || 'PZ' : 'PZ',
-          quantita: num(r[c.q]), prezzo: price, iva: c.iva >= 0 ? num(r[c.iva]) : 0.22,
+          quantita: num(r[c.q]), prezzo: price, iva: (() => { if (c.iva < 0 || r[c.iva] === '' || r[c.iva] == null) return 0.22; const v = num(r[c.iva]); return v > 1 ? v / 100 : v; })(),
           centro, societa: socOf(c.soc >= 0 ? r[c.soc] : '', isAtt || centro === 'ATTREZZATI'), categoria: (c.cat >= 0 && String(r[c.cat] || '').trim()) || autoCat(desc), fornitore: c.forn >= 0 ? String(r[c.forn] || '').trim() : '', note: c.note >= 0 ? String(r[c.note] || '').trim() : '', creato: now
         });
       });
@@ -894,9 +912,9 @@
     } catch (e) { toast(e.message); } finally { busy(); }
   }
   /* ---------- Importa aggiornamenti: confronto prima di salvare ---------- */
-  const FIELDS = ['data', 'ndoc', 'codice', 'descrizione', 'um', 'quantita', 'prezzo', 'centro', 'societa', 'categoria', 'fornitore', 'note'];
-  const FLBL = { data: 'data', ndoc: 'n. doc.', codice: 'codice', descrizione: 'descrizione', um: 'UM', quantita: 'quantità', prezzo: 'prezzo', centro: 'centro', societa: 'società', categoria: 'categoria', fornitore: 'fornitore', note: 'note' };
-  const same = (f, a, b) => (f === 'quantita' || f === 'prezzo') ? Math.abs(num(a) - num(b)) < 1e-6 : String(a ?? '').trim() === String(b ?? '').trim();
+  const FIELDS = ['data', 'ndoc', 'codice', 'descrizione', 'um', 'quantita', 'prezzo', 'iva', 'centro', 'societa', 'categoria', 'fornitore', 'note'];
+  const FLBL = { data: 'data', ndoc: 'n. doc.', codice: 'codice', descrizione: 'descrizione', um: 'UM', quantita: 'quantità', prezzo: 'prezzo', centro: 'centro', societa: 'società', categoria: 'categoria', fornitore: 'fornitore', note: 'note', iva: 'IVA' };
+  const same = (f, a, b) => f === 'iva' ? Math.abs(ivaRate({ iva: a }) - ivaRate({ iva: b })) < 1e-6 : (f === 'quantita' || f === 'prezzo') ? Math.abs(num(a) - num(b)) < 1e-6 : String(a ?? '').trim() === String(b ?? '').trim();
   function diffImport(rows) {
     const byId = new Map(db.movimenti.map(r => [String(r.id), r]));
     const lastPrice = new Map(); // ultimo prezzo noto per articolo
@@ -922,7 +940,8 @@
     });
     return res;
   }
-  function reviewImport(rows) {
+  function reviewImport(rows) { return netMode(() => reviewImport0(rows)); }
+  function reviewImport0(rows) {
     const d = diffImport(rows);
     const nTot = d.prezzoIns.length + d.prezzoVar.length + d.altre.length + d.nuoviProd.length + d.nuoveRighe.length;
     if (!nTot) return toast(`Nessuna differenza: ${d.invariate} righe già aggiornate`);
@@ -964,7 +983,8 @@
     $$('#sheet-body .rv-tg').forEach(b => b.onclick = () => { const L = $(`[data-sec="${b.dataset.tg}"]`), on = !$$('input', L).every(x => !x.checked) ; $$('input', L).forEach(x => (x.checked = !on)); b.textContent = on ? 'Seleziona' : 'Deseleziona'; upd(); });
   }
 
-  async function exportXlsx(rows, tag) {
+  async function exportXlsx(rows, tag) { const p = ivaOn; ivaOn = false; try { return await exportXlsx0(rows, tag); } finally { ivaOn = p; } }
+  async function exportXlsx0(rows, tag) {
     if (!rows.length) return toast('Nessun movimento da esportare');
     try {
       busy('Preparo il file Excel…');
@@ -977,34 +997,37 @@
       const setF = (ws, ref, f, v, z) => (ws[ref] = { t: 'n', f, v, z });
 
       // 1 · Movimenti (stesso formato del modello di importazione)
-      const H = ['Data', 'N. Doc.', 'Codice', 'Descrizione', 'UM', 'Quantità', 'Prezzo unit.', 'Totale', 'Centro', 'Società', 'Categoria', 'Fornitore', 'Note', 'ID (non modificare)'];
-      const ws = U.aoa_to_sheet([H, ...sorted.map(r => [validD(r.data) ? parseD(r.data) : '', r.ndoc || '', r.codice || '', r.descrizione || '', r.um || '', num(r.quantita), num(r.prezzo), null, r.centro || '', r.societa || '', r.categoria || '', r.fornitore || '', r.note || '', String(r.id)])], { cellDates: true });
+      const H = ['Data', 'N. Doc.', 'Codice', 'Descrizione', 'UM', 'Quantità', 'Prezzo unit.', 'Totale', 'IVA %', 'Totale + IVA', 'Centro', 'Società', 'Categoria', 'Fornitore', 'Note', 'ID (non modificare)'];
+      const ws = U.aoa_to_sheet([H, ...sorted.map(r => [validD(r.data) ? parseD(r.data) : '', r.ndoc || '', r.codice || '', r.descrizione || '', r.um || '', num(r.quantita), num(r.prezzo), null, ivaRate(r), null, r.centro || '', r.societa || '', r.categoria || '', r.fornitore || '', r.note || '', String(r.id)])], { cellDates: true });
       sorted.forEach((r, i) => {
         const R = i + 2;
         if (ws['A' + R] && ws['A' + R].t === 'd') ws['A' + R].z = 'dd/mm/yyyy';
         ws['F' + R].z = QTY; ws['G' + R].z = EUR3;
         setF(ws, 'H' + R, `F${R}*G${R}`, tot(r), EUR);
+        ws['I' + R].z = '0%'; setF(ws, 'J' + R, `H${R}*(1+I${R})`, r2(tot(r) * (1 + ivaRate(r))), EUR);
       });
-      U.sheet_add_aoa(ws, [['', '', '', 'TOTALE', '', null, '', null]], { origin: 'A' + (last + 1) });
+      U.sheet_add_aoa(ws, [['', '', '', 'TOTALE', '', null, '', null, '', null]], { origin: 'A' + (last + 1) });
       setF(ws, 'F' + (last + 1), `SUBTOTAL(9,F2:F${last})`, sorted.reduce((s, r) => s + num(r.quantita), 0), QTY);
       setF(ws, 'H' + (last + 1), `SUBTOTAL(9,H2:H${last})`, sumT(sorted), EUR);
-      ws['!autofilter'] = { ref: `A1:N${last}` };
-      fit(ws, [11, 9, 9, 56, 6, 10, 13, 14, 15, 19, 26, 18, 24, 18]);
+      setF(ws, 'J' + (last + 1), `SUBTOTAL(9,J2:J${last})`, sumI(sorted), EUR);
+      ws['!autofilter'] = { ref: `A1:P${last}` };
+      fit(ws, [11, 9, 9, 56, 6, 10, 13, 14, 7, 14, 15, 19, 26, 18, 24, 18]);
       U.book_append_sheet(wb, ws, 'Movimenti');
 
       // 2 · Riepilogo centri (formule collegate ai movimenti)
       const T = sumT(sorted), bud = budget();
       const cs = [...new Set(sorted.map(r => r.centro || ''))].sort((a, b) => sumT(sorted.filter(r => r.centro === b)) - sumT(sorted.filter(r => r.centro === a)));
-      const wr = U.aoa_to_sheet([['Centro', 'Righe', 'Articoli', 'Totale', '% sul totale', 'Budget annuale', 'Scostamento', 'Righe senza prezzo']]);
+      const wr = U.aoa_to_sheet([['Centro', 'Righe', 'Prodotti', 'Totale (IVA esclusa)', '% sul totale', 'Budget annuale', 'Scostamento', 'Righe senza prezzo', 'Totale + IVA']]);
       cs.forEach((c, i) => {
         const R = i + 2, rr = sorted.filter(r => r.centro === c), t = sumT(rr), b = num(bud[c]);
         U.sheet_add_aoa(wr, [[c]], { origin: 'A' + R });
-        setF(wr, 'B' + R, `COUNTIF(Movimenti!$I$2:$I$${last},A${R})`, rr.length, '#,##0');
+        setF(wr, 'B' + R, `COUNTIF(Movimenti!$K$2:$K$${last},A${R})`, rr.length, '#,##0');
         wr['C' + R] = { t: 'n', v: new Set(rr.map(prodKey)).size, z: '#,##0' };
-        setF(wr, 'D' + R, `SUMIF(Movimenti!$I$2:$I$${last},A${R},Movimenti!$H$2:$H$${last})`, t, EUR);
+        setF(wr, 'D' + R, `SUMIF(Movimenti!$K$2:$K$${last},A${R},Movimenti!$H$2:$H$${last})`, t, EUR);
         setF(wr, 'E' + R, `IF($D$${cs.length + 2}=0,0,D${R}/$D$${cs.length + 2})`, T ? t / T : 0, '0.0%');
         if (b) { wr['F' + R] = { t: 'n', v: b, z: EUR }; setF(wr, 'G' + R, `F${R}-D${R}`, b - t, EUR); }
-        setF(wr, 'H' + R, `COUNTIFS(Movimenti!$I$2:$I$${last},A${R},Movimenti!$G$2:$G$${last},0)`, rr.filter(r => !num(r.prezzo)).length, '#,##0');
+        setF(wr, 'H' + R, `COUNTIFS(Movimenti!$K$2:$K$${last},A${R},Movimenti!$G$2:$G$${last},0)`, rr.filter(r => !num(r.prezzo)).length, '#,##0');
+        setF(wr, 'I' + R, `SUMIF(Movimenti!$K$2:$K$${last},A${R},Movimenti!$J$2:$J$${last})`, sumI(rr), EUR);
       });
       const TR = cs.length + 2;
       U.sheet_add_aoa(wr, [['TOTALE']], { origin: 'A' + TR });
@@ -1013,8 +1036,9 @@
       setF(wr, 'D' + TR, `SUM(D2:D${TR - 1})`, T, EUR);
       setF(wr, 'E' + TR, `SUM(E2:E${TR - 1})`, 1, '0.0%');
       setF(wr, 'H' + TR, `SUM(H2:H${TR - 1})`, sorted.filter(r => !num(r.prezzo)).length, '#,##0');
-      wr['!ref'] = `A1:H${TR}`;
-      fit(wr, [18, 9, 10, 15, 12, 15, 15, 17]);
+      setF(wr, 'I' + TR, `SUM(I2:I${TR - 1})`, sumI(sorted), EUR);
+      wr['!ref'] = `A1:I${TR}`;
+      fit(wr, [18, 9, 10, 19, 12, 15, 15, 17, 15]);
       U.book_append_sheet(wb, wr, 'Riepilogo centri');
 
       // 3 · Categorie x Centri
@@ -1023,7 +1047,7 @@
       const wm = U.aoa_to_sheet([['Categoria', ...cs, 'Totale']]);
       ks.forEach((k, i) => {
         const R = i + 2; U.sheet_add_aoa(wm, [[k]], { origin: 'A' + R });
-        cs.forEach((c, j) => { const v = sumT(sorted.filter(r => r.centro === c && (r.categoria || 'Altro') === k)); setF(wm, col(j + 1) + R, `SUMIFS(Movimenti!$H$2:$H$${last},Movimenti!$K$2:$K$${last},$A${R},Movimenti!$I$2:$I$${last},${col(j + 1)}$1)`, v, EUR); });
+        cs.forEach((c, j) => { const v = sumT(sorted.filter(r => r.centro === c && (r.categoria || 'Altro') === k)); setF(wm, col(j + 1) + R, `SUMIFS(Movimenti!$H$2:$H$${last},Movimenti!$M$2:$M$${last},$A${R},Movimenti!$K$2:$K$${last},${col(j + 1)}$1)`, v, EUR); });
         setF(wm, col(cs.length + 1) + R, `SUM(B${R}:${col(cs.length)}${R})`, sumT(sorted.filter(r => (r.categoria || 'Altro') === k)), EUR);
       });
       const MR = ks.length + 2; U.sheet_add_aoa(wm, [['TOTALE']], { origin: 'A' + MR });
@@ -1042,8 +1066,8 @@
       U.book_append_sheet(wb, wa, 'Articoli');
 
       // 5 · Info
-      const wi = U.aoa_to_sheet([['Centro di Costo — Soluzione Veicolare'], [], ['Esportato il', new Date()], ['Società', soc || 'Tutte'], ['Movimenti', n], ['Spesa totale', T], [], ['I totali dei fogli «Riepilogo centri» e «Categorie x Centri» sono formule collegate al foglio «Movimenti».'], ['Il foglio «Movimenti» ha lo stesso formato del modello: correggi prezzi o aggiungi righe e reimporta con «Importa aggiornamenti».'], ['La colonna «ID» collega ogni riga al movimento nell\'app: non modificarla. Le righe nuove vanno lasciate con ID vuoto.']], { cellDates: true });
-      wi.B3.z = 'dd/mm/yyyy hh:mm'; wi.B6.z = EUR; fit(wi, [16, 22]);
+      const wi = U.aoa_to_sheet([['Centro di Costo — Soluzione Veicolare'], [], ['Esportato il', new Date()], ['Società', soc || 'Tutte'], ['Movimenti', n], ['Spesa totale (IVA esclusa)', T], ['Spesa totale (IVA inclusa)', sumI(sorted)], [], ['I totali dei fogli «Riepilogo centri» e «Categorie x Centri» sono formule collegate al foglio «Movimenti».'], ['Il foglio «Movimenti» ha lo stesso formato del modello: correggi prezzi o aggiungi righe e reimporta con «Importa aggiornamenti».'], ['La colonna «ID» collega ogni riga al movimento nell\'app: non modificarla. Le righe nuove vanno lasciate con ID vuoto.']], { cellDates: true });
+      wi.B3.z = 'dd/mm/yyyy hh:mm'; wi.B6.z = EUR; wi.B7.z = EUR; fit(wi, [16, 22]);
       U.book_append_sheet(wb, wi, 'Info');
 
       XLSX.writeFile(wb, `centro-di-costo-${tag}-${today()}.xlsx`, { compression: true });
@@ -1112,7 +1136,10 @@
         <label class="f"><span>Quantità</span><input name="quantita" inputmode="decimal" value="${esc(fmtIn(r.quantita))}"></label>
         <label class="f"><span>Prezzo unit. € (no IVA)</span><input name="prezzo" inputmode="decimal" value="${esc(fmtIn(r.prezzo))}" placeholder="0,00"></label>
       </div>
-      <div class="tot-line"><span class="muted">Totale</span><b id="fm-tot">${eur(tot(r))}</b></div>
+      <div class="iva-box">
+        <label class="f"><span>Aliquota IVA</span><select name="iva">${[0.22, 0.10, 0.04, 0].map(v => `<option value="${v}"${Math.abs(ivaRate(r) - v) < 1e-6 ? ' selected' : ''}>${v ? fmtNum(v * 100, 0) + '%' : 'Esente'}</option>`).join('')}</select></label>
+        <div class="iva-sum" id="fm-sum"></div>
+      </div>
       <div class="f-row">
         <label class="f"><span>Centro di costo</span><select name="centro">${opt(centri(), r.centro)}</select></label>
         <label class="f"><span>Categoria</span><select name="categoria">${opt(categorie(), r.categoria || autoCat(r.descrizione))}</select></label>
@@ -1131,7 +1158,7 @@
       </div>
       <label class="f"><span>Note</span><input name="note" value="${esc(r.note)}"></label>`,
       fd => {
-        const row = { ...r, ...Object.fromEntries(fd), quantita: num(fd.get('quantita')), prezzo: num(fd.get('prezzo')) };
+        const row = { ...r, ...Object.fromEntries(fd), quantita: num(fd.get('quantita')), prezzo: num(fd.get('prezzo')), iva: Number(fd.get('iva')) };
         if (!row.descrizione.trim()) return toast('Inserisci la descrizione');
         if (isNew) row.creato = new Date().toISOString();
         LS.set('cdc_lastcc', row.centro); LS.set('cdc_lastsoc', row.societa);
@@ -1143,8 +1170,9 @@
     const form = $('#sheet-form');
     let catTouched = !isNew;
     form.categoria.addEventListener('change', () => (catTouched = true));
-    const upd = () => { $('#fm-tot').textContent = eur(r2(num(form.quantita.value) * num(form.prezzo.value))); };
-    form.quantita.addEventListener('input', upd); form.prezzo.addEventListener('input', upd);
+    const upd = () => { const n = num(form.quantita.value) * num(form.prezzo.value), iv = n * Number(form.iva.value);
+      $('#fm-sum').innerHTML = `<div><span>Imponibile</span><b>${eur(n)}</b></div><div><span>IVA ${Number(form.iva.value) ? fmtNum(Number(form.iva.value) * 100, 0) + '%' : 'esente'}</span><b>${eur(iv)}</b></div><div class="t"><span>Totale</span><b>${eur(n + iv)}</b></div>`; };
+    upd(); form.quantita.addEventListener('input', upd); form.prezzo.addEventListener('input', upd); form.iva.addEventListener('change', upd);
     form.descrizione.addEventListener('input', () => { if (!catTouched) form.categoria.value = autoCat(form.descrizione.value); });
     form.centro.addEventListener('change', () => { if (form.centro.value === 'ATTREZZATI') form.societa.value = 'Attrezzati'; });
     const sb = $('#scan-btn'); if (sb) sb.onclick = scanDoc;
@@ -1222,7 +1250,7 @@
       el.innerHTML = opt(f0 === 'centro' ? centri() : categorie(), r[f0] || (f0 === 'categoria' ? 'Altro' : ''));
     } else {
       el = document.createElement('input');
-      el.inputMode = 'decimal'; el.value = num(r[f0]) ? String(num(r[f0])).replace('.', ',') : ''; el.placeholder = '0,00';
+      el.inputMode = 'decimal'; const sv = f0 === 'prezzo' ? r2(num(r[f0]) * mul(r) * 1000) / 1000 : num(r[f0]); el.value = sv ? String(sv).replace('.', ',') : ''; el.placeholder = '0,00';
     }
     el.className = 'cell-in';
     td.innerHTML = ''; td.appendChild(el); el.focus(); if (el.select) el.select();
@@ -1230,7 +1258,7 @@
     const commit = keep => {
       if (done) return; done = true;
       if (!keep) return renderMov();
-      const v = f0 === 'centro' || f0 === 'categoria' ? el.value : num(el.value);
+      const v = f0 === 'centro' || f0 === 'categoria' ? el.value : f0 === 'prezzo' ? Math.round(num(el.value) / mul(r) * 1e6) / 1e6 : num(el.value);
       if (String(v) === String(f0 === 'centro' || f0 === 'categoria' ? r[f0] : num(r[f0]))) return renderMov();
       const row = { ...r, [f0]: v };
       if (f0 === 'centro' && v === 'ATTREZZATI') row.societa = 'Attrezzati';
@@ -1257,7 +1285,7 @@
       </div>
       <label class="f"><span>Categoria</span><select name="categoria">${opt(categorie(), cat)}</select></label>
       <div class="f-row">
-        <label class="f"><span>Nuovo prezzo unit. €</span><input name="prezzo" inputmode="decimal" value="${last ? esc(String(num(last.prezzo)).replace('.', ',')) : ''}" placeholder="0,00"></label>
+        <label class="f"><span>Nuovo prezzo unit. € (IVA esclusa)</span><input name="prezzo" inputmode="decimal" value="${last ? esc(String(num(last.prezzo)).replace('.', ',')) : ''}" placeholder="0,00"></label>
         <label class="f"><span>Applica il prezzo a</span><select name="dove">
           <option value="no">Non cambiare i prezzi</option>
           <option value="tutte">Tutte le righe</option>
@@ -1309,6 +1337,7 @@
       if (t.closest('#sb-del')) { delSelected(); return; }
       if (t.closest('#m-xls')) { exportXlsx(filtered(), f.per === 'zero' ? 'senza-prezzo' : 'movimenti-filtrati'); return; }
       if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
+      if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'centri' || view === 'home') ccAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
       if (t.closest('#zb-auto')) { openAutoPrice(); return; }
       if (t.closest('#zb-xls')) { exportXlsx(filtered(), 'senza-prezzo'); return; }
       const ed = t.closest('td.ed'); if (ed && !ed.querySelector('input,select')) { inlineEdit(ed); return; }
