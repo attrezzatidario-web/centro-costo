@@ -15,8 +15,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
-  <link rel="stylesheet" href="cdc.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="cdc.css?v=6">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -98,9 +98,16 @@
           <div class="card kpi link-card" data-go="articoli"><div class="kpi-h"><span class="label">Articoli distinti</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></span></div><div class="big" id="k-art">0</div><span class="muted small" id="k-art-s"></span></div>
           <div class="card kpi link-card" id="k-zero-card"><div class="kpi-h"><span class="label">Righe senza prezzo</span><span class="kpi-ic warn-ic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></svg></span></div><div class="big" id="k-zero">0</div><span class="muted small">da completare</span></div>
         </div>
+        <div class="cc-dash dash">
+          <div class="card cc-mapcard">
+            <div class="card-h"><h3>Mappa dei centri</h3><a class="link" href="#centri">Dashboard</a></div>
+            <div class="cc-map k-map"></div>
+          </div>
+          <div class="card cc-rankcard"><div class="card-h"><h3>Classifica centri</h3><span class="muted small">tocca per il dettaglio</span></div><div class="cc-rank k-rank"></div><div class="cc-ins k-ins"></div></div>
+        </div>
+        <div class="card cc-focus k-focus dash"></div>
         <div class="home-grid">
           <div class="col-main">
-            <div class="card"><div class="card-h"><h3>Spesa per centro di costo</h3><a class="link" href="#centri">Dettaglio</a></div><div class="bars" id="h-centri"></div></div>
             <div class="card"><div class="card-h"><h3>Spesa per categoria</h3><span class="muted small" id="h-cat-n"></span></div><div class="bars" id="h-cat"></div></div>
             <div class="card" id="h-trend-card"><div class="card-h"><h3>Andamento mensile</h3><span class="muted small" id="h-trend-s"></span></div><div class="mbars" id="h-trend"></div></div>
           </div>
@@ -119,22 +126,22 @@
           <select id="f-cat"></select>
           <select id="f-per"></select>
         </div>
-        <div class="sum-row"><span class="muted small" id="m-count"></span><strong id="m-sum">0 €</strong></div>
+        <div class="sum-row"><span class="muted small" id="m-count"></span><span class="sum-r"><button class="btn sm" id="m-selmode">Seleziona</button><button class="btn sm" id="m-xls"><span class="xl-d">Esporta </span>Excel</button><strong id="m-sum">0 €</strong></span></div>
         <div id="m-list"></div>
       </section>
 
       <!-- CENTRI -->
       <section id="v-centri" class="view" data-v="centri" hidden>
-        <div class="soc-bar" id="c-soc"></div>
-        <div class="cc-dash">
+        <div class="soc-bar k-soc"></div>
+        <div class="cc-dash dash">
           <div class="card cc-mapcard">
-            <div class="cc-hero" id="c-hero"></div>
-            <div class="cc-map" id="c-map"></div>
+            <div class="cc-hero k-hero"></div>
+            <div class="cc-map k-map"></div>
           </div>
-          <div class="card cc-rankcard"><div class="card-h"><h3>Classifica centri</h3><span class="muted small">tocca per il dettaglio</span></div><div class="cc-rank" id="c-rank"></div><div class="cc-ins" id="c-ins"></div></div>
+          <div class="card cc-rankcard"><div class="card-h"><h3>Classifica centri</h3><span class="muted small">tocca per il dettaglio</span></div><div class="cc-rank k-rank"></div><div class="cc-ins k-ins"></div></div>
         </div>
-        <div class="card cc-focus" id="c-focus"></div>
-        <div class="card"><div class="card-h"><h3>Confronto per categoria</h3><span class="muted small">importi per centro</span></div><div class="mx-wrap" id="c-matrix"></div></div>
+        <div class="card cc-focus k-focus dash"></div>
+        <div class="card"><div class="card-h"><h3>Confronto per categoria</h3><span class="muted small">importi per centro</span></div><div class="mx-wrap k-matrix"></div></div>
       </section>
 
       <!-- ARTICOLI -->
@@ -180,8 +187,8 @@
           </div>
           <div class="card">
             <h3>Importa da Excel</h3>
-            <p class="muted small" style="margin:4px 0 12px">Carica l'export (fogli «SOLUZIONE VEICOLARE» e «ATTREZZATI»): categorie assegnate in automatico.</p>
-            <div class="row-btns"><button class="btn primary sm" id="s-imp-add">Aggiungi righe</button><button class="btn sm" id="s-imp-rep">Sostituisci tutto</button><button class="btn sm" id="s-exp">Esporta CSV</button></div>
+            <p class="muted small" style="margin:4px 0 12px">Carica l'export del gestionale o il <b>modello Excel</b> compilato. Se la categoria è vuota viene assegnata in automatico.</p>
+            <div class="row-btns"><button class="btn primary sm" id="s-imp-add">Aggiungi righe</button><button class="btn sm" id="s-imp-rep">Sostituisci tutto</button><button class="btn sm" id="s-xls">Esporta Excel completo</button><a class="btn sm" href="modello-importazione.xlsx" download>Scarica modello Excel</a></div>
           </div>
           <div class="card">
             <h3>Budget annuale per centro</h3>
@@ -202,6 +209,10 @@
       </section>
     </main>
 
+    <div class="selbar" id="selbar" hidden>
+      <span class="sb-n"><b id="sb-n">0</b> selezionate · <span id="sb-t">0 €</span></span>
+      <span class="sb-a"><button class="btn sm" id="sb-all">Tutte</button><button class="btn sm" id="sb-none">Annulla</button><button class="btn sm sb-del" id="sb-del">Elimina</button></span>
+    </div>
     <button id="fab" class="fab" aria-label="Nuovo movimento"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
   </div>
 
@@ -221,6 +232,6 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

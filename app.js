@@ -206,6 +206,7 @@
   const f = { q: '', centro: '', cat: '', per: '', zero: false };
   const a = { q: '', sort: 'tot', centro: '' };
   let mLimit = 150, aLimit = 120;
+  const sel = new Set(); let selMode = false;
   let chat = LS.get('cdc_chat', []);
 
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
@@ -215,11 +216,12 @@
   function go() {
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
-    if (view === 'centri') ccAnim = true;
+    if (view === 'centri' || view === 'home') ccAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === view));
     $('#title').textContent = TITLES[view];
     $('#fab').hidden = view === 'assistente' || view === 'impostazioni';
+    if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
   }
@@ -264,8 +266,7 @@
     const zero = rows.filter(r => !num(r.prezzo)).length;
     countTo($('#k-zero'), zero, v => fmtNum(Math.round(v), 0));
 
-    const bud = budget();
-    $('#h-centri').innerHTML = barRows(byC.map(x => ({ ...x, bud: num(bud[x.k]) || 0 })), T, { click: 'centro' });
+    renderDash($('#v-home'), {});
 
     const byK = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => ({ k, v: sumT(v) })).sort((x, y) => y.v - x.v);
     $('#h-cat').innerHTML = barRows(byK, T, { click: 'cat' });
@@ -375,6 +376,8 @@
     const list = filtered();
     const T = sumT(list);
     sub(isDesk() ? 'Clic su prezzo, quantità, centro o categoria per modificarli al volo' : (soc || ''));
+    $('#m-selmode').hidden = isDesk(); $('#m-selmode').textContent = selMode ? 'Fine' : 'Seleziona'; $('#m-selmode').classList.toggle('primary', selMode);
+    selBar();
     $('#m-count').textContent = `${fmtNum(list.length, 0)} righe`;
     countTo($('#m-sum'), T);
     // con data prima (più recenti), poi senza data nell'ordine di inserimento
@@ -387,13 +390,33 @@
     const more = sorted.length > mLimit ? `<div class="more-row"><button class="btn sm" id="m-more">Mostra altre ${fmtNum(Math.min(300, sorted.length - mLimit), 0)}</button></div>` : '';
     if (!list.length) { $('#m-list').innerHTML = `<div class="card empty-state"><p class="muted">${db.movimenti.length ? 'Nessun movimento con questi filtri.' : 'Ancora nessun movimento. Importa il file Excel da Impostazioni o aggiungi un movimento.'}</p></div>`; return; }
     if (isDesk()) {
-      $('#m-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th>Descrizione</th><th>Centro</th><th>Categoria</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">Totale</th></tr></thead><tbody>${shown.map(r => {
+      const allOn = shown.length && shown.every(r => sel.has(String(r.id)));
+      $('#m-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th class="ck"><input type="checkbox" class="cb" id="m-ckall"${allOn ? ' checked' : ''} aria-label="Seleziona tutte le righe visibili"></th><th>Descrizione</th><th>Centro</th><th>Categoria</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">Totale</th></tr></thead><tbody>${shown.map(r => {
         const z = !num(r.prezzo);
-        return `<tr data-id="${esc(r.id)}"><td><div class="tcell">${ccIc(r.centro)}<div class="tt"><b>${esc(r.descrizione)}</b><small>${[r.codice ? 'Cod. ' + r.codice : '', r.ndoc ? 'Doc. ' + r.ndoc : '', shortDate(r.data), r.fornitore].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div></div></td><td class="m2 ed" data-ed="centro" title="Clic per cambiare">${esc(r.centro || '—')}</td><td class="ed" data-ed="categoria" title="Clic per cambiare"><span class="chip">${esc(r.categoria || 'Altro')}</span></td><td class="num ed" data-ed="quantita" title="Clic per modificare">${qtyFmt(r.quantita)} <span class="muted small">${esc(r.um || '')}</span></td><td class="num ed" data-ed="prezzo" title="Clic per modificare">${z ? '<span class="chip soon">mancante</span>' : eurP(r.prezzo)}</td><td class="num amt">${eur(tot(r))}</td></tr>`;
+        const on = sel.has(String(r.id));
+        return `<tr data-id="${esc(r.id)}"${on ? ' class="sel"' : ''}><td class="ck"><input type="checkbox" class="cb" data-ck="${esc(r.id)}"${on ? ' checked' : ''}></td><td><div class="tcell">${ccIc(r.centro)}<div class="tt"><b>${esc(r.descrizione)}</b><small>${[r.codice ? 'Cod. ' + r.codice : '', r.ndoc ? 'Doc. ' + r.ndoc : '', shortDate(r.data), r.fornitore].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div></div></td><td class="m2 ed" data-ed="centro" title="Clic per cambiare">${esc(r.centro || '—')}</td><td class="ed" data-ed="categoria" title="Clic per cambiare"><span class="chip">${esc(r.categoria || 'Altro')}</span></td><td class="num ed" data-ed="quantita" title="Clic per modificare">${qtyFmt(r.quantita)} <span class="muted small">${esc(r.um || '')}</span></td><td class="num ed" data-ed="prezzo" title="Clic per modificare">${z ? '<span class="chip soon">mancante</span>' : eurP(r.prezzo)}</td><td class="num amt">${eur(tot(r))}</td></tr>`;
       }).join('')}</tbody></table></div>${more}`;
     } else {
-      $('#m-list').innerHTML = `<div class="day">${shown.map(itemHtml).join('')}</div>${more}`;
+      $('#m-list').innerHTML = `<div class="day${selMode ? ' selmode' : ''}">${shown.map(r => selMode ? itemHtml(r).replace('<div class="item"', `<div class="item${sel.has(String(r.id)) ? ' sel' : ''}" data-ck="${esc(r.id)}"`).replace(/ data-id="[^"]*"/, '') : itemHtml(r)).join('')}</div>${more}`;
     }
+  }
+
+  function selBar() {
+    const ids = new Set(db.movimenti.map(r => String(r.id)));
+    [...sel].forEach(id => { if (!ids.has(id)) sel.delete(id); });
+    const bar = $('#selbar'); bar.hidden = view !== 'movimenti' || !sel.size;
+    document.body.classList.toggle('has-sel', !bar.hidden);
+    if (bar.hidden) return;
+    $('#sb-n').textContent = fmtNum(sel.size, 0);
+    $('#sb-t').textContent = eur(sumT(db.movimenti.filter(r => sel.has(String(r.id)))));
+    const n = filtered().length; $('#sb-all').textContent = `Tutte (${fmtNum(n, 0)})`;
+  }
+  function delSelected() {
+    const n = sel.size; if (!n) return;
+    if (!confirm(`Eliminare ${n} ${n === 1 ? 'movimento' : 'movimenti'}? L'operazione non si può annullare.`)) return;
+    write([...sel].map(id => ({ action: 'delete', sheet: 'Movimenti', id })));
+    sel.clear(); selMode = false; renderMov();
+    toast(`${n} ${n === 1 ? 'movimento eliminato' : 'movimenti eliminati'}`);
   }
 
   /* ================= CENTRI ================= */
@@ -407,6 +430,7 @@
   const proj = ([lon, lat]) => [(lon * IT_P.c - IT_P.minx) * IT_P.k + IT_P.ox, (-lat - IT_P.miny) * IT_P.k + IT_P.oy];
   const CAT_COL = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)'];
   let selCC = '', ccAnim = true;
+  const K = (k, R) => $('.k-' + k, R);
 
   function ccStats(rows) {
     const T = sumT(rows), by = groupBy(rows, r => r.centro || '—');
@@ -416,26 +440,28 @@
     return { T, list: list.filter(x => x.rows.length || num(budget()[x.c])) };
   }
 
-  function renderCentri() {
+  function renderCentri() { renderDash($('#v-centri'), { hero: true, matrix: true }); }
+
+  function renderDash(R, opt = {}) {
     const rows = rowsSoc();
     const { T, list } = ccStats(rows);
-    sub(soc || 'Tutte le società');
+    if (opt.hero) sub(soc || 'Tutte le società');
     if (!list.find(x => x.c === selCC)) selCC = list[0] ? list[0].c : '';
     const anim = ccAnim && !reduced(); ccAnim = false;
-    const v = $('#v-centri'); v.classList.toggle('cc-anim', anim);
+    R.classList.toggle('cc-anim', anim);
 
     // società
-    $('#c-soc').innerHTML = [['', 'Tutte'], ['Soluzione Veicolare', 'Soluzione Veicolare'], ['Attrezzati', 'Attrezzati']].map(([k, l]) => `<button data-soc="${esc(k)}" class="${soc === k ? 'on' : ''}">${esc(l)}</button>`).join('');
+    if (K('soc', R)) K('soc', R).innerHTML = [['', 'Tutte'], ['Soluzione Veicolare', 'Soluzione Veicolare'], ['Attrezzati', 'Attrezzati']].map(([k, l]) => `<button data-soc="${esc(k)}" class="${soc === k ? 'on' : ''}">${esc(l)}</button>`).join('');
 
     // hero
     const top2 = list.slice(0, 2).reduce((s, x) => s + x.t, 0);
-    $('#c-hero').innerHTML = `
-      <div class="ch-main"><span class="label">Spesa totale dei centri</span><div class="ch-big" id="c-tot">0 €</div><span class="muted small">${list.filter(x => x.rows.length).length} centri attivi · ${fmtNum(rows.length, 0)} righe</span></div>
+    if (opt.hero) K('hero', R).innerHTML = `
+      <div class="ch-main"><span class="label">Spesa totale dei centri</span><div class="ch-big k-tot">0 €</div><span class="muted small">${list.filter(x => x.rows.length).length} centri attivi · ${fmtNum(rows.length, 0)} righe</span></div>
       <div class="ch-kpis">
         <div><span>Concentrazione</span><b>${fmtNum(pct(top2, T), 1)}%</b><small>nei primi 2 centri</small></div>
         <div><span>Media per centro</span><b>${eur0(list.length ? T / list.filter(x => x.rows.length).length : 0)}</b><small>spesa media</small></div>
       </div>`;
-    countTo($('#c-tot'), T, eur0);
+    if (opt.hero) countTo(K('tot', R), T, eur0);
 
     // mappa
     const mx = Math.max(1, ...list.map(x => x.t));
@@ -444,8 +470,8 @@
     const arcs = hq ? pins.filter(p => p !== hq).map((p, i) => {
       const dx = p.px - hq.px, dy = p.py - hq.py, L = Math.hypot(dx, dy) || 1, bend = Math.min(60, L * .35);
       const cx = (hq.px + p.px) / 2 - dy / L * bend, cy = (hq.py + p.py) / 2 + dx / L * bend;
-      return `<path id="arc-${i}" class="cm-arc" pathLength="1" style="--d:${900 + i * 140}ms" d="M${hq.px.toFixed(1)} ${hq.py.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${p.px.toFixed(1)} ${p.py.toFixed(1)}"/>
-        <circle class="cm-dot" r="2.2"><animateMotion dur="${(2.2 + L / 160).toFixed(2)}s" begin="${(1.5 + i * .25).toFixed(2)}s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1"><mpath href="#arc-${i}"/></animateMotion></circle>`;
+      return `<path id="arc-${R.id}-${i}" class="cm-arc" pathLength="1" style="--d:${900 + i * 140}ms" d="M${hq.px.toFixed(1)} ${hq.py.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${p.px.toFixed(1)} ${p.py.toFixed(1)}"/>
+        <circle class="cm-dot" r="2.2"><animateMotion dur="${(2.2 + L / 160).toFixed(2)}s" begin="${(1.5 + i * .25).toFixed(2)}s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1"><mpath href="#arc-${R.id}-${i}"/></animateMotion></circle>`;
     }).join('') : '';
     const lab = p => {
       const [dx, dy, an] = LBL[p.c] || [p.r + 10, -6, 'start'];
@@ -455,7 +481,7 @@
         <text x="${lx.toFixed(1)}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n">${esc(p.c)}${p.c === HQ ? ' · sede' : ''}</text>
         <text x="${lx.toFixed(1)}" y="${(ly + 9).toFixed(1)}" text-anchor="${an}" class="cm-v">${eur0(p.t)} · ${fmtNum(pct(p.t, T), 1)}%</text></g>`;
     };
-    $('#c-map').innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei centri di costo">
+    K('map', R).innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei centri di costo">
       <path class="cm-land" pathLength="1" d="${IT_PATH}"/>
       ${arcs}
       ${pins.slice().reverse().map(p => `<g class="cm-pin${p.c === selCC ? ' on' : ''}" data-centro="${esc(p.c)}" style="--d:${700 + p.i * 110}ms" transform="translate(${p.px.toFixed(1)} ${p.py.toFixed(1)})">
@@ -465,7 +491,7 @@
 
     // classifica
     const bud = budget();
-    $('#c-rank').innerHTML = list.map((x, i) => {
+    K('rank', R).innerHTML = list.map((x, i) => {
       const b = num(bud[x.c]), over = b && x.t > b;
       return `<button class="cr-row${x.c === selCC ? ' on' : ''}" data-centro="${esc(x.c)}" style="--d:${200 + i * 80}ms">
         <span class="cr-n">${i + 1}</span>
@@ -488,25 +514,25 @@
       if (bs.length) ins.push({ ic: ov.length ? 'warn' : 'ok', t: ov.length ? `Budget superato in <b>${ov.map(x => esc(x.c)).join(', ')}</b>` : 'Tutti i centri entro il budget', v: `${bs.length - ov.length}/${bs.length}` });
     }
     const II = { up: '<path d="M4 17l6-6 4 4 6-7M14 8h6v6"/>', warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', top: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.8 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>' };
-    $('#c-ins').innerHTML = ins.length ? `<div class="cf-sub">Indicatori</div>` + ins.map((x, i) => `<div class="ci-row ${x.ic}"${x.go ? ` data-gozero="${esc(x.go)}"` : ''} style="--d:${600 + i * 90}ms"><span class="ci-ic"><svg viewBox="0 0 24 24">${II[x.ic]}</svg></span><span class="ci-t">${x.t}</span><b>${x.v}</b></div>`).join('') : '';
-    if (anim) $$('#c-rank [data-count]').forEach(el => { el._v = 0; countTo(el, +el.dataset.count, eur0); });
+    K('ins', R).innerHTML = ins.length ? `<div class="cf-sub">Indicatori</div>` + ins.map((x, i) => `<div class="ci-row ${x.ic}"${x.go ? ` data-gozero="${esc(x.go)}"` : ''} style="--d:${600 + i * 90}ms"><span class="ci-ic"><svg viewBox="0 0 24 24">${II[x.ic]}</svg></span><span class="ci-t">${x.t}</span><b>${x.v}</b></div>`).join('') : '';
+    if (anim) $$('.k-rank [data-count]', R).forEach(el => { el._v = 0; countTo(el, +el.dataset.count, eur0); });
 
-    renderFocus(list, T, anim);
-    renderMatrix(rows, list, T, anim);
+    renderFocus(R, list, T, anim);
+    if (opt.matrix) renderMatrix(R, rows, list, T, anim);
   }
 
-  function selectCC(c) {
+  function selectCC(c, R) {
     if (c === selCC) return;
     selCC = c;
-    $$('#c-map .cm-pin').forEach(p => p.classList.toggle('on', p.dataset.centro === c));
-    $$('#c-rank .cr-row').forEach(p => p.classList.toggle('on', p.dataset.centro === c));
+    $$('.k-map .cm-pin', R).forEach(p => p.classList.toggle('on', p.dataset.centro === c));
+    $$('.k-rank .cr-row', R).forEach(p => p.classList.toggle('on', p.dataset.centro === c));
     const rows = rowsSoc(); const { T, list } = ccStats(rows);
-    renderFocus(list, T, !reduced());
-    if (!isDesk()) $('#c-focus').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderFocus(R, list, T, !reduced());
+    if (!isDesk()) K('focus', R).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function renderFocus(list, T, anim) {
-    const el = $('#c-focus');
+  function renderFocus(R, list, T, anim) {
+    const el = K('focus', R);
     const x = list.find(z => z.c === selCC);
     if (!x) { el.innerHTML = '<div class="empty">Nessun centro</div>'; return; }
     el.classList.remove('cf-in'); void el.offsetWidth; if (anim) el.classList.add('cf-in');
@@ -527,7 +553,7 @@
       <div class="cf-grid">
         <div class="cf-col">
           <div class="cf-kpis">
-            <div><span>Spesa</span><b id="cf-tot">0 €</b></div>
+            <div><span>Spesa</span><b class="k-cftot">0 €</b></div>
             <div><span>Righe</span><b>${fmtNum(n, 0)}</b></div>
             <div><span>Articoli</span><b>${fmtNum(art.length, 0)}</b></div>
             <div><span>Media per riga</span><b>${eur(n ? x.t / n : 0)}</b></div>
@@ -549,7 +575,7 @@
           <div class="cf-top">${top.map((a, i) => `<div class="ct-row" data-art="${esc(a.k)}" style="--d:${300 + i * 70}ms"><div class="ct-t"><span>${esc(a.desc)}</span><b>${eur0(a.tot)}</b></div><div class="ct-bar"><i style="width:${(a.tot / tmx * 100).toFixed(1)}%"></i></div></div>`).join('') || '<div class="empty">Nessun articolo</div>'}</div>
         </div>
       </div>`;
-    countTo($('#cf-tot'), x.t, eur0);
+    countTo(K('cftot', el), x.t, eur0);
     // ciambella: segmenti con 2px di stacco, disegnati in sequenza
     const C = 2 * Math.PI * 62, gap = seg.length > 1 ? 2.5 : 0;
     const segs = $$('.dn-s', el), tot = seg.reduce((s, z) => s + z.v, 0) || 1;
@@ -558,7 +584,7 @@
     if (!anim) draw(1); else { draw(0); const t0 = performance.now(); const st = now => { const k = Math.min(1, (now - t0 - 150) / 900); const e = k < 0 ? 0 : 1 - Math.pow(1 - k, 3); draw(e); if (k < 1) requestAnimationFrame(st); }; requestAnimationFrame(st); }
   }
 
-  function renderMatrix(rows, list, T, anim) {
+  function renderMatrix(R, rows, list, T, anim) {
     const cs = list.filter(x => x.rows.length).map(x => x.c);
     const ks = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => [k, sumT(v)]).sort((p, q) => q[1] - p[1]).map(x => x[0]);
     const cell = {};
@@ -566,14 +592,14 @@
     const mxv = Math.max(1, ...Object.values(cell));
     const heat = v => !v ? 'h0' : v / mxv > .45 ? 'h3' : v / mxv > .15 ? 'h2' : v / mxv > .03 ? 'h1' : '';
     const byC = new Map(list.map(x => [x.c, x.t]));
-    $('#c-matrix').innerHTML = cs.length ? `<table class="mx${anim ? ' mx-anim' : ''}"><thead><tr><th>Categoria</th>${cs.map(c => `<th>${esc(c)}</th>`).join('')}<th>Totale</th></tr></thead><tbody>
+    K('matrix', R).innerHTML = cs.length ? `<table class="mx${anim ? ' mx-anim' : ''}"><thead><tr><th>Categoria</th>${cs.map(c => `<th>${esc(c)}</th>`).join('')}<th>Totale</th></tr></thead><tbody>
       ${ks.map((k, r) => `<tr><td title="${esc(k)}">${esc(k)}</td>${cs.map((c, j) => { const v = cell[k + '|' + c] || 0; return `<td class="${heat(v)}" style="--d:${(r + j) * 35}ms">${v ? eur0(v) : '—'}</td>`; }).join('')}<td><b>${eur0(cs.reduce((s, c) => s + (cell[k + '|' + c] || 0), 0))}</b></td></tr>`).join('')}
       <tr class="tot"><td>Totale</td>${cs.map(c => `<td>${eur0(byC.get(c) || 0)}</td>`).join('')}<td>${eur0(T)}</td></tr></tbody></table>` : '<div class="empty">Nessun dato</div>';
   }
 
   // tooltip sulla mappa
   function mapTip(e) {
-    const pin = e.target.closest('.cm-pin'), wrap = $('#c-map');
+    const pin = e.target.closest('.cm-pin'), wrap = e.currentTarget;
     let tip = $('.cm-tip', wrap);
     if (!pin) { if (tip) tip.remove(); return; }
     const { T, list } = ccStats(rowsSoc()); const x = list.find(z => z.c === pin.dataset.centro); if (!x) return;
@@ -718,31 +744,35 @@
       inp.click();
     });
   }
-  const nh = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  const nh = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  const socOf = (v, att) => { const t = nh(v); if (t.startsWith('attrez')) return 'Attrezzati'; if (t.startsWith('soluz') || t === 'sv') return 'Soluzione Veicolare'; return att ? 'Attrezzati' : 'Soluzione Veicolare'; };
   function parseWorkbook(wb) {
     const out = [], now = new Date().toISOString();
     wb.SheetNames.forEach(name => {
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+      if (/^(riepilogo|articoli|info|istruzioni|categorie|elenchi)/i.test(name)) return;
       const hi = aoa.findIndex(r => r.some(c => nh(c) === 'descrizione'));
       if (hi < 0) return;
       const H = aoa[hi].map(nh);
       const col = (...keys) => { for (const k of keys) { const i = H.indexOf(k); if (i >= 0) return i; } return -1; };
-      const c = { cod: col('cod', 'codice', 'codart'), des: col('descrizione'), um: col('um'), q: col('quant', 'quantita', 'qta'), pa: col('pacq', 'prezzoacquisto', 'costo'), pr: col('prezzo'), ind: col('indirizzo', 'centro', 'centrodicosto', 'sede'), doc: col('ndoc', 'documento', 'numdoc'), dt: col('data'), iva: col('imposte', 'iva'), forn: col('fornitore') };
+      const c = { cod: col('cod', 'codice', 'codart'), des: col('descrizione'), um: col('um'), q: col('quant', 'quantita', 'qta', 'qt'), pa: col('pacq', 'prezzoacquisto', 'costo'), pr: col('prezzo', 'prezzounit', 'prezzounitario'), ind: col('indirizzo', 'centro', 'centrodicosto', 'sede'), soc: col('societa'), cat: col('categoria'), note: col('note'), doc: col('ndoc', 'documento', 'numdoc'), dt: col('data'), iva: col('imposte', 'iva'), forn: col('fornitore') };
       const isAtt = /attrezzat/i.test(name);
       aoa.slice(hi + 1).forEach(r => {
         const desc = String(r[c.des] ?? '').trim();
         if (!desc) return;
+        if (c.note >= 0 && /^esempio/i.test(String(r[c.note] || '').trim())) return; // righe di esempio del modello
+        if (/^totale$/i.test(desc)) return; // riga dei totali dell'export
         let d = c.dt >= 0 ? r[c.dt] : '';
         if (d instanceof Date) d = ymd(d);
         else if (typeof d === 'number' && d > 20000) d = ymd(new Date(Math.round((d - 25569) * 864e5)));
-        else d = validD(d) ? String(d).slice(0, 10) : '';
+        else { const m = String(d).trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); d = m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[2])}-${pad(m[1])}` : validD(d) ? String(d).slice(0, 10) : ''; }
         const price = c.pa >= 0 && r[c.pa] !== '' ? num(r[c.pa]) : c.pr >= 0 ? num(r[c.pr]) : 0;
         const centro = (c.ind >= 0 ? String(r[c.ind] || '').trim().toUpperCase() : '') || (isAtt ? 'ATTREZZATI' : 'DA ASSEGNARE');
         out.push({
           id: uid() + out.length.toString(36), data: d, ndoc: c.doc >= 0 ? String(r[c.doc] ?? '') : '', codice: c.cod >= 0 ? String(r[c.cod] ?? '').trim() : '',
           descrizione: desc.replace(/\s+/g, ' '), um: c.um >= 0 ? String(r[c.um] || '').trim().toUpperCase() || 'PZ' : 'PZ',
           quantita: num(r[c.q]), prezzo: price, iva: c.iva >= 0 ? num(r[c.iva]) : 0.22,
-          centro, societa: isAtt ? 'Attrezzati' : 'Soluzione Veicolare', categoria: autoCat(desc), fornitore: c.forn >= 0 ? String(r[c.forn] || '') : '', note: '', creato: now
+          centro, societa: socOf(c.soc >= 0 ? r[c.soc] : '', isAtt || centro === 'ATTREZZATI'), categoria: (c.cat >= 0 && String(r[c.cat] || '').trim()) || autoCat(desc), fornitore: c.forn >= 0 ? String(r[c.forn] || '').trim() : '', note: c.note >= 0 ? String(r[c.note] || '').trim() : '', creato: now
         });
       });
     });
@@ -774,6 +804,92 @@
       }
       if (nuovi.length) setConfig('centri', [...cc, ...nuovi]);
       toast(`${rows.length} righe importate`);
+    } catch (e) { toast(e.message); } finally { busy(); }
+  }
+  async function exportXlsx(rows, tag) {
+    if (!rows.length) return toast('Nessun movimento da esportare');
+    try {
+      busy('Preparo il file Excel…');
+      await loadXlsx();
+      const U = XLSX.utils, wb = U.book_new();
+      const EUR = '#,##0.00 "€"', EUR3 = '#,##0.000 "€"', QTY = '#,##0.##';
+      const sorted = rows.slice().sort((a, b) => (centri().indexOf(a.centro) - centri().indexOf(b.centro)) || String(b.data || '').localeCompare(String(a.data || '')));
+      const n = sorted.length, last = n + 1;
+      const fit = (ws, w) => (ws['!cols'] = w.map(x => ({ wch: x })));
+      const setF = (ws, ref, f, v, z) => (ws[ref] = { t: 'n', f, v, z });
+
+      // 1 · Movimenti (stesso formato del modello di importazione)
+      const H = ['Data', 'N. Doc.', 'Codice', 'Descrizione', 'UM', 'Quantità', 'Prezzo unit.', 'Totale', 'Centro', 'Società', 'Categoria', 'Fornitore', 'Note'];
+      const ws = U.aoa_to_sheet([H, ...sorted.map(r => [validD(r.data) ? parseD(r.data) : '', r.ndoc || '', r.codice || '', r.descrizione || '', r.um || '', num(r.quantita), num(r.prezzo), null, r.centro || '', r.societa || '', r.categoria || '', r.fornitore || '', r.note || ''])], { cellDates: true });
+      sorted.forEach((r, i) => {
+        const R = i + 2;
+        if (ws['A' + R] && ws['A' + R].t === 'd') ws['A' + R].z = 'dd/mm/yyyy';
+        ws['F' + R].z = QTY; ws['G' + R].z = EUR3;
+        setF(ws, 'H' + R, `F${R}*G${R}`, tot(r), EUR);
+      });
+      U.sheet_add_aoa(ws, [['', '', '', 'TOTALE', '', null, '', null]], { origin: 'A' + (last + 1) });
+      setF(ws, 'F' + (last + 1), `SUBTOTAL(9,F2:F${last})`, sorted.reduce((s, r) => s + num(r.quantita), 0), QTY);
+      setF(ws, 'H' + (last + 1), `SUBTOTAL(9,H2:H${last})`, sumT(sorted), EUR);
+      ws['!autofilter'] = { ref: `A1:M${last}` };
+      fit(ws, [11, 9, 9, 56, 6, 10, 13, 14, 15, 19, 26, 18, 24]);
+      U.book_append_sheet(wb, ws, 'Movimenti');
+
+      // 2 · Riepilogo centri (formule collegate ai movimenti)
+      const T = sumT(sorted), bud = budget();
+      const cs = [...new Set(sorted.map(r => r.centro || ''))].sort((a, b) => sumT(sorted.filter(r => r.centro === b)) - sumT(sorted.filter(r => r.centro === a)));
+      const wr = U.aoa_to_sheet([['Centro', 'Righe', 'Articoli', 'Totale', '% sul totale', 'Budget annuale', 'Scostamento', 'Righe senza prezzo']]);
+      cs.forEach((c, i) => {
+        const R = i + 2, rr = sorted.filter(r => r.centro === c), t = sumT(rr), b = num(bud[c]);
+        U.sheet_add_aoa(wr, [[c]], { origin: 'A' + R });
+        setF(wr, 'B' + R, `COUNTIF(Movimenti!$I$2:$I$${last},A${R})`, rr.length, '#,##0');
+        wr['C' + R] = { t: 'n', v: new Set(rr.map(artKey)).size, z: '#,##0' };
+        setF(wr, 'D' + R, `SUMIF(Movimenti!$I$2:$I$${last},A${R},Movimenti!$H$2:$H$${last})`, t, EUR);
+        setF(wr, 'E' + R, `IF($D$${cs.length + 2}=0,0,D${R}/$D$${cs.length + 2})`, T ? t / T : 0, '0.0%');
+        if (b) { wr['F' + R] = { t: 'n', v: b, z: EUR }; setF(wr, 'G' + R, `F${R}-D${R}`, b - t, EUR); }
+        setF(wr, 'H' + R, `COUNTIFS(Movimenti!$I$2:$I$${last},A${R},Movimenti!$G$2:$G$${last},0)`, rr.filter(r => !num(r.prezzo)).length, '#,##0');
+      });
+      const TR = cs.length + 2;
+      U.sheet_add_aoa(wr, [['TOTALE']], { origin: 'A' + TR });
+      setF(wr, 'B' + TR, `SUM(B2:B${TR - 1})`, n, '#,##0');
+      wr['C' + TR] = { t: 'n', v: new Set(sorted.map(artKey)).size, z: '#,##0' };
+      setF(wr, 'D' + TR, `SUM(D2:D${TR - 1})`, T, EUR);
+      setF(wr, 'E' + TR, `SUM(E2:E${TR - 1})`, 1, '0.0%');
+      setF(wr, 'H' + TR, `SUM(H2:H${TR - 1})`, sorted.filter(r => !num(r.prezzo)).length, '#,##0');
+      wr['!ref'] = `A1:H${TR}`;
+      fit(wr, [18, 9, 10, 15, 12, 15, 15, 17]);
+      U.book_append_sheet(wb, wr, 'Riepilogo centri');
+
+      // 3 · Categorie x Centri
+      const ks = [...new Set(sorted.map(r => r.categoria || 'Altro'))].sort((a, b) => sumT(sorted.filter(r => (r.categoria || 'Altro') === b)) - sumT(sorted.filter(r => (r.categoria || 'Altro') === a)));
+      const col = i => U.encode_col(i);
+      const wm = U.aoa_to_sheet([['Categoria', ...cs, 'Totale']]);
+      ks.forEach((k, i) => {
+        const R = i + 2; U.sheet_add_aoa(wm, [[k]], { origin: 'A' + R });
+        cs.forEach((c, j) => { const v = sumT(sorted.filter(r => r.centro === c && (r.categoria || 'Altro') === k)); setF(wm, col(j + 1) + R, `SUMIFS(Movimenti!$H$2:$H$${last},Movimenti!$K$2:$K$${last},$A${R},Movimenti!$I$2:$I$${last},${col(j + 1)}$1)`, v, EUR); });
+        setF(wm, col(cs.length + 1) + R, `SUM(B${R}:${col(cs.length)}${R})`, sumT(sorted.filter(r => (r.categoria || 'Altro') === k)), EUR);
+      });
+      const MR = ks.length + 2; U.sheet_add_aoa(wm, [['TOTALE']], { origin: 'A' + MR });
+      cs.concat(['']).forEach((c, j) => { const L = col(j + 1); setF(wm, L + MR, `SUM(${L}2:${L}${MR - 1})`, c ? sumT(sorted.filter(r => r.centro === c)) : T, EUR); });
+      wm['!ref'] = `A1:${col(cs.length + 1)}${MR}`;
+      fit(wm, [28, ...cs.map(() => 15), 15]);
+      U.book_append_sheet(wb, wm, 'Categorie x Centri');
+
+      // 4 · Articoli
+      const arts = articoli(sorted);
+      const wa = U.aoa_to_sheet([['Codice', 'Articolo', 'Acquisti', 'Q.tà totale', 'Prezzo min', 'Prezzo max', 'Prezzo medio', 'Variazione', 'Spesa totale', 'Centri'],
+        ...arts.map(x => [x.codice, x.desc, x.n, x.qty, x.min || null, x.max || null, x.avg || null, x.var || null, x.tot, x.centri.join(', ')])]);
+      arts.forEach((x, i) => { const R = i + 2; ['E', 'F', 'G'].forEach(L => wa[L + R] && (wa[L + R].z = EUR3)); if (wa['H' + R]) wa['H' + R].z = '0%'; wa['I' + R].z = EUR; wa['D' + R].z = QTY; });
+      wa['!autofilter'] = { ref: `A1:J${arts.length + 1}` };
+      fit(wa, [9, 56, 9, 11, 12, 12, 13, 10, 14, 34]);
+      U.book_append_sheet(wb, wa, 'Articoli');
+
+      // 5 · Info
+      const wi = U.aoa_to_sheet([['Centro di Costo — Soluzione Veicolare'], [], ['Esportato il', new Date()], ['Società', soc || 'Tutte'], ['Movimenti', n], ['Spesa totale', T], [], ['I totali dei fogli «Riepilogo centri» e «Categorie x Centri» sono formule collegate al foglio «Movimenti».'], ['Il foglio «Movimenti» ha lo stesso formato del modello: si può modificare e reimportare dall\'app.']], { cellDates: true });
+      wi.B3.z = 'dd/mm/yyyy hh:mm'; wi.B6.z = EUR; fit(wi, [16, 22]);
+      U.book_append_sheet(wb, wi, 'Info');
+
+      XLSX.writeFile(wb, `centro-di-costo-${tag}-${today()}.xlsx`, { compression: true });
+      toast('File Excel scaricato');
     } catch (e) { toast(e.message); } finally { busy(); }
   }
   function exportCsv() {
@@ -1017,14 +1133,22 @@
 
     document.addEventListener('click', e => {
       const t = e.target;
-      const s = t.closest('[data-soc]'); if (s) { soc = s.dataset.soc; LS.set('cdc_soc', soc); if (view === 'centri') ccAnim = true; render(); return; }
+      const s = t.closest('[data-soc]'); if (s) { soc = s.dataset.soc; LS.set('cdc_soc', soc); if (view === 'centri' || view === 'home') ccAnim = true; render(); return; }
       const go2 = t.closest('[data-go]'); if (go2) { location.hash = go2.dataset.go; return; }
       if (t.closest('#k-zero-card')) { Object.assign(f, { q: '', centro: '', cat: '', per: 'zero' }); location.hash = 'movimenti'; return; }
       const gm = t.closest('[data-gomov]'); if (gm) { Object.assign(f, { q: '', cat: '', per: '', centro: gm.dataset.gomov }); mLimit = 150; location.hash = 'movimenti'; return; }
       const gz = t.closest('[data-gozero]'); if (gz) { Object.assign(f, { q: '', cat: '', per: 'zero', centro: gz.dataset.gozero }); mLimit = 150; location.hash = 'movimenti'; return; }
-      const sc = t.closest('#v-centri [data-centro]'); if (sc) { selectCC(sc.dataset.centro); return; }
+      const sc = t.closest('.dash [data-centro]'); if (sc) { selectCC(sc.dataset.centro, sc.closest('.view')); return; }
       const bc = t.closest('.bar-row[data-centro], .cc-card[data-centro]'); if (bc) { Object.assign(f, { q: '', cat: '', per: '', centro: bc.dataset.centro }); mLimit = 150; location.hash = 'movimenti'; return; }
       const bk = t.closest('.bar-row[data-cat]'); if (bk) { Object.assign(f, { q: '', centro: '', per: '', cat: bk.dataset.cat }); mLimit = 150; location.hash = 'movimenti'; return; }
+      if (t.id === 'm-ckall') { const on = t.checked; $$('#m-list [data-ck]').forEach(c => { const id = c.dataset.ck; on ? sel.add(id) : sel.delete(id); }); renderMov(); return; }
+      const ck = t.closest('#m-list [data-ck]'); if (ck) { const id = ck.dataset.ck; sel.has(id) ? sel.delete(id) : sel.add(id); if (t.tagName !== 'INPUT') ck.classList.toggle('sel'); else ck.closest('tr').classList.toggle('sel', t.checked); selBar(); return; }
+      if (t.closest('#m-list td.ck')) { const cb = t.closest('td.ck').querySelector('input'); cb.click(); return; }
+      if (t.closest('#m-selmode')) { selMode = !selMode; if (!selMode) sel.clear(); renderMov(); return; }
+      if (t.closest('#sb-none')) { sel.clear(); selMode = false; renderMov(); return; }
+      if (t.closest('#sb-all')) { filtered().forEach(r => sel.add(String(r.id))); if (!isDesk()) selMode = true; renderMov(); return; }
+      if (t.closest('#sb-del')) { delSelected(); return; }
+      if (t.closest('#m-xls')) { exportXlsx(filtered(), 'movimenti-filtrati'); return; }
       const ed = t.closest('td.ed'); if (ed && !ed.querySelector('input,select')) { inlineEdit(ed); return; }
       if (t.closest('td.ed')) return;
       const it = t.closest('[data-id]'); if (it && !t.closest('#sheet-body')) { const r = db.movimenti.find(x => String(x.id) === it.dataset.id); if (r) formMov(r); return; }
@@ -1048,7 +1172,7 @@
     $('#a-sort').onchange = e => { a.sort = e.target.value; renderArt(); };
     $('#a-centro').onchange = e => { a.centro = e.target.value; renderArt(); };
 
-    $('#c-map').addEventListener('mousemove', mapTip); $('#c-map').addEventListener('mouseleave', () => { const t = $('#c-map .cm-tip'); if (t) t.remove(); });
+    $$('.k-map').forEach(m => { m.addEventListener('mousemove', mapTip); m.addEventListener('mouseleave', () => { const t = $('.cm-tip', m); if (t) t.remove(); }); });
     $('#chat-form').addEventListener('submit', e => { e.preventDefault(); ask($('#chat-q').value); });
     $('#chat-q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && isDesk()) { e.preventDefault(); ask(e.target.value); } });
     $('#chat-q').addEventListener('input', e => { e.target.style.height = ''; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
@@ -1061,7 +1185,7 @@
     $('#s-classify').onclick = classifyAI;
     $('#s-imp-add').onclick = () => importExcel(false);
     $('#s-imp-rep').onclick = () => importExcel(true);
-    $('#s-exp').onclick = exportCsv;
+    $('#s-xls').onclick = () => exportXlsx(db.movimenti, 'completo');
     $('#s-budget').addEventListener('change', e => {
       const c = e.target.dataset.bud; if (!c) return;
       const b = { ...budget() }; const v = num(e.target.value);
