@@ -15,8 +15,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=7">
-  <link rel="stylesheet" href="cdc.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="cdc.css?v=8">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -96,7 +96,7 @@
           <div class="card kpi"><div class="kpi-h"><span class="label">Totale speso</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M17 6.5A7 7 0 1 0 17 17.5M4 10h9M4 14h9"/></svg></span></div><div class="big" id="k-tot">0 €</div><span class="muted small" id="k-tot-s"></span></div>
           <div class="card kpi link-card" data-go="centri"><div class="kpi-h"><span class="label">Centro più costoso</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span></div><div class="big k-txt" id="k-top">—</div><span class="muted small" id="k-top-s"></span></div>
           <div class="card kpi link-card" data-go="articoli"><div class="kpi-h"><span class="label">Articoli distinti</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></span></div><div class="big" id="k-art">0</div><span class="muted small" id="k-art-s"></span></div>
-          <div class="card kpi link-card" id="k-zero-card"><div class="kpi-h"><span class="label">Righe senza prezzo</span><span class="kpi-ic warn-ic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></svg></span></div><div class="big" id="k-zero">0</div><span class="muted small">da completare</span></div>
+          <div class="card kpi link-card" id="k-zero-card"><div class="kpi-h"><span class="label">Righe senza prezzo</span><span class="kpi-ic warn-ic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></svg></span></div><div class="big" id="k-zero">0</div><span class="muted small" id="k-zero-s">da completare</span></div>
         </div>
         <div class="cc-dash dash">
           <div class="card cc-mapcard">
@@ -129,7 +129,8 @@
         <div class="card zb" id="m-zero" hidden>
           <span class="zb-ic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></svg></span>
           <div class="zb-t"><b>Completa i prezzi mancanti</b><span>1 · Esporta in Excel &nbsp;2 · Inserisci i prezzi (e se vuoi aggiungi prodotti) &nbsp;3 · Reimporta: prima di salvare ti mostro prezzi variati e prodotti nuovi.</span></div>
-          <div class="zb-a"><button class="btn sm" id="zb-xls">1 · Esporta Excel</button><button class="btn sm primary" id="zb-imp">3 · Importa file</button></div>
+          <div class="zb-an" id="zb-an"></div>
+          <div class="zb-a"><button class="btn sm primary" id="zb-auto" hidden>Completa in automatico</button><button class="btn sm" id="zb-xls">1 · Esporta Excel</button><button class="btn sm" id="zb-imp">3 · Importa file</button></div>
         </div>
         <div class="sum-row"><span class="muted small" id="m-count"></span><span class="sum-r"><button class="btn sm" id="m-selmode">Seleziona</button><button class="btn sm" id="m-imp"><span class="xl-d">Importa </span>aggiornamenti</button><button class="btn sm" id="m-xls"><span class="xl-d">Esporta </span>Excel</button><strong id="m-sum">0 €</strong></span></div>
         <div id="m-list"></div>
@@ -237,6 +238,6 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

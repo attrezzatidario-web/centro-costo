@@ -265,6 +265,7 @@
     $('#k-art-s').textContent = 'codici e voci uniche';
     const zero = rows.filter(r => !num(r.prezzo)).length;
     countTo($('#k-zero'), zero, v => fmtNum(Math.round(v), 0));
+    { const n = priceSuggest().out.length; $('#k-zero-s').textContent = n ? `${n} completabili in automatico` : 'da completare'; }
 
     renderDash($('#v-home'), {});
 
@@ -380,6 +381,15 @@
     selBar();
     $('#m-count').textContent = `${fmtNum(list.length, 0)} righe`;
     $('#m-zero').hidden = f.per !== 'zero';
+    if (f.per === 'zero') {
+      const ps = priceStats();
+      $('#zb-an').innerHTML = `
+        <div><b>${fmtNum(ps.nPrezzo, 0)}</b><span>righe con prezzo · ${eur0(ps.tPrezzo)}</span></div>
+        <div class="bad"><b>${fmtNum(ps.zero.length, 0)}</b><span>righe senza prezzo</span></div>
+        <div><b>${fmtNum(ps.conCod, 0)}</b><span>di queste hanno un codice</span></div>
+        <div class="${ps.out.length ? 'ok' : ''}"><b>${fmtNum(ps.out.length, 0)}</b><span>completabili in automatico${ps.nDes ? ` (${ps.nCod} da codice, ${ps.nDes} da descrizione)` : ''}</span></div>`;
+      $('#zb-auto').hidden = !ps.out.length; $('#zb-auto').textContent = `Completa in automatico (${ps.out.length})`;
+    }
     countTo($('#m-sum'), T);
     // con data prima (più recenti), poi senza data nell'ordine di inserimento
     const sorted = list.map((r, i) => [r, i]).sort((x, y) => {
@@ -400,6 +410,54 @@
     } else {
       $('#m-list').innerHTML = `<div class="day${selMode ? ' selmode' : ''}">${shown.map(r => selMode ? itemHtml(r).replace('<div class="item"', `<div class="item${sel.has(String(r.id)) ? ' sel' : ''}" data-ck="${esc(r.id)}"`).replace(/ data-id="[^"]*"/, '') : itemHtml(r)).join('')}</div>${more}`;
     }
+  }
+
+  /* ---------- Prezzi mancanti: analisi e completamento dal codice ---------- */
+  const normD = d => String(d || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  function priceSuggest() {
+    const priced = db.movimenti.filter(r => num(r.prezzo) > 0)
+      .map((r, i) => [r, i]).sort((a, b) => String(a[0].data || '').localeCompare(String(b[0].data || '')) || a[1] - b[1]).map(x => x[0]);
+    const byCod = new Map(), byDes = new Map();
+    priced.forEach(r => { // l'ultimo inserito vince: è il più recente
+      const c = String(r.codice || '').trim(); if (c) { const L = byCod.get(c) || []; L.push(r); byCod.set(c, L); }
+      const d = normD(r.descrizione); const L2 = byDes.get(d) || []; L2.push(r); byDes.set(d, L2);
+    });
+    const zero = db.movimenti.filter(r => !num(r.prezzo));
+    const out = [];
+    zero.forEach(r => {
+      const c = String(r.codice || '').trim();
+      let L = c && byCod.get(c), src = 'codice';
+      if (!L) { L = byDes.get(normD(r.descrizione)); src = 'descrizione'; }
+      if (!L || !L.length) return;
+      const from = L[L.length - 1], prices = [...new Set(L.map(x => num(x.prezzo)))];
+      out.push({ r, src, from, price: num(from.prezzo), prices });
+    });
+    return { zero, out, conCod: zero.filter(r => String(r.codice || '').trim()).length };
+  }
+  function priceStats() {
+    const p = priceSuggest(), conPrezzo = db.movimenti.filter(r => num(r.prezzo) > 0);
+    return { ...p, nPrezzo: conPrezzo.length, tPrezzo: sumT(conPrezzo), nCod: p.out.filter(x => x.src === 'codice').length, nDes: p.out.filter(x => x.src === 'descrizione').length };
+  }
+  function openAutoPrice() {
+    const { out } = priceSuggest();
+    if (!out.length) return toast('Nessuna riga senza prezzo ha un codice già presente con prezzo');
+    const line = x => `${esc(x.r.centro || '—')} · ${qtyFmt(x.r.quantita)} ${esc(x.r.um || '')} × <b>${eurP(x.price)}</b> = ${eur(num(x.r.quantita) * x.price)}`;
+    const srcTxt = x => `${x.src === 'codice' ? 'stesso codice ' + esc(x.r.codice) : 'stessa descrizione'} · da ${esc(x.from.centro || '—')}${validD(x.from.data) ? ' del ' + esc(shortDate(x.from.data)) : ''}${x.prices.length > 1 ? ` · prezzi trovati ${eurP(Math.min(...x.prices))} – ${eurP(Math.max(...x.prices))}, uso il più recente` : ''}`;
+    const sec = (title, items, off) => items.length ? `<div class="rv-sec"><div class="rv-h"><b>${title}</b><span class="chip">${items.length}</span></div><div class="rv-list">${items.map(x => `<label class="rv-row"><input type="checkbox" class="cb" name="a${out.indexOf(x)}"${off ? '' : ' checked'}><span class="rv-m"><span class="t">${esc(x.r.descrizione)}</span><span class="s">${line(x)}</span><span class="s rv-src">${srcTxt(x)}</span></span></label>`).join('')}</div></div>` : '';
+    const c1 = out.filter(x => x.src === 'codice'), c2 = out.filter(x => x.src === 'descrizione');
+    openSheet('Completa i prezzi in automatico', `
+      <div class="ai-note">Prezzo preso dall'ultimo acquisto dello stesso articolo. Controlla e togli la spunta a quello che non vuoi.</div>
+      ${sec('Stesso codice', c1, false)}
+      ${sec('Stessa descrizione, codice diverso', c2, true)}`,
+      fd => {
+        const pick = out.filter((x, i) => fd.get('a' + i));
+        if (!pick.length) return toast('Nessuna riga selezionata');
+        write(pick.map(x => ({ action: 'upsert', sheet: 'Movimenti', row: { ...x.r, prezzo: x.price } })));
+        toast(`${pick.length} prezzi inseriti · ${eur(pick.reduce((s, x) => s + num(x.r.quantita) * x.price, 0))}`);
+        return true;
+      }, null, `Applica ${c1.length} prezzi`);
+    $('#sheet-form').classList.add('wide');
+    $('#sheet-body').addEventListener('change', () => { const n = $$('#sheet-body .rv-row input:checked').length; $('#sheet-ok').textContent = `Applica ${n} prezz${n === 1 ? 'o' : 'i'}`; });
   }
 
   function selBar() {
@@ -1224,6 +1282,7 @@
       if (t.closest('#sb-del')) { delSelected(); return; }
       if (t.closest('#m-xls')) { exportXlsx(filtered(), f.per === 'zero' ? 'senza-prezzo' : 'movimenti-filtrati'); return; }
       if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
+      if (t.closest('#zb-auto')) { openAutoPrice(); return; }
       if (t.closest('#zb-xls')) { exportXlsx(filtered(), 'senza-prezzo'); return; }
       const ed = t.closest('td.ed'); if (ed && !ed.querySelector('input,select')) { inlineEdit(ed); return; }
       if (t.closest('td.ed')) return;
