@@ -42,7 +42,7 @@
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
   const isLocal = () => url === 'local';
-  const save = () => { LS.set('cdc_data', db); LS.set('cdc_queue', queue); };
+  const save = () => { prodIdx = null; LS.set('cdc_data', db); LS.set('cdc_queue', queue); };
 
   /* ================= Utils ================= */
   const $ = (s, el = document) => el.querySelector(s);
@@ -75,6 +75,18 @@
   const ccAbbr = s => { const w = String(s || '?').trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase(); };
   const ccIc = c => `<span class="ic cc${String(c).toUpperCase() === 'ATTREZZATI' ? ' cc-att' : ''}">${esc(ccAbbr(c))}</span>`;
   const groupBy = (arr, fn) => { const m = new Map(); arr.forEach(x => { const k = fn(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); }); return m; };
+  // un prodotto = tutte le righe con lo stesso codice o la stessa descrizione (taglie e varianti incluse)
+  let prodIdx = null;
+  const dKey = r => 'd:' + String(r.descrizione || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const cKey = r => { const c = String(r.codice || '').trim(); return c ? 'c:' + c : ''; };
+  function buildProd() {
+    const par = new Map();
+    const find = x => { if (!par.has(x)) par.set(x, x); let r = x; while (par.get(r) !== r) r = par.get(r); while (par.get(x) !== r) { const n = par.get(x); par.set(x, r); x = n; } return r; };
+    const uni = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) par.set(ra < rb ? rb : ra, ra < rb ? ra : rb); };
+    db.movimenti.forEach(r => { const d = dKey(r), c = cKey(r); find(d); if (c) uni(c, d); });
+    prodIdx = { find, par };
+  }
+  const prodKey = r => { if (!prodIdx) buildProd(); const d = dKey(r), c = cKey(r); if (prodIdx.par.has(d)) return prodIdx.find(d); if (c && prodIdx.par.has(c)) return prodIdx.find(c); return c || d; };
   const artKey = r => String(r.codice || '').trim() ? 'c:' + String(r.codice).trim() : 'd:' + String(r.descrizione || '').trim().toUpperCase().replace(/\s+/g, ' ');
 
   function toast(msg) {
@@ -260,7 +272,7 @@
     $('#k-top').textContent = byC[0] ? byC[0].k : '—';
     $('#k-top-s').textContent = byC[0] ? `${eur0(byC[0].v)} · ${fmtNum(pct(byC[0].v, T), 1)}%` : '';
 
-    const arts = new Set(rows.map(artKey));
+    const arts = new Set(rows.map(prodKey));
     countTo($('#k-art'), arts.size, v => fmtNum(Math.round(v), 0));
     $('#k-art-s').textContent = 'codici e voci uniche';
     const zero = rows.filter(r => !num(r.prezzo)).length;
@@ -556,7 +568,7 @@
         <span class="cr-n">${i + 1}</span>
         <span class="cr-main"><span class="cr-top"><b>${esc(x.c)}</b><span><em>${fmtNum(pct(x.t, T), 1)}%</em><strong data-count="${x.t}">${eur0(x.t)}</strong></span></span>
         <span class="cr-track"><i class="${over ? 'over' : ''}" style="width:${(x.t / mx * 100).toFixed(2)}%"></i>${b ? `<u style="left:${Math.min(100, b / mx * 100).toFixed(2)}%" title="Budget ${esc(eur0(b))}"></u>` : ''}</span>
-        <span class="cr-sub">${fmtNum(x.rows.length, 0)} righe · ${fmtNum(new Set(x.rows.map(artKey)).size, 0)} articoli${b ? ' · budget ' + eur0(b) : ''}</span></span>
+        <span class="cr-sub">${fmtNum(x.rows.length, 0)} righe · ${fmtNum(new Set(x.rows.map(prodKey)).size, 0)} articoli${b ? ' · budget ' + eur0(b) : ''}</span></span>
       </button>`;
     }).join('') || '<div class="empty">Nessun dato</div>';
     // indicatori automatici
@@ -670,13 +682,16 @@
 
   /* ================= ARTICOLI ================= */
   function articoli(rows) {
-    const m = groupBy(rows, artKey);
+    const m = groupBy(rows, prodKey);
     return [...m].map(([k, v]) => {
       const prices = v.map(r => num(r.prezzo)).filter(p => p > 0);
       const qty = v.reduce((s, r) => s + num(r.quantita), 0);
       const t = sumT(v);
       const min = prices.length ? Math.min(...prices) : 0, max = prices.length ? Math.max(...prices) : 0;
-      return { k, rows: v, desc: v[v.length - 1].descrizione, codice: v[0].codice || '', um: v[0].um || '', n: v.length, qty, tot: t, min, max, avg: qty ? t / qty : 0, var: min ? max / min - 1 : 0, centri: [...new Set(v.map(r => r.centro))] };
+      const codes = [...new Set(v.map(r => String(r.codice || '').trim()).filter(Boolean))];
+      const dc = {}; v.forEach(r => { const d = String(r.descrizione || '').trim().replace(/\s+/g, ' '); dc[d] = (dc[d] || 0) + 1; });
+      const desc = Object.entries(dc).sort((p, q) => q[1] - p[1])[0][0];
+      return { k, rows: v, desc, codes, codice: codes.length === 1 ? codes[0] : '', um: v[0].um || '', n: v.length, qty, tot: t, min, max, avg: qty ? t / qty : 0, var: min ? max / min - 1 : 0, centri: [...new Set(v.map(r => r.centro))] };
     }).sort((x, y) => y.tot - x.tot);
   }
   function renderArt() {
@@ -684,36 +699,48 @@
     const q = a.q.trim().toLowerCase();
     let list = articoli(rowsSoc().filter(r => !a.centro || r.centro === a.centro));
     const nVar = list.filter(x => x.var > 0.02).length;
-    if (q) list = list.filter(x => `${x.desc} ${x.codice}`.toLowerCase().includes(q));
+    if (q) list = list.filter(x => `${x.desc} ${x.codes.join(' ')} ${x.rows.map(r => r.descrizione).join(' ')}`.toLowerCase().includes(q));
     if (a.sort === 'qty') list.sort((x, y) => y.qty - x.qty);
     if (a.sort === 'var') list.sort((x, y) => (y.var > 0.02) - (x.var > 0.02) || y.var - x.var);
     if (a.sort === 'n') list.sort((x, y) => y.n - x.n);
     sub(soc || '');
-    $('#a-count').textContent = `${fmtNum(list.length, 0)} articoli · ${eur0(list.reduce((s, x) => s + x.tot, 0))}`;
+    $('#a-count').textContent = `${fmtNum(list.length, 0)} prodotti · ${eur0(list.reduce((s, x) => s + x.tot, 0))}`;
     $('#a-var').hidden = !nVar; $('#a-var').textContent = `${nVar} con prezzo variato`;
     const shown = list.slice(0, aLimit);
     const more = list.length > aLimit ? `<div class="more-row"><button class="btn sm" id="a-more">Mostra altri</button></div>` : '';
     const varChip = x => x.var > 0.02 ? `<span class="chip soon art-var">+${fmtNum(x.var * 100, 0)}%</span>` : '';
     if (!list.length) { $('#a-list').innerHTML = '<div class="card empty-state"><p class="muted">Nessun articolo.</p></div>'; return; }
     if (isDesk()) {
-      $('#a-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th>Articolo</th><th class="r">Acquisti</th><th class="r">Q.tà</th><th class="r">Prezzo medio</th><th class="r">Min – Max</th><th class="r">Totale</th></tr></thead><tbody>${shown.map(x => `<tr data-art="${esc(x.k)}"><td><div class="tt"><b>${esc(x.desc)}</b><small>${[x.codice ? 'Cod. ' + x.codice : '', x.centri.join(', ')].filter(Boolean).map(esc).join(' · ')}</small></div></td><td class="num">${x.n}</td><td class="num">${qtyFmt(x.qty)} <span class="muted small">${esc(x.um)}</span></td><td class="num">${x.avg ? eurP(x.avg) : '—'}</td><td class="num">${x.min ? (x.var > 0.02 ? `${eurP(x.min)} – ${eurP(x.max)} ${varChip(x)}` : eurP(x.min)) : '<span class="chip soon">mancante</span>'}</td><td class="num amt">${eur(x.tot)}</td></tr>`).join('')}</tbody></table></div>${more}`;
+      $('#a-list').innerHTML = `<div class="card tbl-card"><table class="tbl"><thead><tr><th>Articolo</th><th class="r">Acquisti</th><th class="r">Q.tà</th><th class="r">Prezzo medio</th><th class="r">Min – Max</th><th class="r">Totale</th></tr></thead><tbody>${shown.map(x => `<tr data-art="${esc(x.k)}"><td><div class="tt"><b>${esc(x.desc)}</b><small>${[x.codes.length > 1 ? x.codes.length + ' codici (varianti)' : x.codice ? 'Cod. ' + x.codice : '', x.centri.join(', ')].filter(Boolean).map(esc).join(' · ')}</small></div></td><td class="num">${x.n}</td><td class="num">${qtyFmt(x.qty)} <span class="muted small">${esc(x.um)}</span></td><td class="num">${x.avg ? eurP(x.avg) : '—'}</td><td class="num">${x.min ? (x.var > 0.02 ? `${eurP(x.min)} – ${eurP(x.max)} ${varChip(x)}` : eurP(x.min)) : '<span class="chip soon">mancante</span>'}</td><td class="num amt">${eur(x.tot)}</td></tr>`).join('')}</tbody></table></div>${more}`;
     } else {
       $('#a-list').innerHTML = `<div class="day">${shown.map(x => `<div class="item" data-art="${esc(x.k)}"><span class="ic">${esc(String(x.n))}×</span><div class="main"><div class="t">${esc(x.desc)}</div><div class="s">${qtyFmt(x.qty)} ${esc(x.um)} · medio ${x.avg ? eurP(x.avg) : '—'} ${varChip(x)}</div></div><div class="amt">${eur0(x.tot)}</div></div>`).join('')}</div>${more}`;
     }
   }
   function openArt(k) {
     const x = articoli(rowsSoc()).find(z => z.k === k); if (!x) return;
-    const rows = [...x.rows].sort((p, q) => String(q.data || '').localeCompare(String(p.data || '')));
+    const byDate = (p, q) => (validD(q.data) ? q.data : '').localeCompare(validD(p.data) ? p.data : '');
+    const rows = [...x.rows].sort(byDate);
+    const pz = [...groupBy(x.rows, r => r.centro || '—')].map(([c, v]) => ({ c, v, q: v.reduce((s, r) => s + num(r.quantita), 0), t: sumT(v), last: v.map(r => validD(r.data) ? r.data : '').sort().pop() })).sort((p, q) => q.q - p.q);
+    const mq = Math.max(1, ...pz.map(p => p.q));
+    const codesH = x.codes.length > 1 ? `<div class="ad-codes">${x.codes.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : '';
+    // cronologia: raggruppata per data
+    const groups = [...groupBy(rows, r => validD(r.data) ? r.data : '')];
     openSheet(x.desc, `
-      <div class="kv">
-        ${x.codice ? `<div><span>Codice</span><strong>${esc(x.codice)}</strong></div>` : ''}
-        <div><span>Spesa totale</span><strong>${eur(x.tot)}</strong></div>
-        <div><span>Quantità acquistata</span><strong>${qtyFmt(x.qty)} ${esc(x.um)}</strong></div>
-        <div><span>Prezzo medio</span><strong>${x.avg ? eurP(x.avg) : '—'}</strong></div>
-        ${x.var > 0.02 ? `<div><span>Variazione prezzo</span><strong class="up">${eurP(x.min)} → ${eurP(x.max)} (+${fmtNum(x.var * 100, 0)}%)</strong></div>` : ''}
+      <div class="ad-kpis">
+        <div><span>Spesa totale</span><b>${eur(x.tot)}</b></div>
+        <div><span>Quantità</span><b>${qtyFmt(x.qty)} ${esc(x.um)}</b></div>
+        <div><span>Prezzo medio</span><b>${x.avg ? eurP(x.avg) : '—'}</b></div>
+        <div><span>Spedizioni</span><b>${x.n}</b></div>
       </div>
-      <div class="hist"><div class="muted small" style="margin-bottom:4px">${rows.length} acquisti</div>${rows.map(r => `<div class="item" data-id="${esc(r.id)}" style="cursor:pointer">${ccIc(r.centro)}<div class="main"><div class="t">${esc(r.centro)}</div><div class="s">${qtyFmt(r.quantita)} × ${num(r.prezzo) ? eurP(r.prezzo) : 'prezzo mancante'}${r.data && validD(r.data) ? ' · ' + esc(shortDate(r.data)) : ''}${r.ndoc ? ' · Doc. ' + esc(r.ndoc) : ''}</div></div><div class="amt">${eur(tot(r))}</div></div>`).join('')}</div>`,
-      null, null, 'Modifica articolo');
+      ${x.var > 0.02 ? `<div class="ad-var">Prezzo variato: ${eurP(x.min)} → ${eurP(x.max)} <b>+${fmtNum(x.var * 100, 0)}%</b></div>` : ''}
+      <div class="ad-sec"><span class="cf-sub">${x.codes.length > 1 ? x.codes.length + ' codici (taglie o varianti)' : x.codice ? 'Codice ' + esc(x.codice) : 'Senza codice'}</span>${codesH}</div>
+      <div class="ad-sec"><span class="cf-sub">Piazzali</span>
+        <div class="ad-pz">${pz.map(p => `<div class="ad-pr">${ccIc(p.c)}<div class="ad-pm"><div class="ad-pt"><b>${esc(p.c)}</b><span>${qtyFmt(p.q)} ${esc(x.um)} · ${eur0(p.t)}</span></div><div class="ct-bar"><i style="width:${(p.q / mq * 100).toFixed(1)}%"></i></div><small>${p.v.length} ${p.v.length === 1 ? 'spedizione' : 'spedizioni'}${p.last ? ' · ultima il ' + esc(shortDate(p.last)) : ''}</small></div></div>`).join('')}</div></div>
+      <div class="ad-sec"><span class="cf-sub">Cronologia spedizioni</span>
+        <div class="tl">${groups.map(([d, v]) => `<div class="tl-g"><div class="tl-d">${d ? esc(parseD(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })) : 'Senza data'}</div>
+          ${v.map(r => `<div class="tl-i" data-id="${esc(r.id)}"><i></i><div class="tl-m"><div class="tl-t"><b>${esc(r.centro || '—')}</b><span>${eur(tot(r))}</span></div><div class="tl-s">${qtyFmt(r.quantita)} ${esc(r.um || '')} × ${num(r.prezzo) ? eurP(r.prezzo) : '<span class="up">prezzo mancante</span>'}${r.ndoc ? ' · Doc. ' + esc(r.ndoc) : ''}${x.codes.length > 1 && r.codice ? ' · cod. ' + esc(r.codice) : ''}${r.fornitore ? ' · ' + esc(r.fornitore) : ''}</div></div></div>`).join('')}</div>`).join('')}</div></div>`,
+      null, null, 'Modifica prodotto');
+    $('#sheet-form').classList.add('wide');
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = () => { closeSheet(); setTimeout(() => formArt(k), 250); };
   }
 
@@ -873,8 +900,8 @@
   function diffImport(rows) {
     const byId = new Map(db.movimenti.map(r => [String(r.id), r]));
     const lastPrice = new Map(); // ultimo prezzo noto per articolo
-    [...db.movimenti].sort((a, b) => String(a.data || '').localeCompare(String(b.data || ''))).forEach(r => { if (num(r.prezzo) > 0) lastPrice.set(artKey(r), num(r.prezzo)); });
-    const known = new Set(db.movimenti.map(artKey));
+    [...db.movimenti].sort((a, b) => String(a.data || '').localeCompare(String(b.data || ''))).forEach(r => { if (num(r.prezzo) > 0) lastPrice.set(prodKey(r), num(r.prezzo)); });
+    const known = new Set(db.movimenti.map(prodKey));
     const res = { prezzoIns: [], prezzoVar: [], altre: [], nuoviProd: [], nuoveRighe: [], invariate: 0 };
     rows.forEach(r => {
       const old = r._hasId ? byId.get(String(r.id)) : null;
@@ -888,7 +915,7 @@
         else res.altre.push(it);
       } else {
         if (r._hasId) row.id = uid() + Math.random().toString(36).slice(2, 5); // ID non trovato: riga nuova
-        const k = artKey(row), lp = lastPrice.get(k);
+        const k = prodKey(row), lp = lastPrice.get(k);
         const it = { row, lp, pv: lp && num(row.prezzo) > 0 && Math.abs(num(row.prezzo) / lp - 1) > .005 };
         (known.has(k) ? res.nuoveRighe : res.nuoviProd).push(it);
       }
@@ -973,7 +1000,7 @@
         const R = i + 2, rr = sorted.filter(r => r.centro === c), t = sumT(rr), b = num(bud[c]);
         U.sheet_add_aoa(wr, [[c]], { origin: 'A' + R });
         setF(wr, 'B' + R, `COUNTIF(Movimenti!$I$2:$I$${last},A${R})`, rr.length, '#,##0');
-        wr['C' + R] = { t: 'n', v: new Set(rr.map(artKey)).size, z: '#,##0' };
+        wr['C' + R] = { t: 'n', v: new Set(rr.map(prodKey)).size, z: '#,##0' };
         setF(wr, 'D' + R, `SUMIF(Movimenti!$I$2:$I$${last},A${R},Movimenti!$H$2:$H$${last})`, t, EUR);
         setF(wr, 'E' + R, `IF($D$${cs.length + 2}=0,0,D${R}/$D$${cs.length + 2})`, T ? t / T : 0, '0.0%');
         if (b) { wr['F' + R] = { t: 'n', v: b, z: EUR }; setF(wr, 'G' + R, `F${R}-D${R}`, b - t, EUR); }
@@ -982,7 +1009,7 @@
       const TR = cs.length + 2;
       U.sheet_add_aoa(wr, [['TOTALE']], { origin: 'A' + TR });
       setF(wr, 'B' + TR, `SUM(B2:B${TR - 1})`, n, '#,##0');
-      wr['C' + TR] = { t: 'n', v: new Set(sorted.map(artKey)).size, z: '#,##0' };
+      wr['C' + TR] = { t: 'n', v: new Set(sorted.map(prodKey)).size, z: '#,##0' };
       setF(wr, 'D' + TR, `SUM(D2:D${TR - 1})`, T, EUR);
       setF(wr, 'E' + TR, `SUM(E2:E${TR - 1})`, 1, '0.0%');
       setF(wr, 'H' + TR, `SUM(H2:H${TR - 1})`, sorted.filter(r => !num(r.prezzo)).length, '#,##0');
@@ -1222,10 +1249,10 @@
     const zero = x.rows.filter(r => !num(r.prezzo)).length;
     const cat = x.rows[x.rows.length - 1].categoria || autoCat(x.desc);
     openSheet('Modifica articolo', `
-      <div class="ai-note">Le modifiche valgono per ${x.n === 1 ? 'l\'unica riga' : 'tutte le ' + x.n + ' righe'} di questo articolo</div>
+      <div class="ai-note">Le modifiche valgono per ${x.n === 1 ? 'l\'unica riga' : 'tutte le ' + x.n + ' righe'} di questo prodotto</div>
       <label class="f"><span>Descrizione</span><input name="descrizione" required data-focus value="${esc(x.desc)}"></label>
       <div class="f-row">
-        <label class="f"><span>Codice articolo</span><input name="codice" value="${esc(x.codice)}"></label>
+        ${x.codes.length > 1 ? `<label class="f"><span>Codici</span><input value="${esc(x.codes.length + ' codici: restano invariati')}" disabled></label>` : `<label class="f"><span>Codice articolo</span><input name="codice" value="${esc(x.codice)}"></label>`}
         <label class="f"><span>Unità</span><select name="um">${opt(UM, x.um || 'PZ')}</select></label>
       </div>
       <label class="f"><span>Categoria</span><select name="categoria">${opt(categorie(), cat)}</select></label>
@@ -1241,7 +1268,7 @@
         const desc = String(fd.get('descrizione')).trim(); if (!desc) return toast('Inserisci la descrizione');
         const p = num(fd.get('prezzo')), dove = fd.get('dove');
         const ops = x.rows.map(r => {
-          const row = { ...r, descrizione: desc, codice: String(fd.get('codice')).trim(), um: fd.get('um'), categoria: fd.get('categoria') };
+          const row = { ...r, descrizione: desc, codice: fd.has('codice') ? String(fd.get('codice')).trim() : r.codice, um: fd.get('um'), categoria: fd.get('categoria') };
           if (dove === 'tutte' || (dove === 'zero' && !num(r.prezzo))) row.prezzo = p;
           return { action: 'upsert', sheet: 'Movimenti', row };
         });
