@@ -15,8 +15,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
-  <link rel="stylesheet" href="cdc.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="cdc.css?v=7">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -126,7 +126,12 @@
           <select id="f-cat"></select>
           <select id="f-per"></select>
         </div>
-        <div class="sum-row"><span class="muted small" id="m-count"></span><span class="sum-r"><button class="btn sm" id="m-selmode">Seleziona</button><button class="btn sm" id="m-xls"><span class="xl-d">Esporta </span>Excel</button><strong id="m-sum">0 €</strong></span></div>
+        <div class="card zb" id="m-zero" hidden>
+          <span class="zb-ic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></svg></span>
+          <div class="zb-t"><b>Completa i prezzi mancanti</b><span>1 · Esporta in Excel &nbsp;2 · Inserisci i prezzi (e se vuoi aggiungi prodotti) &nbsp;3 · Reimporta: prima di salvare ti mostro prezzi variati e prodotti nuovi.</span></div>
+          <div class="zb-a"><button class="btn sm" id="zb-xls">1 · Esporta Excel</button><button class="btn sm primary" id="zb-imp">3 · Importa file</button></div>
+        </div>
+        <div class="sum-row"><span class="muted small" id="m-count"></span><span class="sum-r"><button class="btn sm" id="m-selmode">Seleziona</button><button class="btn sm" id="m-imp"><span class="xl-d">Importa </span>aggiornamenti</button><button class="btn sm" id="m-xls"><span class="xl-d">Esporta </span>Excel</button><strong id="m-sum">0 €</strong></span></div>
         <div id="m-list"></div>
       </section>
 
@@ -188,7 +193,7 @@
           <div class="card">
             <h3>Importa da Excel</h3>
             <p class="muted small" style="margin:4px 0 12px">Carica l'export del gestionale o il <b>modello Excel</b> compilato. Se la categoria è vuota viene assegnata in automatico.</p>
-            <div class="row-btns"><button class="btn primary sm" id="s-imp-add">Aggiungi righe</button><button class="btn sm" id="s-imp-rep">Sostituisci tutto</button><button class="btn sm" id="s-xls">Esporta Excel completo</button><a class="btn sm" href="modello-importazione.xlsx" download>Scarica modello Excel</a></div>
+            <div class="row-btns"><button class="btn primary sm" id="s-imp-add">Importa aggiornamenti</button><button class="btn sm" id="s-imp-rep">Sostituisci tutto</button><button class="btn sm" id="s-xls">Esporta Excel completo</button><a class="btn sm" href="modello-importazione.xlsx" download>Scarica modello Excel</a></div>
           </div>
           <div class="card">
             <h3>Budget annuale per centro</h3>
@@ -232,6 +237,6 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

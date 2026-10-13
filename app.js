@@ -379,6 +379,7 @@
     $('#m-selmode').hidden = isDesk(); $('#m-selmode').textContent = selMode ? 'Fine' : 'Seleziona'; $('#m-selmode').classList.toggle('primary', selMode);
     selBar();
     $('#m-count').textContent = `${fmtNum(list.length, 0)} righe`;
+    $('#m-zero').hidden = f.per !== 'zero';
     countTo($('#m-sum'), T);
     // con data prima (più recenti), poi senza data nell'ordine di inserimento
     const sorted = list.map((r, i) => [r, i]).sort((x, y) => {
@@ -755,7 +756,7 @@
       if (hi < 0) return;
       const H = aoa[hi].map(nh);
       const col = (...keys) => { for (const k of keys) { const i = H.indexOf(k); if (i >= 0) return i; } return -1; };
-      const c = { cod: col('cod', 'codice', 'codart'), des: col('descrizione'), um: col('um'), q: col('quant', 'quantita', 'qta', 'qt'), pa: col('pacq', 'prezzoacquisto', 'costo'), pr: col('prezzo', 'prezzounit', 'prezzounitario'), ind: col('indirizzo', 'centro', 'centrodicosto', 'sede'), soc: col('societa'), cat: col('categoria'), note: col('note'), doc: col('ndoc', 'documento', 'numdoc'), dt: col('data'), iva: col('imposte', 'iva'), forn: col('fornitore') };
+      const c = { cod: col('cod', 'codice', 'codart'), des: col('descrizione'), um: col('um'), q: col('quant', 'quantita', 'qta', 'qt'), pa: col('pacq', 'prezzoacquisto', 'costo'), pr: col('prezzo', 'prezzounit', 'prezzounitario'), ind: col('indirizzo', 'centro', 'centrodicosto', 'sede'), id: col('idnonmodificare', 'id'), soc: col('societa'), cat: col('categoria'), note: col('note'), doc: col('ndoc', 'documento', 'numdoc'), dt: col('data'), iva: col('imposte', 'iva'), forn: col('fornitore') };
       const isAtt = /attrezzat/i.test(name);
       aoa.slice(hi + 1).forEach(r => {
         const desc = String(r[c.des] ?? '').trim();
@@ -769,7 +770,7 @@
         const price = c.pa >= 0 && r[c.pa] !== '' ? num(r[c.pa]) : c.pr >= 0 ? num(r[c.pr]) : 0;
         const centro = (c.ind >= 0 ? String(r[c.ind] || '').trim().toUpperCase() : '') || (isAtt ? 'ATTREZZATI' : 'DA ASSEGNARE');
         out.push({
-          id: uid() + out.length.toString(36), data: d, ndoc: c.doc >= 0 ? String(r[c.doc] ?? '') : '', codice: c.cod >= 0 ? String(r[c.cod] ?? '').trim() : '',
+          id: (c.id >= 0 && String(r[c.id] ?? '').trim()) || uid() + out.length.toString(36), _hasId: c.id >= 0 && !!String(r[c.id] ?? '').trim(), data: d, ndoc: c.doc >= 0 ? String(r[c.doc] ?? '') : '', codice: c.cod >= 0 ? String(r[c.cod] ?? '').trim() : '',
           descrizione: desc.replace(/\s+/g, ' '), um: c.um >= 0 ? String(r[c.um] || '').trim().toUpperCase() || 'PZ' : 'PZ',
           quantita: num(r[c.q]), prezzo: price, iva: c.iva >= 0 ? num(r[c.iva]) : 0.22,
           centro, societa: socOf(c.soc >= 0 ? r[c.soc] : '', isAtt || centro === 'ATTREZZATI'), categoria: (c.cat >= 0 && String(r[c.cat] || '').trim()) || autoCat(desc), fornitore: c.forn >= 0 ? String(r[c.forn] || '').trim() : '', note: c.note >= 0 ? String(r[c.note] || '').trim() : '', creato: now
@@ -790,7 +791,8 @@
       if (!rows.length) return toast('Nessuna riga trovata nel file');
       const T = sumT(rows);
       const nc = new Set(rows.map(r => r.centro)).size;
-      if (!confirm(`${rows.length} righe · ${eur(T)} · ${nc} centri.\n${replace ? 'SOSTITUIRE tutti i movimenti attuali?' : 'Aggiungere ai movimenti attuali?'}`)) return;
+      if (!replace) return reviewImport(rows);
+      if (!confirm(`${rows.length} righe · ${eur(T)} · ${nc} centri.\nSOSTITUIRE tutti i movimenti attuali?`)) return;
       const cc = centri(); const nuovi = [...new Set(rows.map(r => r.centro))].filter(c => !cc.includes(c));
       if (replace) {
         if (!isLocal()) {
@@ -798,7 +800,7 @@
           queue = queue.filter(o => o.sheet !== 'Movimenti');
           await api('replaceAll', { sheet: 'Movimenti', rows });
         }
-        db.movimenti = rows; save(); render();
+        rows.forEach(r => delete r._hasId); db.movimenti = rows; save(); render();
       } else {
         write(rows.map(row => ({ action: 'upsert', sheet: 'Movimenti', row })));
       }
@@ -806,6 +808,77 @@
       toast(`${rows.length} righe importate`);
     } catch (e) { toast(e.message); } finally { busy(); }
   }
+  /* ---------- Importa aggiornamenti: confronto prima di salvare ---------- */
+  const FIELDS = ['data', 'ndoc', 'codice', 'descrizione', 'um', 'quantita', 'prezzo', 'centro', 'societa', 'categoria', 'fornitore', 'note'];
+  const FLBL = { data: 'data', ndoc: 'n. doc.', codice: 'codice', descrizione: 'descrizione', um: 'UM', quantita: 'quantità', prezzo: 'prezzo', centro: 'centro', societa: 'società', categoria: 'categoria', fornitore: 'fornitore', note: 'note' };
+  const same = (f, a, b) => (f === 'quantita' || f === 'prezzo') ? Math.abs(num(a) - num(b)) < 1e-6 : String(a ?? '').trim() === String(b ?? '').trim();
+  function diffImport(rows) {
+    const byId = new Map(db.movimenti.map(r => [String(r.id), r]));
+    const lastPrice = new Map(); // ultimo prezzo noto per articolo
+    [...db.movimenti].sort((a, b) => String(a.data || '').localeCompare(String(b.data || ''))).forEach(r => { if (num(r.prezzo) > 0) lastPrice.set(artKey(r), num(r.prezzo)); });
+    const known = new Set(db.movimenti.map(artKey));
+    const res = { prezzoIns: [], prezzoVar: [], altre: [], nuoviProd: [], nuoveRighe: [], invariate: 0 };
+    rows.forEach(r => {
+      const old = r._hasId ? byId.get(String(r.id)) : null;
+      const row = { ...r }; delete row._hasId;
+      if (old) {
+        const row2 = { ...old, ...Object.fromEntries(FIELDS.map(f => [f, row[f]])) };
+        const ch = FIELDS.filter(f => !same(f, old[f], row[f]));
+        if (!ch.length) { res.invariate++; return; }
+        const it = { row: row2, old, ch };
+        if (ch.includes('prezzo')) (num(old.prezzo) > 0 ? res.prezzoVar : res.prezzoIns).push(it);
+        else res.altre.push(it);
+      } else {
+        if (r._hasId) row.id = uid() + Math.random().toString(36).slice(2, 5); // ID non trovato: riga nuova
+        const k = artKey(row), lp = lastPrice.get(k);
+        const it = { row, lp, pv: lp && num(row.prezzo) > 0 && Math.abs(num(row.prezzo) / lp - 1) > .005 };
+        (known.has(k) ? res.nuoveRighe : res.nuoviProd).push(it);
+      }
+    });
+    return res;
+  }
+  function reviewImport(rows) {
+    const d = diffImport(rows);
+    const nTot = d.prezzoIns.length + d.prezzoVar.length + d.altre.length + d.nuoviProd.length + d.nuoveRighe.length;
+    if (!nTot) return toast(`Nessuna differenza: ${d.invariate} righe già aggiornate`);
+    const nVar = d.prezzoVar.length + d.nuoveRighe.filter(x => x.pv).length;
+    const all = [];
+    const pctTxt = (a, b) => { const p = (b / a - 1) * 100; return `<em class="${p > 0 ? 'up' : 'down'}">${p > 0 ? '+' : ''}${fmtNum(p, 1)}%</em>`; };
+    const sec = (key, title, cls, items, line) => {
+      if (!items.length) return '';
+      const rowsH = items.map(it => { const i = all.push(it) - 1; return `<label class="rv-row"><input type="checkbox" class="cb" name="u${i}" checked><span class="rv-m"><span class="t">${esc(it.row.descrizione)}</span><span class="s">${line(it)}</span></span></label>`; }).join('');
+      return `<div class="rv-sec ${cls}"><div class="rv-h"><b>${title}</b><span class="chip ${cls}">${items.length}</span><button type="button" class="link rv-tg" data-tg="${key}">Deseleziona</button></div><div class="rv-list" data-sec="${key}">${rowsH}</div></div>`;
+    };
+    const cc = it => esc(it.row.centro || '—');
+    const html = `
+      <div class="rv-kpis">
+        <div class="${nVar ? 'warn' : ''}"><b>${nVar}</b><span>prezzi variati</span></div>
+        <div><b>${d.prezzoIns.length}</b><span>prezzi inseriti</span></div>
+        <div class="${d.nuoviProd.length ? 'new' : ''}"><b>${d.nuoviProd.length}</b><span>prodotti nuovi</span></div>
+        <div><b>${d.nuoveRighe.length + d.altre.length}</b><span>altre righe</span></div>
+      </div>
+      ${d.invariate ? `<div class="muted small rv-same">${d.invariate} righe del file sono uguali a quelle già salvate e vengono ignorate.</div>` : ''}
+      ${sec('pv', 'Prezzi variati', 'late', d.prezzoVar, it => `${cc(it)} · ${eurP(it.old.prezzo)} → <b>${eurP(it.row.prezzo)}</b> ${pctTxt(num(it.old.prezzo), num(it.row.prezzo))}`)}
+      ${sec('np', 'Prodotti nuovi', 'paid', d.nuoviProd, it => `${cc(it)} · ${qtyFmt(it.row.quantita)} ${esc(it.row.um || '')} × ${num(it.row.prezzo) ? eurP(it.row.prezzo) : 'senza prezzo'} · mai acquistato prima`)}
+      ${sec('pi', 'Prezzi inseriti', '', d.prezzoIns, it => `${cc(it)} · ${qtyFmt(it.row.quantita)} × <b>${eurP(it.row.prezzo)}</b> = ${eur(tot(it.row))}`)}
+      ${sec('nr', 'Nuove righe di articoli già presenti', '', d.nuoveRighe, it => `${cc(it)} · ${qtyFmt(it.row.quantita)} × ${num(it.row.prezzo) ? eurP(it.row.prezzo) : 'senza prezzo'}${it.pv ? ` · <span class="rv-pv">ultimo prezzo ${eurP(it.lp)} ${pctTxt(it.lp, num(it.row.prezzo))}</span>` : ''}`)}
+      ${sec('al', 'Altre modifiche', '', d.altre, it => `${cc(it)} · cambia ${it.ch.map(f => FLBL[f]).join(', ')}`)}`;
+    openSheet('Controlla prima di importare', html, fd => {
+      const pick = all.filter((_, i) => fd.get('u' + i));
+      if (!pick.length) return toast('Nessuna riga selezionata');
+      const cc0 = centri(); const nuoviC = [...new Set(pick.map(it => it.row.centro))].filter(c => c && !cc0.includes(c));
+      write(pick.map(it => ({ action: 'upsert', sheet: 'Movimenti', row: it.row })));
+      if (nuoviC.length) setConfig('centri', [...cc0, ...nuoviC]);
+      const nP = pick.filter(it => it.old && it.ch.includes('prezzo')).length, nN = pick.filter(it => !it.old).length;
+      toast(`Importato: ${nP} prezzi aggiornati, ${nN} righe nuove`);
+      return true;
+    }, null, `Applica ${nTot} modifiche`);
+    $('#sheet-form').classList.add('wide');
+    const upd = () => { const n = $$('#sheet-body .rv-row input:checked').length; $('#sheet-ok').textContent = `Applica ${n} modifich${n === 1 ? 'a' : 'e'}`; };
+    $('#sheet-body').addEventListener('change', upd);
+    $$('#sheet-body .rv-tg').forEach(b => b.onclick = () => { const L = $(`[data-sec="${b.dataset.tg}"]`), on = !$$('input', L).every(x => !x.checked) ; $$('input', L).forEach(x => (x.checked = !on)); b.textContent = on ? 'Seleziona' : 'Deseleziona'; upd(); });
+  }
+
   async function exportXlsx(rows, tag) {
     if (!rows.length) return toast('Nessun movimento da esportare');
     try {
@@ -819,8 +892,8 @@
       const setF = (ws, ref, f, v, z) => (ws[ref] = { t: 'n', f, v, z });
 
       // 1 · Movimenti (stesso formato del modello di importazione)
-      const H = ['Data', 'N. Doc.', 'Codice', 'Descrizione', 'UM', 'Quantità', 'Prezzo unit.', 'Totale', 'Centro', 'Società', 'Categoria', 'Fornitore', 'Note'];
-      const ws = U.aoa_to_sheet([H, ...sorted.map(r => [validD(r.data) ? parseD(r.data) : '', r.ndoc || '', r.codice || '', r.descrizione || '', r.um || '', num(r.quantita), num(r.prezzo), null, r.centro || '', r.societa || '', r.categoria || '', r.fornitore || '', r.note || ''])], { cellDates: true });
+      const H = ['Data', 'N. Doc.', 'Codice', 'Descrizione', 'UM', 'Quantità', 'Prezzo unit.', 'Totale', 'Centro', 'Società', 'Categoria', 'Fornitore', 'Note', 'ID (non modificare)'];
+      const ws = U.aoa_to_sheet([H, ...sorted.map(r => [validD(r.data) ? parseD(r.data) : '', r.ndoc || '', r.codice || '', r.descrizione || '', r.um || '', num(r.quantita), num(r.prezzo), null, r.centro || '', r.societa || '', r.categoria || '', r.fornitore || '', r.note || '', String(r.id)])], { cellDates: true });
       sorted.forEach((r, i) => {
         const R = i + 2;
         if (ws['A' + R] && ws['A' + R].t === 'd') ws['A' + R].z = 'dd/mm/yyyy';
@@ -830,8 +903,8 @@
       U.sheet_add_aoa(ws, [['', '', '', 'TOTALE', '', null, '', null]], { origin: 'A' + (last + 1) });
       setF(ws, 'F' + (last + 1), `SUBTOTAL(9,F2:F${last})`, sorted.reduce((s, r) => s + num(r.quantita), 0), QTY);
       setF(ws, 'H' + (last + 1), `SUBTOTAL(9,H2:H${last})`, sumT(sorted), EUR);
-      ws['!autofilter'] = { ref: `A1:M${last}` };
-      fit(ws, [11, 9, 9, 56, 6, 10, 13, 14, 15, 19, 26, 18, 24]);
+      ws['!autofilter'] = { ref: `A1:N${last}` };
+      fit(ws, [11, 9, 9, 56, 6, 10, 13, 14, 15, 19, 26, 18, 24, 18]);
       U.book_append_sheet(wb, ws, 'Movimenti');
 
       // 2 · Riepilogo centri (formule collegate ai movimenti)
@@ -884,7 +957,7 @@
       U.book_append_sheet(wb, wa, 'Articoli');
 
       // 5 · Info
-      const wi = U.aoa_to_sheet([['Centro di Costo — Soluzione Veicolare'], [], ['Esportato il', new Date()], ['Società', soc || 'Tutte'], ['Movimenti', n], ['Spesa totale', T], [], ['I totali dei fogli «Riepilogo centri» e «Categorie x Centri» sono formule collegate al foglio «Movimenti».'], ['Il foglio «Movimenti» ha lo stesso formato del modello: si può modificare e reimportare dall\'app.']], { cellDates: true });
+      const wi = U.aoa_to_sheet([['Centro di Costo — Soluzione Veicolare'], [], ['Esportato il', new Date()], ['Società', soc || 'Tutte'], ['Movimenti', n], ['Spesa totale', T], [], ['I totali dei fogli «Riepilogo centri» e «Categorie x Centri» sono formule collegate al foglio «Movimenti».'], ['Il foglio «Movimenti» ha lo stesso formato del modello: correggi prezzi o aggiungi righe e reimporta con «Importa aggiornamenti».'], ['La colonna «ID» collega ogni riga al movimento nell\'app: non modificarla. Le righe nuove vanno lasciate con ID vuoto.']], { cellDates: true });
       wi.B3.z = 'dd/mm/yyyy hh:mm'; wi.B6.z = EUR; fit(wi, [16, 22]);
       U.book_append_sheet(wb, wi, 'Info');
 
@@ -923,6 +996,7 @@
     $('#sheet-body').innerHTML = html;
     const ok = $('#sheet-ok'); ok.textContent = okLabel; ok.type = 'submit'; ok.onclick = null; ok.hidden = false;
     $('#sheet-del').hidden = !del;
+    $('#sheet-form').classList.remove('wide');
     onSubmit = submit; onDelete = del;
     clearTimeout(closeSheet._t);
     $('#sheet').classList.remove('closing');
@@ -1148,7 +1222,9 @@
       if (t.closest('#sb-none')) { sel.clear(); selMode = false; renderMov(); return; }
       if (t.closest('#sb-all')) { filtered().forEach(r => sel.add(String(r.id))); if (!isDesk()) selMode = true; renderMov(); return; }
       if (t.closest('#sb-del')) { delSelected(); return; }
-      if (t.closest('#m-xls')) { exportXlsx(filtered(), 'movimenti-filtrati'); return; }
+      if (t.closest('#m-xls')) { exportXlsx(filtered(), f.per === 'zero' ? 'senza-prezzo' : 'movimenti-filtrati'); return; }
+      if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
+      if (t.closest('#zb-xls')) { exportXlsx(filtered(), 'senza-prezzo'); return; }
       const ed = t.closest('td.ed'); if (ed && !ed.querySelector('input,select')) { inlineEdit(ed); return; }
       if (t.closest('td.ed')) return;
       const it = t.closest('[data-id]'); if (it && !t.closest('#sheet-body')) { const r = db.movimenti.find(x => String(x.id) === it.dataset.id); if (r) formMov(r); return; }
