@@ -148,7 +148,11 @@ select.cell-in { text-align: left; min-width: 150px; padding-right: 28px; }
 .spx-t { display: grid; justify-items: center; gap: 4px; margin-top: -18px; opacity: 0; }
 .spx-t b { font-size: clamp(20px, 5.4vw, 26px); font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
 .spx-t span { font-size: 11.5px; font-weight: 600; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
-@media (prefers-color-scheme: dark) { .spx { --wm: #6d93db; } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .spx { --wm: #6d93db; }
+}
+:root[data-theme="dark"] .spx { --wm: #6d93db; }
+
 
 /* =========================================================
    CENTRI — dashboard
@@ -156,7 +160,11 @@ select.cell-in { text-align: left; min-width: 150px; padding-right: 28px; }
 #v-centri, #v-home {
   --c1: #3362ab; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c-other: #b6bac3;
 }
-@media (prefers-color-scheme: dark) { #v-centri, #v-home { --c1: #6d93db; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-other: #5b616c; } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #v-centri, :root:not([data-theme="light"]) #v-home { --c1: #6d93db; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-other: #5b616c; }
+}
+:root[data-theme="dark"] #v-centri, :root[data-theme="dark"] #v-home { --c1: #6d93db; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-other: #5b616c; }
+
 
 .cc-dash { display: grid; gap: 12px; }
 @media (min-width: 900px) { .cc-dash { grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 16px; align-items: stretch; } }
@@ -449,3 +457,14 @@ body.has-sel .fab { display: none; }
 .iva-sum b { color: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .iva-sum .t { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 1px; color: var(--ink); font-size: 14px; }
 .iva-sum .t b { color: var(--ink); font-weight: 700; }
+
+/* =========================================================
+   TEMA — selettore Automatico / Chiaro / Scuro
+   ========================================================= */
+.th-seg { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); isolation: isolate; }
+.th-seg button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: color .25s; }
+.th-seg button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .4s var(--spring); }
+.th-seg button.on { color: var(--accent); }
+.th-seg button.on svg { transform: scale(1.12) rotate(-8deg); }
+.th-seg i { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 16px) / 3); border-radius: 10px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.06); transform: translateX(calc(var(--i, 0) * (100% + 4px))); transition: transform .4s var(--spring); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .35s; }

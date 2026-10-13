@@ -248,6 +248,24 @@
     render();
     window.scrollTo(0, 0);
   }
+  /* ---------- Tema: automatico / chiaro / scuro ---------- */
+  const getTheme = () => { try { return localStorage.getItem('cdc_theme') || 'auto'; } catch { return 'auto'; } };
+  function applyTheme(t, anim) {
+    const root = document.documentElement;
+    const go = () => {
+      if (t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
+      const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+      $$('meta[name="theme-color"]').forEach(m => { m.setAttribute('content', dark ? '#0f1115' : '#f4f5f7'); m.removeAttribute('media'); });
+      themeUI();
+    };
+    if (anim && !reduced() && document.startViewTransition) document.startViewTransition(go); else go();
+  }
+  function themeUI() {
+    const t = getTheme(), seg = $('#s-theme'); if (!seg) return;
+    const btns = $$('[data-theme-set]', seg), i = btns.findIndex(b => b.dataset.themeSet === t);
+    btns.forEach((b, j) => { b.classList.toggle('on', j === i); b.setAttribute('aria-checked', j === i); });
+    seg.style.setProperty('--i', Math.max(0, i));
+  }
   function ivaUI() {
     $$('.iva-tg').forEach(b => { b.classList.toggle('on', ivaOn); b.setAttribute('aria-pressed', ivaOn); });
     document.body.classList.toggle('iva-on', ivaOn);
@@ -815,6 +833,7 @@
 
   /* ================= IMPOSTAZIONI ================= */
   function renderSettings() {
+    themeUI();
     sub('');
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
     $('#s-conn').innerHTML = `
@@ -1337,6 +1356,7 @@
       if (t.closest('#sb-del')) { delSelected(); return; }
       if (t.closest('#m-xls')) { exportXlsx(filtered(), f.per === 'zero' ? 'senza-prezzo' : 'movimenti-filtrati'); return; }
       if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
+      const th = t.closest('[data-theme-set]'); if (th) { const v = th.dataset.themeSet; try { localStorage.setItem('cdc_theme', v); } catch {} applyTheme(v, true); toast(v === 'auto' ? 'Tema automatico' : v === 'dark' ? 'Tema scuro' : 'Tema chiaro'); return; }
       if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'centri' || view === 'home') ccAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
       if (t.closest('#zb-auto')) { openAutoPrice(); return; }
       if (t.closest('#zb-xls')) { exportXlsx(filtered(), 'senza-prezzo'); return; }
@@ -1418,6 +1438,8 @@
   }
 
   bind();
+  applyTheme(getTheme());
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (getTheme() === 'auto') applyTheme('auto'); });
   start();
   intro();
 
