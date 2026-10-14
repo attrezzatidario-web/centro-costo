@@ -40,6 +40,7 @@
   LS.set('cdc_url', url);
   let db = LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
   if (!db.gls) db.gls = [];
+  if (!db.gasolio) db.gasolio = [];
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
   const isLocal = () => url === 'local';
@@ -146,7 +147,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -203,7 +204,7 @@
       const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=all&t=' + Date.now());
       const j = await r.json();
       if (!j.ok) throw new Error(j.error);
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []) };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []) };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -237,17 +238,18 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Home', movimenti: 'Movimenti', articoli: 'Articoli', gls: 'GLS Attrezzati', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Home', movimenti: 'Movimenti', articoli: 'Articoli', gls: 'GLS Attrezzati', gasolio: 'Gasolio', impostazioni: 'Impostazioni' };
   function go() {
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
     if (view === 'centri' || view === 'home') ccAnim = true;
     if (view === 'gls') glsAnim = true;
+    if (view === 'gasolio') gasAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === view));
     $('#title').textContent = TITLES[view];
     $('#fab').hidden = view === 'impostazioni' || view === 'gls';
-    $('#add-top').style.visibility = view === 'gls' ? 'hidden' : '';
+    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -276,7 +278,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, impostazioni: renderSettings }[view];
+    const fn = { home: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -1639,6 +1641,347 @@
     } catch (e) { toast(e.message); } finally { busy(); }
   }
 
+  /* =========================================================
+     GASOLIO — rifornimenti dei mezzi dalla sede di San Cesareo
+     ========================================================= */
+  let gasP = '', gasAnim = true, gasF = { q: '', targa: '' }, gasLimit = 80;
+  const gasRows = () => db.gasolio || [];
+  const gasOk = () => isLocal() || !db.v || db.v >= 'cdc-1.2';
+  const gasPrice = () => num(cfg('gasolioPrezzo'));
+  const gPrezzo = r => num(r.prezzo) || gasPrice();
+  const gCost = arr => arr.reduce((s, r) => s + num(r.litri) * gPrezzo(r), 0);
+  const plate = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const plateFmt = p => /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(p) ? `${p.slice(0, 2)} ${p.slice(2, 5)} ${p.slice(5)}` : p;
+  const L = (v, d = 0) => fmtNum(v, d) + ' L';
+  const gasMonths = () => [...new Set(gasRows().map(r => String(r.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+  const gasNorm = s => String(s || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  function gasVehicles(all) {
+    // statistiche per mezzo calcolate su tutto lo storico (servono i km precedenti)
+    const by = groupBy(all, r => plate(r.targa) || '—');
+    const out = new Map();
+    by.forEach((v, p) => {
+      const s = v.slice().sort((a, b) => String(a.data).localeCompare(String(b.data)) || num(a.km) - num(b.km));
+      const usi = [...groupBy(s, r => gasNorm(r.uso) || '—')].sort((a, b) => b[1].length - a[1].length);
+      const owner = s.map(r => gasNorm(r.proprietario)).filter(Boolean).pop() || '';
+      const seg = new Map(); let prev = null;
+      s.forEach(r => { const k = num(r.km); if (!k) return; if (prev && k > prev.km && k - prev.km < 5000) seg.set(r.id, k - prev.km); prev = { km: k }; });
+      out.set(p, { p, s, uso: usi[0][0], owner, seg });
+    });
+    return out;
+  }
+
+  function renderGas() {
+    const months = gasMonths();
+    const sel = $('#ga-per');
+    if (gasP && !months.includes(gasP)) gasP = '';
+    sel.innerHTML = `<option value=""${gasP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === gasP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(gasP);
+    $('#ga-prev').disabled = ix >= opts.length - 1; $('#ga-next').disabled = ix <= 0;
+    sub(ivaLbl() + ' · rifornimenti sede di San Cesareo');
+    const all = gasRows();
+    const rows = gasP ? all.filter(r => String(r.data).slice(0, 7) === gasP) : all;
+    const anim = gasAnim && !reduced(); gasAnim = false;
+    const body = $('#ga-body');
+    body.classList.toggle('cc-anim', anim);
+    const warn = gasOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati del gasolio.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.2 (Code.gs nuovo). Finché non lo aggiorni l'importazione è bloccata.</span></div>`;
+    const perL = gasP ? mLabel(gasP) : months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : '';
+    if (!rows.length) {
+      body.innerHTML = warn + `<div class="gl-hero ga-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${gasArt(0)}</div><div class="gh-main"><span class="gh-lbl">Gasolio Attrezzati</span><h3>Nessun rifornimento registrato</h3><p>Importa il tuo file Excel con «Importa» oppure aggiungi un rifornimento.</p></div></div></div>`;
+      return;
+    }
+    const V = gasVehicles(all);
+    const lit = gSum(rows, 'litri'), n = rows.length, price = gasPrice();
+    const ids = new Set(rows.map(r => r.id));
+    let km = 0, kmL = 0;
+    V.forEach(x => x.seg.forEach((d, id) => { if (ids.has(id)) { km += d; kmL += num(x.s.find(r => r.id === id).litri); } }));
+    const cons = kmL ? km / kmL : 0;
+    const cost = gCost(rows), hasCost = rows.some(r => gPrezzo(r) > 0);
+    const plates = new Set(rows.map(r => plate(r.targa)));
+    const days = new Set(rows.map(r => String(r.data).slice(0, 10))).size;
+    const K = [['Rifornimenti', n, v => fmtNum(Math.round(v), 0), `${days} giorni`],
+      ['Mezzi', plates.size, v => fmtNum(Math.round(v), 0), `${new Set(rows.map(r => gasNorm(r.operatore)).filter(x => x && x !== '?')).size} operatori`],
+      ['Media a pieno', lit / n, v => L(v, 1), `max ${L(Math.max(...rows.map(r => num(r.litri))), 1)}`],
+      ['Km percorsi', km, v => fmtNum(v, 0) + ' km', 'tra due rifornimenti'],
+      ['Consumo medio', cons, v => fmtNum(v, 1) + ' km/L', cons ? `${fmtNum(100 / cons, 1)} L ogni 100 km` : 'servono i km'],
+      hasCost ? ['Costo', cost * gMul(), v => eur0(v), km ? `${fmtNum(cost * gMul() / km, 3)} €/km` : ivaLbl()] : ['Costo', 0, () => '—', 'imposta il prezzo €/L']];
+    const prevK = gasP ? months[months.indexOf(gasP) - 1] : null;
+    const prevL = prevK ? gSum(all.filter(r => String(r.data).slice(0, 7) === prevK), 'litri') : 0;
+    const dl = prevL ? (() => { const p = (lit / prevL - 1) * 100; return `<span class="gl-d ${p > 0 ? 'up' : 'down'}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>`; })() : '';
+    body.innerHTML = warn + `
+      <div class="gl-hero ga-hero">
+        <div class="gh-top"><div class="gh-art">${gasArt(Math.min(1, lit / Math.max(1, gasP ? Math.max(...months.map(k => gSum(all.filter(r => String(r.data).slice(0, 7) === k), 'litri'))) : lit)))}</div>
+        <div class="gh-main">
+          <span class="gh-lbl">Gasolio erogato · ${esc(perL)}</span>
+          <div class="gh-big k-glit">0 L</div>
+          <div class="gh-sub"><span>${n} rifornimenti</span><span>${plates.size} mezzi</span>${hasCost ? `<span>${esc(gE0(cost))} stimati</span>` : `<button class="gh-chip" id="ga-price" type="button">Imposta prezzo €/L</button>`}${dl}</div>
+        </div></div>
+        <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-gak="${i}">0</b><small>${s}</small></div>`).join('')}</div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Mezzi</h3><span class="muted small">${plates.size} mezzi · clic per vedere i rifornimenti</span></div><div class="ga-veh" id="ga-veh"></div></div>
+      <div class="card"><div class="card-h"><h3>Linea del tempo</h3><span class="muted small">ogni punto è un rifornimento · grandezza = litri</span></div><div class="ga-tl" id="ga-tl"></div></div>
+      <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>${gasP ? 'Litri giorno per giorno' : 'Litri mese per mese'}</h3><span class="muted small" id="ga-tr-s"></span></div><div class="mbars ga-bars" id="ga-tr"></div></div>
+        <div class="card"><div class="card-h"><h3>Per utilizzo</h3><span class="muted small">da colonna «movimenti»</span></div><div class="bars" id="ga-uso"></div></div>
+      </div>
+      <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>Operatori</h3><span class="muted small">chi ha fatto rifornimento</span></div><div id="ga-op"></div></div>
+        <div class="card"><div class="card-h"><h3>Giorni della settimana</h3><span class="muted small">litri per giorno</span></div><div id="ga-wd"></div></div>
+      </div>
+      <div class="card" id="ga-anom"></div>
+      <div class="card gl-list"><div class="card-h"><h3>Tutti i rifornimenti</h3><span class="muted small" id="ga-cnt"></span></div>
+        <div class="filters gl-f ga-f"><input id="ga-q" type="search" placeholder="Cerca targa, operatore, utilizzo…" value="${esc(gasF.q)}"><select id="ga-ft"></select></div>
+        <div id="ga-list"></div></div>`;
+
+    countTo($('.k-glit', body), lit, v => L(v, 0));
+    $$('[data-gak]', body).forEach(el => { const i = +el.dataset.gak; el._v = 0; if (K[i][1]) countTo(el, K[i][1], K[i][2]); else el.textContent = K[i][2](0); });
+
+    // mezzi
+    const vs = [...plates].map(p => { const x = V.get(p) || { s: [], uso: '—', owner: '', seg: new Map() }; const v = rows.filter(r => plate(r.targa) === p); let k = 0, kl = 0; x.seg.forEach((d, id) => { if (v.some(r => r.id === id)) { k += d; kl += num(v.find(r => r.id === id).litri); } }); const last = v.slice().sort((a, b) => String(b.data).localeCompare(String(a.data)))[0]; const kms = x.s.map(r => num(r.km)).filter(Boolean); return { p, v, l: gSum(v, 'litri'), k, cons: kl ? k / kl : 0, uso: x.uso, owner: x.owner, last, odo: kms.length ? Math.max(...kms) : 0 }; }).sort((a, b) => b.l - a.l);
+    const mv = Math.max(...vs.map(x => x.l), 1);
+    $('#ga-veh').innerHTML = vs.map((x, i) => `<div class="gv-c${gasF.targa === x.p ? ' on' : ''}" data-gtarga="${esc(x.p)}" style="--d:${120 + i * 60}ms">
+        <div class="gv-top"><span class="gv-plate"><i>I</i><b>${esc(plateFmt(x.p))}</b></span><span class="gv-l"><b>${L(x.l, 0)}</b><small>${fmtNum(pct(x.l, lit), 0)}%</small></span></div>
+        <div class="gv-name">${esc(x.uso)}${x.owner ? ` <em>· ${esc(x.owner)}</em>` : ''}</div>
+        <div class="gv-tank"><i style="width:${(x.l / mv * 100).toFixed(1)}%"></i></div>
+        <div class="gv-st"><div><small>Pieni</small><b>${x.v.length}</b></div><div><small>Km</small><b>${x.k ? fmtNum(x.k, 0) : '—'}</b></div><div><small>km/L</small><b>${x.cons ? fmtNum(x.cons, 1) : '—'}</b></div><div><small>Ultimo</small><b>${x.last && validD(x.last.data) ? parseD(x.last.data).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) : '—'}</b></div></div>
+      </div>`).join('');
+
+    // linea del tempo
+    const ds = rows.map(r => parseD(r.data).getTime()).filter(t => !isNaN(t));
+    let t0 = Math.min(...ds), t1 = Math.max(...ds);
+    if (gasP) { const [y, m] = gasP.split('-').map(Number); t0 = new Date(y, m - 1, 1).getTime(); t1 = new Date(y, m, 0).getTime(); }
+    const span = Math.max(1, t1 - t0), W = 1000, LH = 34, PL = 112, PR = 16;
+    const lanes = vs.map(x => x.p), H = lanes.length * LH + 30, mxL = Math.max(...rows.map(r => num(r.litri)), 1);
+    const X = t => PL + (t - t0) / span * (W - PL - PR);
+    const ticks = []; { const d = new Date(t0); d.setDate(1); if (d.getTime() < t0) d.setMonth(d.getMonth() + (gasP ? 0 : 1)); if (gasP) { for (let i = 1; i <= new Date(t1).getDate(); i += 5) ticks.push([new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), i).getTime(), String(i)]); } else { while (d.getTime() <= t1) { ticks.push([d.getTime(), MESI[d.getMonth()].slice(0, 3)]); d.setMonth(d.getMonth() + 1); } } }
+    $('#ga-tl').innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="ga-tsvg">
+      ${ticks.map(([t, l]) => `<line class="ga-tk" x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="0" y2="${H - 22}"/><text class="ga-tkl" x="${X(t).toFixed(1)}" y="${H - 6}">${esc(l)}</text>`).join('')}
+      ${lanes.map((p, i) => { const y = i * LH + LH / 2; const pts = rows.filter(r => plate(r.targa) === p).sort((a, b) => String(a.data).localeCompare(String(b.data)));
+        return `<g class="ga-lane" data-gtarga="${esc(p)}"><text class="ga-ll" x="0" y="${y + 4}">${esc(plateFmt(p))}</text><line class="ga-lt" x1="${PL}" x2="${W - PR}" y1="${y}" y2="${y}"/>
+          ${pts.length > 1 ? `<path class="ga-lp" pathLength="1" style="--d:${300 + i * 90}ms" d="M${pts.map(r => `${X(parseD(r.data).getTime()).toFixed(1)} ${y}`).join(' L')}"/>` : ''}
+          ${pts.map((r, j) => `<circle class="ga-dot" data-gas="${esc(r.id)}" style="--d:${500 + i * 90 + j * 40}ms" cx="${X(parseD(r.data).getTime()).toFixed(1)}" cy="${y}" r="${(3 + 7 * Math.sqrt(num(r.litri) / mxL)).toFixed(1)}"><title>${esc(shortDate(r.data))} · ${esc(L(num(r.litri), 2))}${num(r.km) ? ' · ' + fmtNum(num(r.km), 0) + ' km' : ''}${r.operatore ? ' · ' + esc(r.operatore) : ''}</title></circle>`).join('')}</g>`; }).join('')}
+    </svg>`;
+
+    // andamento
+    if (gasP) {
+      const [yy, mm] = gasP.split('-').map(Number), nd = new Date(yy, mm, 0).getDate(), byD = groupBy(rows, r => String(r.data).slice(0, 10));
+      const dd = [...Array(nd)].map((_, i) => { const v = byD.get(`${gasP}-${pad(i + 1)}`) || []; return { l: i + 1, v: gSum(v, 'litri'), n: v.length }; }), md = Math.max(...dd.map(x => x.v), 1);
+      $('#ga-tr').innerHTML = dd.map((x, i) => `<div class="mb" title="${x.l} ${esc(MESI[mm - 1])}: ${esc(L(x.v, 1))}"><span class="mbv">${x.v ? fmtNum(x.v, 0) : ''}</span><i class="${x.v === md ? 'cur' : ''}" style="height:${x.v ? Math.max(3, x.v / md * 100) : 0}%;animation-delay:${i * 18}ms"></i><span class="mbl">${x.l % 5 === 1 ? x.l : ''}</span></div>`).join('');
+      $('#ga-tr-s').textContent = `${days} giorni con rifornimenti`;
+    } else {
+      const mm = months.map(k => ({ k, v: gSum(all.filter(r => String(r.data).slice(0, 7) === k), 'litri') })), mx = Math.max(...mm.map(x => x.v), 1);
+      $('#ga-tr').innerHTML = mm.map((x, i) => `<div class="mb gl-mb" data-gaper="${x.k}" title="${esc(mLabel(x.k))}: ${esc(L(x.v, 1))}"><span class="mbv">${fmtNum(x.v, 0)} L</span><i class="${x.v === mx ? 'cur' : ''}" style="height:${Math.max(3, x.v / mx * 100)}%;animation-delay:${i * 60}ms"></i><span class="mbl">${esc(MESI[Number(x.k.slice(5)) - 1].slice(0, 3))}</span></div>`).join('');
+      $('#ga-tr-s').textContent = `media ${L(lit / (months.length || 1), 0)} al mese`;
+    }
+    // utilizzo
+    const byU = [...groupBy(rows, r => gasNorm(r.uso) || '—')].map(([k, v]) => ({ k, v: gSum(v, 'litri'), n: v.length })).sort((a, b) => b.v - a.v);
+    const mu = Math.max(...byU.map(x => x.v), 1);
+    $('#ga-uso').innerHTML = byU.slice(0, 10).map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} ${x.n === 1 ? 'pieno' : 'pieni'}</em></span><span>${L(x.v, 0)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mu * 100).toFixed(2)}%"></div></div></div>`).join('');
+    // operatori
+    const byO = [...groupBy(rows, r => { const o = gasNorm(r.operatore); return o && o !== '?' ? o : 'Non indicato'; })].map(([k, v]) => ({ k, v: gSum(v, 'litri'), n: v.length })).sort((a, b) => b.v - a.v);
+    $('#ga-op').innerHTML = `<div class="ga-ops">${byO.map((x, i) => `<div class="ga-op${x.k === 'Non indicato' ? ' na' : ''}" style="--d:${150 + i * 70}ms"><span class="ga-av">${esc(x.k === 'Non indicato' ? '?' : x.k.slice(0, 2))}</span><span class="ga-om"><b>${esc(x.k.charAt(0) + x.k.slice(1).toLowerCase())}</b><small>${x.n} ${x.n === 1 ? 'rifornimento' : 'rifornimenti'} · ${fmtNum(pct(x.v, lit), 0)}%</small><span class="gd-b"><i style="width:${(x.v / byO[0].v * 100).toFixed(1)}%"></i></span></span><b>${L(x.v, 0)}</b></div>`).join('')}</div>`;
+    // giorni della settimana
+    const WD = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'], wd = WD.map(() => ({ v: 0, n: 0 }));
+    rows.forEach(r => { if (!validD(r.data)) return; const d = (parseD(r.data).getDay() + 6) % 7; wd[d].v += num(r.litri); wd[d].n++; });
+    const mw = Math.max(...wd.map(x => x.v), 1);
+    $('#ga-wd').innerHTML = `<div class="ga-wd">${wd.map((x, i) => `<div class="ga-w" style="--d:${150 + i * 60}ms"><div class="ga-wb"><i style="height:${(x.v / mw * 100).toFixed(1)}%"></i></div><b>${x.v ? fmtNum(x.v, 0) : '–'}</b><small>${WD[i]}</small><em>${x.n ? x.n + (x.n === 1 ? ' pieno' : ' pieni') : ''}</em></div>`).join('')}</div>`;
+
+    renderGasAnom(rows, V);
+    $('#ga-ft').innerHTML = `<option value="">Tutti i mezzi</option>` + vs.map(x => `<option value="${esc(x.p)}"${gasF.targa === x.p ? ' selected' : ''}>${esc(plateFmt(x.p))} · ${esc(x.uso)}</option>`).join('');
+    renderGasList(rows);
+  }
+
+  function renderGasList(rows) {
+    rows = rows || (gasP ? gasRows().filter(r => String(r.data).slice(0, 7) === gasP) : gasRows());
+    const q = gasF.q.trim().toLowerCase();
+    const Ls = rows.filter(r => (!gasF.targa || plate(r.targa) === gasF.targa) && (!q || `${r.targa} ${plate(r.targa)} ${r.operatore} ${r.uso} ${r.proprietario} ${r.note}`.toLowerCase().includes(q)))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data)) || num(b.km) - num(a.km));
+    $('#ga-cnt').textContent = `${Ls.length} rifornimenti · ${L(gSum(Ls, 'litri'), 1)}`;
+    const sh = Ls.slice(0, gasLimit);
+    const more = Ls.length > gasLimit ? `<div class="more-row"><button class="btn sm" id="ga-more">Mostra tutti (${Ls.length})</button></div>` : '';
+    if (!Ls.length) { $('#ga-list').innerHTML = '<div class="empty">Nessun rifornimento</div>'; return; }
+    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+    if (isDesk()) {
+      $('#ga-list').innerHTML = `<table class="tbl gl-st"><thead><tr><th>Data</th><th>Targa</th><th>Utilizzo</th><th>Operatore</th><th>Proprietario</th><th class="r">Km</th><th class="r">Litri</th><th class="r">€/L</th><th class="r">Costo</th></tr></thead><tbody>
+        ${sh.map(r => `<tr data-gas="${esc(r.id)}"><td class="d">${dd(r.data)}</td><td><span class="gv-plate sm"><i>I</i><b>${esc(plateFmt(plate(r.targa)))}</b></span></td><td class="m2">${esc(r.uso)}</td><td class="m2">${esc(r.operatore || '—')}</td><td class="m2">${esc(r.proprietario || '—')}</td><td class="num">${num(r.km) ? fmtNum(num(r.km), 0) : '<span class="chip soon">—</span>'}</td><td class="num amt">${fmtNum(num(r.litri), 2)}</td><td class="num">${gPrezzo(r) ? fmtNum(gPrezzo(r) * gMul(), 3) : '—'}</td><td class="num">${gPrezzo(r) ? gE(num(r.litri) * gPrezzo(r)) : '—'}</td></tr>`).join('')}</tbody></table>${more}`;
+    } else {
+      $('#ga-list').innerHTML = `<div class="list">${sh.map(r => `<div class="item" data-gas="${esc(r.id)}"><span class="ic ga-ic"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg></span><div class="main"><div class="t">${esc(plateFmt(plate(r.targa)))} · ${esc(r.uso)}</div><div class="s">${dd(r.data)} · ${esc(r.operatore || '—')}${num(r.km) ? ' · ' + fmtNum(num(r.km), 0) + ' km' : ''}</div></div><div class="amt">${fmtNum(num(r.litri), 1)} L</div></div>`).join('')}</div>${more}`;
+    }
+  }
+
+  function renderGasAnom(rows, V) {
+    const A = [], ids = new Set(rows.map(r => r.id));
+    const noKm = rows.filter(r => !num(r.km));
+    if (noKm.length) A.push({ t: 'warn', h: 'Chilometri mancanti', d: `${noKm.length} rifornimenti senza km: non si può calcolare il consumo di quei pieni (${[...new Set(noKm.map(r => plateFmt(plate(r.targa))))].join(', ')}).`, v: L(gSum(noKm, 'litri'), 0), ids: noKm.map(r => r.id) });
+    V.forEach(x => { let prev = null; x.s.forEach(r => { const k = num(r.km); if (!k) return; if (prev && k < prev.km && ids.has(r.id)) A.push({ t: 'warn', h: `Km che tornano indietro · ${plateFmt(x.p)}`, d: `Il ${esc(shortDate(r.data))} risultano ${fmtNum(k, 0)} km, ma il ${esc(shortDate(prev.r.data))} erano ${fmtNum(prev.km, 0)} km. Probabile errore di data o di battitura.`, v: fmtNum(k - prev.km, 0) + ' km', ids: [prev.r.id, r.id] }); if (prev && k - prev.km >= 5000 && ids.has(r.id)) A.push({ t: 'info', h: `Salto di km anomalo · ${plateFmt(x.p)}`, d: `Tra il ${esc(shortDate(prev.r.data))} e il ${esc(shortDate(r.data))} risultano ${fmtNum(k - prev.km, 0)} km.`, v: 'verificare', ids: [prev.r.id, r.id] }); prev = { km: k, r }; }); });
+    const ps = [...new Set(rows.map(r => plate(r.targa)))], lev = (a, b) => { if (a.length !== b.length) return 9; let d = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++; return d; };
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) if (lev(ps[i], ps[j]) === 1) { const v = rows.filter(r => [ps[i], ps[j]].includes(plate(r.targa))); A.push({ t: 'info', h: 'Targhe quasi uguali', d: `${plateFmt(ps[i])} e ${plateFmt(ps[j])} differiscono di un solo carattere: controlla se è lo stesso mezzo.`, v: v.length + ' pieni', ids: v.map(r => r.id) }); }
+    const big = rows.filter(r => num(r.litri) > 70);
+    if (big.length) A.push({ t: 'info', h: 'Rifornimenti molto grandi', d: `${big.length} rifornimenti oltre 70 litri: verificare se il serbatoio del mezzo li può contenere.`, v: L(gSum(big, 'litri'), 0), ids: big.map(r => r.id) });
+    const noOp = rows.filter(r => !String(r.operatore || '').trim() || String(r.operatore).trim() === '?');
+    if (noOp.length) A.push({ t: 'info', h: 'Operatore non indicato', d: `${noOp.length} rifornimenti senza chi li ha fatti.`, v: L(gSum(noOp, 'litri'), 0), ids: noOp.map(r => r.id) });
+    const fix = rows.filter(r => /data corretta/i.test(r.note || ''));
+    if (fix.length) A.push({ t: 'info', h: 'Date corrette in importazione', d: fix.map(r => `${plateFmt(plate(r.targa))}: ${esc(r.note)}`).join(' · '), v: fix.length + '', ids: fix.map(r => r.id) });
+    const I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
+    $('#ga-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` +
+      (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gaq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia</div>');
+  }
+
+  // grafica: indicatore carburante con lancetta e goccia con liquido
+  function gasArt(level) {
+    const lv = Math.max(.08, Math.min(1, level || .6));
+    const cx = 420, cy = 178, R = 82, a0 = Math.PI * 1.1, a1 = Math.PI * 1.9;
+    const pt = (a, r) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+    const ticks = [...Array(21)].map((_, i) => { const a = a0 + (a1 - a0) * i / 20, [x1, y1] = pt(a, R), [x2, y2] = pt(a, R - (i % 5 ? 7 : 14)); return `<line class="gg-t${i % 5 ? '' : ' m'}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`; }).join('');
+    const [ax, ay] = pt(a0, R + 12), [bx, by] = pt(a1, R + 12);
+    const arc = `M${pt(a0, R + 4).map(v => v.toFixed(1)).join(' ')} A${R + 4} ${R + 4} 0 0 1 ${pt(a1, R + 4).map(v => v.toFixed(1)).join(' ')}`;
+    const deg = (a0 + (a1 - a0) * lv) * 180 / Math.PI + 90;
+    const dy = 172 - 128 * lv;
+    return `<svg viewBox="250 22 390 232" aria-hidden="true" class="gh-svg ga-svg" preserveAspectRatio="xMaxYMid meet">
+      <defs><pattern id="gadots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern>
+      <clipPath id="gadrop"><path d="M560 40 C560 40 518 96 518 128 a42 42 0 0 0 84 0 C602 96 560 40 560 40Z"/></clipPath>
+      <linearGradient id="galiq" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#f39c34"/></linearGradient></defs>
+      <rect x="250" y="22" width="390" height="232" fill="url(#gadots)"/>
+      <path class="ga-pipe" d="M250 236 C 300 236 320 214 360 226 S 420 244 470 236 S 540 222 560 172" pathLength="1"/>
+      <path class="ga-pulse" d="M250 236 C 300 236 320 214 360 226 S 420 244 470 236 S 540 222 560 172" pathLength="1"/>
+      <path class="gg-arc" d="${arc}" pathLength="1"/>
+      <path class="gg-lvl" d="${arc}" pathLength="1" style="--lv:${lv.toFixed(3)}"/>
+      ${ticks}
+      <text class="gg-e" x="${ax.toFixed(1)}" y="${(ay + 4).toFixed(1)}" text-anchor="middle">E</text><text class="gg-e" x="${bx.toFixed(1)}" y="${(by + 4).toFixed(1)}" text-anchor="middle">F</text>
+      <g class="gg-ndl" style="--deg:${deg.toFixed(1)}deg"><path d="M${cx - 3} ${cy} L${cx} ${cy - R + 18} L${cx + 3} ${cy} Z"/></g>
+      <circle cx="${cx}" cy="${cy}" r="8" class="gg-hub"/><circle cx="${cx}" cy="${cy}" r="3" class="gg-hub2"/>
+      <g clip-path="url(#gadrop)"><g class="ga-liq" style="--dy:${dy.toFixed(1)}px">
+        <path class="ga-w1" d="M500 0 q15 -8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 V180 H500Z" fill="url(#galiq)" opacity=".55"/>
+        <path class="ga-w2" d="M500 4 q15 8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 V180 H500Z" fill="url(#galiq)"/>
+      </g>${[0, 1, 2, 3].map(i => `<circle class="ga-bub" cx="${544 + i * 11}" cy="160" r="${1.6 + (i % 2)}" style="--d:${(i * .7).toFixed(1)}s"/>`).join('')}</g>
+      <path class="ga-drop" d="M560 40 C560 40 518 96 518 128 a42 42 0 0 0 84 0 C602 96 560 40 560 40Z"/>
+    </svg>`;
+  }
+
+  function formGas(r) {
+    if (!gasOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.2)');
+    const isNew = !r;
+    const last = gasRows().slice().sort((a, b) => String(b.data).localeCompare(String(a.data)))[0] || {};
+    r = r || { id: 'f' + uid(), data: today(), targa: '', km: '', litri: '', prezzo: '', proprietario: '', operatore: last.operatore || '', centro: 'ATTREZZATI', uso: '', note: '' };
+    const V = gasVehicles(gasRows());
+    openSheet(isNew ? 'Nuovo rifornimento' : 'Modifica rifornimento', `
+      <div class="f-row">
+        <label class="f"><span>Targa</span><input name="targa" required data-focus list="ga-dl-t" value="${esc(r.targa)}" placeholder="Es. GC193WV" autocapitalize="characters"></label>
+        <label class="f"><span>Data</span><input name="data" type="date" required value="${esc(validD(r.data) ? r.data : today())}"></label>
+      </div>
+      <datalist id="ga-dl-t">${[...V.values()].map(x => `<option value="${esc(x.p)}">${esc(x.uso)}</option>`).join('')}</datalist>
+      <div class="f-row">
+        <label class="f"><span>Litri</span><input name="litri" required inputmode="decimal" value="${esc(fmtIn(r.litri))}" placeholder="0,00"></label>
+        <label class="f"><span>Chilometri</span><input name="km" inputmode="numeric" value="${num(r.km) ? esc(String(num(r.km))) : ''}" placeholder="contachilometri"></label>
+      </div>
+      <div class="f-row">
+        <label class="f"><span>Operatore</span><input name="operatore" list="ga-dl-o" value="${esc(r.operatore)}"></label>
+        <label class="f"><span>Proprietario</span><input name="proprietario" value="${esc(r.proprietario)}"></label>
+      </div>
+      <datalist id="ga-dl-o">${[...new Set(gasRows().map(x => gasNorm(x.operatore)).filter(x => x && x !== '?'))].map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+      <label class="f"><span>Utilizzo / movimento</span><input name="uso" list="ga-dl-u" value="${esc(r.uso)}" placeholder="Es. VASY, GIRI PER BENI"></label>
+      <datalist id="ga-dl-u">${[...new Set(gasRows().map(x => gasNorm(x.uso)).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+      <div class="f-row">
+        <label class="f"><span>Prezzo €/L (no IVA)</span><input name="prezzo" inputmode="decimal" value="${esc(fmtIn(r.prezzo))}" placeholder="${gasPrice() ? 'standard ' + esc(fmtIn(gasPrice())) : 'facoltativo'}"></label>
+        <label class="f"><span>Centro di costo</span><input name="centro" value="${esc(r.centro || 'ATTREZZATI')}"></label>
+      </div>
+      <label class="f"><span>Note</span><input name="note" value="${esc(r.note)}"></label>`,
+      fd => {
+        const row = { ...r, ...Object.fromEntries(fd), targa: plate(fd.get('targa')), km: num(fd.get('km')) || '', litri: num(fd.get('litri')), prezzo: num(fd.get('prezzo')) || '', operatore: gasNorm(fd.get('operatore')), uso: gasNorm(fd.get('uso')), proprietario: gasNorm(fd.get('proprietario')) };
+        if (!row.targa) return toast('Inserisci la targa');
+        if (!(row.litri > 0)) return toast('Inserisci i litri');
+        write([{ action: 'upsert', sheet: 'Gasolio', row }]);
+        toast(isNew ? 'Rifornimento aggiunto' : 'Rifornimento salvato');
+        return true;
+      },
+      isNew ? null : () => { if (!confirm('Eliminare questo rifornimento?')) return; write([{ action: 'delete', sheet: 'Gasolio', id: r.id }]); toast('Rifornimento eliminato'); return true; });
+  }
+  function formGasPrice() {
+    openSheet('Prezzo del gasolio', `<p class="muted small" style="margin:0 0 12px">Prezzo medio al litro IVA esclusa, usato per stimare i costi dei rifornimenti che non hanno un prezzo proprio.</p>
+      <label class="f"><span>Prezzo €/L (no IVA)</span><input name="p" inputmode="decimal" data-focus value="${esc(fmtIn(gasPrice() || ''))}" placeholder="Es. 1,45"></label>`,
+      fd => { const v = num(fd.get('p')); setConfig('gasolioPrezzo', v > 0 ? v : ''); toast(v > 0 ? 'Prezzo salvato' : 'Prezzo rimosso'); return true; });
+  }
+
+  /* ---------- Import / export gasolio ---------- */
+  function parseGas(wb) {
+    const out = [];
+    wb.SheetNames.forEach(name => {
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+      const hi = aoa.findIndex(r => r.some(c => /^targa/.test(nh(c))) && r.some(c => /^litri/.test(nh(c))));
+      if (hi < 0) return;
+      const H = aoa[hi].map(nh);
+      const col = (...ks) => { for (const k of ks) { const i = H.findIndex(h => h === k); if (i >= 0) return i; } for (const k of ks) { const i = H.findIndex(h => h.startsWith(k)); if (i >= 0) return i; } return -1; };
+      const c = { data: col('data'), targa: col('targa', 'targauso', 'mezzo'), km: col('kilometri', 'chilometri', 'km'), litri: col('litri'), prop: col('proprietario'), op: col('operatore'), note: col('note'), uso: col('movimenti', 'movimento', 'utilizzo', 'uso'), prezzo: col('prezzolitro', 'prezzo', 'eurolitro'), imp: col('importo', 'costo', 'totale'), cc: col('centrodicosto', 'centro') };
+      const rowsIn = [];
+      aoa.slice(hi + 1).forEach(r => {
+        const tg = plate(r[c.targa]), lt = num(r[c.litri]);
+        if (!tg || !(lt > 0)) return;
+        let d = r[c.data];
+        if (d instanceof Date) d = new Date(d.getTime() + 12 * 36e5); // evita problemi di fuso
+        else if (typeof d === 'number' && d > 20000) d = new Date(Math.round((d - 25569) * 864e5) + 12 * 36e5);
+        else { const m = String(d || '').trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); d = m ? new Date(+(m[3].length === 2 ? '20' + m[3] : m[3]), +m[2] - 1, +m[1], 12) : null; }
+        if (!d || isNaN(d)) return;
+        const kmv = r[c.km], km = typeof kmv === 'number' && kmv > 100 ? Math.round(kmv) : typeof kmv === 'string' && num(kmv) > 100 ? Math.round(num(kmv)) : '';
+        let prezzo = c.prezzo >= 0 ? num(r[c.prezzo]) : 0;
+        if (!prezzo && c.imp >= 0 && num(r[c.imp])) prezzo = r2(num(r[c.imp]) / lt * 1000) / 1000;
+        let note = c.note >= 0 ? String(r[c.note] ?? '').trim() : '', centro = c.cc >= 0 ? gasNorm(r[c.cc]) : '';
+        if (/^esempio/i.test(note)) return;
+        if (!centro && /^[a-z ]{3,30}$/i.test(note) && note.trim().split(/\s+/).length <= 2) { centro = note.toUpperCase(); note = ''; }
+        rowsIn.push({ d, targa: tg, km, litri: r2(lt), prezzo: prezzo || '', proprietario: c.prop >= 0 ? gasNorm(r[c.prop]) : '', operatore: c.op >= 0 ? gasNorm(r[c.op]) : '', centro: centro || 'ATTREZZATI', uso: c.uso >= 0 ? gasNorm(r[c.uso]) : '', note });
+      });
+      // anno sbagliato (es. 1962): si usa l'anno più frequente del file
+      const ys = groupBy(rowsIn.filter(x => x.d.getFullYear() >= 2000), x => x.d.getFullYear()), Y = [...ys].sort((a, b) => b[1].length - a[1].length)[0];
+      rowsIn.forEach((x, i) => {
+        if (x.d.getFullYear() < 2000 && Y) { const old = x.d.toLocaleDateString('it-IT'); x.d.setFullYear(Y[0]); x.note = `data corretta: nel file era ${old}`; }
+        const data = ymd(x.d);
+        let h = 0; const s = `${data}|${x.targa}|${x.litri}|${x.km}|${i}`; for (let k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) | 0;
+        out.push({ id: 'f' + (h >>> 0).toString(36), data, targa: x.targa, km: x.km, litri: x.litri, prezzo: x.prezzo, proprietario: x.proprietario, operatore: x.operatore, centro: x.centro, uso: x.uso, note: x.note });
+      });
+    });
+    return out;
+  }
+  async function importGas() {
+    if (!gasOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.2)');
+    let file; try { file = await pickFile('.xlsx,.xls,.xlsm,.csv'); } catch { return; }
+    try {
+      busy('Leggo il file…'); await loadXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+      const rows = parseGas(wb); busy();
+      if (!rows.length) return toast('Nessun rifornimento trovato: servono le colonne TARGA e LITRI');
+      const months = [...new Set(rows.map(r => r.data.slice(0, 7)))].sort();
+      const old = gasRows().filter(r => months.includes(String(r.data).slice(0, 7)));
+      const fixed = rows.filter(r => /data corretta/.test(r.note)).length, noKm = rows.filter(r => !r.km).length;
+      if (!confirm(`${rows.length} rifornimenti · ${fmtNum(gSum(rows, 'litri'), 2)} litri · ${months.map(mLabel).join(', ')}.${old.length ? `\nSostituisce i ${old.length} rifornimenti già presenti in questi mesi.` : ''}${fixed ? `\n${fixed} data con anno sbagliato corretta in automatico.` : ''}${noKm ? `\n${noKm} righe senza chilometri validi.` : ''}\nImportare?`)) return;
+      const nid = new Set(rows.map(r => r.id));
+      write([...old.filter(r => !nid.has(r.id)).map(r => ({ action: 'delete', sheet: 'Gasolio', id: r.id })), ...rows.map(row => ({ action: 'upsert', sheet: 'Gasolio', row }))]);
+      gasP = ''; gasAnim = true; render();
+      toast(`${rows.length} rifornimenti importati`);
+    } catch (e) { busy(); toast(e.message); }
+  }
+  async function exportGas() {
+    const rows = (gasP ? gasRows().filter(r => String(r.data).slice(0, 7) === gasP) : gasRows()).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)));
+    if (!rows.length) return toast('Nessun rifornimento');
+    try {
+      busy('Preparo il file Excel…'); await loadXlsx();
+      const U = XLSX.utils, wb = U.book_new(), EUR = '#,##0.000 "€"';
+      const H = ['DATA', 'TARGA', 'KILOMETRI', 'LITRI', 'PROPRIETARIO', 'OPERATORE', 'CENTRO DI COSTO', 'MOVIMENTI', 'PREZZO €/L', 'IMPORTO', 'NOTE'];
+      const ws = U.aoa_to_sheet([H, ...rows.map(r => [parseD(r.data), r.targa, num(r.km) || '', num(r.litri), r.proprietario || '', r.operatore || '', r.centro || '', r.uso || '', gPrezzo(r) || '', null, r.note || ''])], { cellDates: true });
+      rows.forEach((r, i) => { const R = i + 2; ws['A' + R].z = 'dd/mm/yyyy'; ws['D' + R].z = '#,##0.00'; if (ws['I' + R] && ws['I' + R].t === 'n') ws['I' + R].z = EUR; ws['J' + R] = { t: 'n', f: `IF(I${R}="","",D${R}*I${R})`, v: r2(num(r.litri) * gPrezzo(r)), z: '#,##0.00 "€"' }; });
+      const Lr = rows.length + 1;
+      U.sheet_add_aoa(ws, [['TOTALE']], { origin: 'A' + (Lr + 1) });
+      ws['D' + (Lr + 1)] = { t: 'n', f: `SUM(D2:D${Lr})`, v: gSum(rows, 'litri'), z: '#,##0.00' };
+      ws['J' + (Lr + 1)] = { t: 'n', f: `SUM(J2:J${Lr})`, v: r2(gCost(rows)), z: '#,##0.00 "€"' };
+      ws['!cols'] = [12, 12, 11, 9, 14, 13, 16, 34, 11, 11, 30].map(w => ({ wch: w })); ws['!autofilter'] = { ref: `A1:K${Lr}` };
+      U.book_append_sheet(wb, ws, 'Rifornimenti');
+      const V = gasVehicles(gasRows());
+      const vs = [...groupBy(rows, r => plate(r.targa))].map(([p, v]) => { const x = V.get(p); let k = 0, kl = 0; x.seg.forEach((d, id) => { const z = v.find(r => r.id === id); if (z) { k += d; kl += num(z.litri); } }); return [plateFmt(p), x.uso, v.length, r2(gSum(v, 'litri')), k || '', kl ? r2(k / kl * 10) / 10 : '', r2(gCost(v))]; }).sort((a, b) => b[3] - a[3]);
+      const w2 = U.aoa_to_sheet([['TARGA', 'UTILIZZO PRINCIPALE', 'RIFORNIMENTI', 'LITRI', 'KM PERCORSI', 'KM/L', 'COSTO STIMATO'], ...vs]);
+      w2['!cols'] = [12, 30, 13, 10, 12, 8, 14].map(w => ({ wch: w }));
+      U.book_append_sheet(wb, w2, 'Mezzi');
+      XLSX.writeFile(wb, `gasolio-${gasP || 'completo'}.xlsx`);
+      busy(); toast('Excel scaricato');
+    } catch (e) { busy(); toast(e.message); }
+  }
+
   /* ================= Eventi ================= */
   function bind() {
     window.addEventListener('hashchange', go);
@@ -1649,7 +1992,7 @@
     $('#sheet-del').onclick = () => { if (onDelete && onDelete() === true) closeSheet(); };
     $$('[data-close]').forEach(b => (b.onclick = closeSheet));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
-    $('#fab').onclick = () => formMov(); $('#add-top').onclick = () => formMov();
+    $('#fab').onclick = () => view === 'gasolio' ? formGas() : formMov(); $('#add-top').onclick = () => formMov();
 
     document.addEventListener('click', e => {
       const t = e.target;
@@ -1672,6 +2015,16 @@
       if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
       const th = t.closest('[data-theme-set]'); if (th) { const v = th.dataset.themeSet; try { localStorage.setItem('cdc_theme', v); } catch {} applyTheme(v, true); toast(v === 'auto' ? 'Tema automatico' : v === 'dark' ? 'Tema scuro' : 'Tema chiaro'); return; }
       if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'centri' || view === 'home') ccAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
+      if (t.closest('#ga-imp')) { importGas(); return; }
+      if (t.closest('#ga-xls')) { exportGas(); return; }
+      if (t.closest('#ga-add')) { formGas(); return; }
+      if (t.closest('#ga-price')) { formGasPrice(); return; }
+      if (t.closest('#ga-prev') || t.closest('#ga-next')) { const o = [...$('#ga-per').options].map(x => x.value), i = o.indexOf(gasP) + (t.closest('#ga-prev') ? 1 : -1); if (i >= 0 && i < o.length) { gasP = o[i]; gasAnim = true; renderGas(); } return; }
+      const gap = t.closest('[data-gaper]'); if (gap) { gasP = gap.dataset.gaper; gasAnim = true; renderGas(); return; }
+      const gas = t.closest('[data-gas]'); if (gas) { const r = gasRows().find(x => String(x.id) === gas.dataset.gas); if (r) formGas(r); return; }
+      const gat = t.closest('[data-gtarga]'); if (gat) { gasF.targa = gasF.targa === gat.dataset.gtarga ? '' : gat.dataset.gtarga; $$('.gv-c').forEach(x => x.classList.toggle('on', x.dataset.gtarga === gasF.targa)); $('#ga-ft').value = gasF.targa; renderGasList(); if (gasF.targa) $('#ga-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      const gaq = t.closest('[data-gaq]'); if (gaq) { gasF.q = ''; gasF.targa = ''; $('#ga-q').value = ''; $('#ga-ft').value = ''; const ids = gaq.dataset.gaq.split(' '); renderGasList(gasRows().filter(r => ids.includes(String(r.id)))); $('#ga-cnt').textContent += ' · filtro controllo'; $('#ga-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if (t.closest('#ga-more')) { gasLimit = 9999; renderGasList(); return; }
       if (t.closest('#gl-imp')) { importGls(); return; }
       if (t.closest('#gl-xls')) { exportGls(); return; }
       if (t.closest('#gl-prev') || t.closest('#gl-next')) { const o = [...$('#gl-mese').options].map(x => x.value), i = o.indexOf(gMonth) + (t.closest('#gl-prev') ? 1 : -1); if (o[i]) { gMonth = o[i]; glsAnim = true; renderGls(); } return; }
@@ -1704,6 +2057,9 @@
     $('#a-q').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { a.q = e.target.value; aLimit = 120; renderArt(); }, 180); });
     $('#a-sort').onchange = e => { a.sort = e.target.value; renderArt(); };
     $('#gl-mese').onchange = e => { gMonth = e.target.value; glsAnim = true; renderGls(); };
+    $('#ga-per').onchange = e => { gasP = e.target.value; gasAnim = true; renderGas(); };
+    document.addEventListener('input', e => { if (e.target.id === 'ga-q') { clearTimeout(qt); qt = setTimeout(() => { gasF.q = e.target.value; renderGasList(); }, 180); } });
+    document.addEventListener('change', e => { if (e.target.id === 'ga-ft') { gasF.targa = e.target.value; $$('.gv-c').forEach(x => x.classList.toggle('on', x.dataset.gtarga === gasF.targa)); renderGasList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'gl-q') { clearTimeout(qt); qt = setTimeout(() => { gF.q = e.target.value; renderGlsList(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'gl-fcdc') { gF.cdc = e.target.value; renderGlsList(); } if (e.target.id === 'gl-fcon') { gF.contr = e.target.value; renderGlsList(); } });
     $('#a-centro').onchange = e => { a.centro = e.target.value; renderArt(); };
