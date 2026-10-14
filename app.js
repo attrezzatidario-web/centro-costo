@@ -1293,6 +1293,8 @@
   const gE = v => eur(num(v) * gMul()), gE0 = v => eur0(num(v) * gMul());
   const kg = v => fmtNum(num(v), 1) + ' kg';
   const glsRows = () => db.gls || [];
+  const ALLM = 'tutto', gIn = r => gMonth === ALLM || r.mese === gMonth;
+  const gPer = () => { if (gMonth !== ALLM) return mLabel(gMonth); const m = glsMonths(); return m.length ? `${mLabel(m[0])} – ${mLabel(m[m.length - 1])}` : ''; };
   const glsMonths = () => [...new Set(glsRows().map(r => r.mese).filter(Boolean))].sort();
   const gSum = (arr, f) => arr.reduce((s, r) => s + num(r[f]), 0);
   const gTot = arr => gSum(arr, 'totale');
@@ -1309,6 +1311,7 @@
   function glsPdf() {
     const a = $('#gl-pdf'); if (!a) return;
     const m = gMonth, url = `analisi/gls-${m}.pdf`;
+    if (m === ALLM) { a.hidden = true; return; }
     const show = ok => { if (m !== gMonth) return; a.hidden = !ok; if (ok) { a.href = url; a.setAttribute('download', `Analisi GLS ${mLabel(m)}.pdf`); } };
     if (m in pdfSeen) return show(pdfSeen[m]);
     a.hidden = true;
@@ -1319,25 +1322,26 @@
   function renderGls() {
     const months = glsMonths();
     const cur = ymOf(new Date());
-    if (!months.includes(gMonth)) gMonth = months.includes(cur) ? cur : months[months.length - 1] || cur;
+    if (gMonth !== ALLM && !months.includes(gMonth)) gMonth = months.includes(cur) ? cur : months[months.length - 1] || cur;
     const sel = $('#gl-mese');
     const opts = [...new Set([...months, cur])].sort().reverse();
-    sel.innerHTML = opts.map(k => `<option value="${k}"${k === gMonth ? ' selected' : ''}>${esc(mLabel(k))}${months.includes(k) ? '' : ' · da caricare'}</option>`).join('');
+    if (months.length) opts.unshift(ALLM);
+    sel.innerHTML = opts.map(k => k === ALLM ? `<option value="${ALLM}"${gMonth === ALLM ? ' selected' : ''}>Tutto il periodo</option>` : `<option value="${k}"${k === gMonth ? ' selected' : ''}>${esc(mLabel(k))}${months.includes(k) ? '' : ' · da caricare'}</option>`).join('');
     const ix = opts.indexOf(gMonth);
     $('#gl-prev').disabled = ix >= opts.length - 1; $('#gl-next').disabled = ix <= 0;
     sub(ivaLbl() + ' · spedizioni GLS da Roma');
     glsPdf();
-    const rows = glsRows().filter(r => r.mese === gMonth);
+    const rows = glsRows().filter(gIn);
     const anim = glsAnim && !reduced(); glsAnim = false;
     const body = $('#gl-body');
     body.classList.toggle('cc-anim', anim);
     const warn = glsScriptOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati GLS.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.1 (Code.gs nuovo). Finché non lo aggiorni l'importazione è bloccata.</span></div>`;
     if (!rows.length) {
-      body.innerHTML = warn + `<div class="gl-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${glsArt()}</div><div class="gh-main"><span class="gh-lbl">GLS Attrezzati · ${esc(mLabel(gMonth))}</span><h3>Nessuna spedizione caricata</h3><p>Importa il resoconto del mese con «Importa mese».</p></div></div></div>`;
+      body.innerHTML = warn + `<div class="gl-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${glsArt()}</div><div class="gh-main"><span class="gh-lbl">GLS Attrezzati · ${esc(gPer())}</span><h3>Nessuna spedizione caricata</h3><p>Importa il resoconto del mese con «Importa mese».</p></div></div></div>`;
       return;
     }
     const T = gTot(rows), n = rows.length, colli = gSum(rows, 'colli'), kr = gSum(rows, 'kgReali'), kt = gSum(rows, 'kgTass');
-    const prevK = months[months.indexOf(gMonth) - 1], prev = prevK ? glsRows().filter(r => r.mese === prevK) : null;
+    const prevK = gMonth === ALLM ? null : months[months.indexOf(gMonth) - 1], prev = prevK ? glsRows().filter(r => r.mese === prevK) : null;
     const dlt = (a, b) => { if (!b) return ''; const p = (a / b - 1) * 100; return `<span class="gl-d ${p > 0 ? 'up' : 'down'}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>`; };
     const vol = kr ? (kt / kr - 1) * 100 : 0;
     const nLoc = new Set(rows.map(r => r.citta + '|' + r.prov)).size, nReg = new Set(rows.map(regOf)).size;
@@ -1351,7 +1355,7 @@
       <div class="gl-hero">
         <div class="gh-top"><div class="gh-art">${glsArt()}</div>
         <div class="gh-main">
-          <span class="gh-lbl">Costo spedizioni · ${esc(mLabel(gMonth))}</span>
+          <span class="gh-lbl">Costo spedizioni · ${esc(gPer())}</span>
           <div class="gh-big k-gtot">0 €</div>
           <div class="gh-sub"><span>${n} spedizioni</span><span>${nLoc} località</span><span>${nReg} regioni</span>${dlt(T, prev && gTot(prev))}</div>
         </div></div>
@@ -1370,7 +1374,7 @@
         <div class="card"><div class="card-h"><h3>Regioni</h3><span class="muted small">${nReg} regioni</span></div><div class="bars" id="gl-reg"></div></div>
         <div class="card"><div class="card-h"><h3>Fasce di peso tassabile</h3><span class="muted small">costo per fascia</span></div><div id="gl-band"></div></div>
       </div>
-      <div class="card"><div class="card-h"><h3>Spedizioni giorno per giorno</h3><span class="muted small" id="gl-day-s"></span></div><div class="mbars gl-days" id="gl-days"></div></div>
+      ${gMonth === ALLM ? '' : `<div class="card"><div class="card-h"><h3>Spedizioni giorno per giorno</h3><span class="muted small" id="gl-day-s"></span></div><div class="mbars gl-days" id="gl-days"></div></div>`}
       ${months.length > 1 ? `<div class="card"><div class="card-h"><h3>Andamento mensile</h3><span class="muted small">${months.length} mesi caricati</span></div><div class="mbars gl-months" id="gl-months"></div></div>` : ''}
       <div class="card"><div class="card-h"><h3>Centri di costo e riaddebito</h3><span class="muted small">costo GLS + IVA 22%</span></div><div class="mx-wrap" id="gl-cdc"></div></div>
       <div class="card" id="gl-anom"></div>
@@ -1414,6 +1418,7 @@
     const mb = Math.max(...bands.map(x => x.t), 1);
     $('#gl-band').innerHTML = `<div class="gl-bands">${bands.map((x, i) => `<div class="gb-row gl-anim-row" style="--d:${150 + i * 50}ms"><span class="gb-l">${x.l}<small>${x.v.length} sped. · ${fmtNum(x.t / (x.kt || 1) * gMul(), 2)} €/kg</small></span><span class="gb-t"><i style="width:${(x.t / mb * 100).toFixed(1)}%"></i></span><b class="gb-v">${gE0(x.t)}</b></div>`).join('')}</div>`;
     // giorni
+    if (gMonth !== ALLM) {
     const [yy, mm] = gMonth.split('-').map(Number), nd = new Date(yy, mm, 0).getDate();
     const byD = groupBy(rows, r => String(r.data).slice(0, 10));
     const days = [...Array(nd)].map((_, i) => { const k = `${gMonth}-${pad(i + 1)}`, v = byD.get(k) || []; const wd = new Date(yy, mm - 1, i + 1).getDay(); return { d: i + 1, k, v, t: gTot(v), we: wd === 0 || wd === 6 }; });
@@ -1421,6 +1426,7 @@
     $('#gl-days').innerHTML = days.map((x, i) => `<div class="mb${x.we ? ' we' : ''}" title="${x.d} ${esc(MESI[mm - 1])}: ${x.v.length} sped. · ${esc(gE(x.t))}"><span class="mbv">${x.t ? esc(gE0(x.t)) : ''}</span><i class="${x.t === md ? 'cur' : ''}" style="height:${x.t ? Math.max(3, x.t / md * 100) : 0}%;animation-delay:${i * 18}ms"></i><span class="mbl">${x.d}</span></div>`).join('');
     const act = days.filter(x => x.v.length).length;
     $('#gl-day-s').textContent = `${act} giorni di spedizione · media ${fmtNum(n / (act || 1), 1)} sped. al giorno`;
+    }
     // centri di costo
     const byCC = [...groupBy(rows, r => r.cdc || '—')].map(([k, v]) => ({ k, nome: v[0].cdcNome || '', v, t: gTot(v), rd: v[0].riaddebito || '' })).sort((a, b) => String(a.k).localeCompare(String(b.k)));
     const isR = x => /^s[iì]/i.test(x.rd);
@@ -1436,7 +1442,7 @@
   }
 
   function renderGlsList(rows) {
-    rows = rows || glsRows().filter(r => r.mese === gMonth);
+    rows = rows || glsRows().filter(gIn);
     const q = gF.q.trim().toLowerCase();
     const L = rows.filter(r => (!gF.cdc || r.cdc === gF.cdc) && (!gF.contr || r.contratto === gF.contr) && (!q || `${r.destinatario} ${r.citta} ${r.prov} ${r.nsped} ${r.rif} ${r.cdcNome}`.toLowerCase().includes(q)))
       .sort((a, b) => String(a.data).localeCompare(String(b.data)) || String(a.nsped).localeCompare(String(b.nsped)));
@@ -1607,7 +1613,7 @@
     } catch (e) { busy(); toast(e.message); }
   }
   async function exportGls() {
-    const rows = glsRows().filter(r => r.mese === gMonth).sort((a, b) => String(a.data).localeCompare(String(b.data)));
+    const rows = glsRows().filter(gIn).sort((a, b) => String(a.data).localeCompare(String(b.data)));
     if (!rows.length) return toast('Nessuna spedizione in questo mese');
     try {
       busy('Preparo il file Excel…'); await loadXlsx();
@@ -1636,7 +1642,7 @@
       const wd = U.aoa_to_sheet([['Regione', 'Località', 'Provincia', 'Spedizioni', 'Colli', 'Kg reali', 'Kg tassabili', 'Costo'], ...bd]);
       bd.forEach((_, i) => { wd['H' + (i + 2)].z = EUR; }); wd['!cols'] = [18, 26, 9, 10, 8, 10, 12, 12].map(w => ({ wch: w }));
       U.book_append_sheet(wb, wd, 'Destinazioni');
-      XLSX.writeFile(wb, `gls-${gMonth}.xlsx`, { compression: true });
+      XLSX.writeFile(wb, `gls-${gMonth === ALLM ? 'completo' : gMonth}.xlsx`, { compression: true });
       toast('File Excel scaricato');
     } catch (e) { toast(e.message); } finally { busy(); }
   }
@@ -2030,7 +2036,7 @@
       if (t.closest('#gl-prev') || t.closest('#gl-next')) { const o = [...$('#gl-mese').options].map(x => x.value), i = o.indexOf(gMonth) + (t.closest('#gl-prev') ? 1 : -1); if (o[i]) { gMonth = o[i]; glsAnim = true; renderGls(); } return; }
       const gmo = t.closest('[data-gmonth]'); if (gmo) { gMonth = gmo.dataset.gmonth; glsAnim = true; renderGls(); return; }
       const gsh = t.closest('[data-gship]'); if (gsh) { glsDetail(gsh.dataset.gship); return; }
-      const gq = t.closest('[data-gq]'); if (gq) { gF.q = ''; gF.cdc = ''; gF.contr = ''; renderGlsList(glsRows().filter(r => r.mese === gMonth && gq.dataset.gq.split(' ').includes(String(r.nsped)))); $('#gl-cnt').textContent += ' · filtro anomalia'; $('#gl-ship').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+      const gq = t.closest('[data-gq]'); if (gq) { gF.q = ''; gF.cdc = ''; gF.contr = ''; renderGlsList(glsRows().filter(r => gIn(r) && gq.dataset.gq.split(' ').includes(String(r.nsped)))); $('#gl-cnt').textContent += ' · filtro anomalia'; $('#gl-ship').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       const gcc = t.closest('[data-gcdc]'); if (gcc) { gF.cdc = gcc.dataset.gcdc; $('#gl-fcdc').value = gF.cdc; renderGlsList(); $('#gl-ship').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       if (t.closest('#gl-more')) { gLimit = 9999; renderGlsList(); return; }
       if (t.closest('#a-imp')) { importExcel(false); return; }
