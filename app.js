@@ -238,18 +238,21 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Home', movimenti: 'Movimenti', articoli: 'Articoli', gls: 'GLS Attrezzati', gasolio: 'Gasolio', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', impostazioni: 'Impostazioni' };
   function go() {
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
-    if (view === 'centri' || view === 'home') ccAnim = true;
+    if (view === 'attrezzatura') ccAnim = true;
+    if (view === 'home') ovAnim = true;
     if (view === 'gls') glsAnim = true;
     if (view === 'gasolio') gasAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
-    $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === view));
+    const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
+    $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
+    $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'impostazioni' || view === 'gls';
-    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' ? 'hidden' : '';
+    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home';
+    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -278,7 +281,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, impostazioni: renderSettings }[view];
+    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -319,7 +322,7 @@
     countTo($('#k-zero'), zero, v => fmtNum(Math.round(v), 0));
     { const n = priceSuggest().out.length; $('#k-zero-s').textContent = n ? `${n} completabili in automatico` : 'da completare'; }
 
-    renderDash($('#v-home'), { matrix: true });
+    renderDash($('#v-attr'), { matrix: true });
     $$('.k-ivalbl').forEach(e => (e.textContent = ivaLbl()));
 
     const byK = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => ({ k, v: sumT(v) })).sort((x, y) => y.v - x.v);
@@ -1724,7 +1727,6 @@
         <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-gak="${i}">0</b><small>${s}</small></div>`).join('')}</div>
       </div>
       <div class="card"><div class="card-h"><h3>Mezzi</h3><span class="muted small">${plates.size} mezzi · clic per vedere i rifornimenti</span></div><div class="ga-veh" id="ga-veh"></div></div>
-      <div class="card"><div class="card-h"><h3>Linea del tempo</h3><span class="muted small">ogni punto è un rifornimento · grandezza = litri</span></div><div class="ga-tl" id="ga-tl"></div></div>
       <div class="gl-2">
         <div class="card"><div class="card-h"><h3>${gasP ? 'Litri giorno per giorno' : 'Litri mese per mese'}</h3><span class="muted small" id="ga-tr-s"></span></div><div class="mbars ga-bars" id="ga-tr"></div></div>
         <div class="card"><div class="card-h"><h3>Per utilizzo</h3><span class="muted small">da colonna «movimenti»</span></div><div class="bars" id="ga-uso"></div></div>
@@ -1750,22 +1752,6 @@
         <div class="gv-tank"><i style="width:${(x.l / mv * 100).toFixed(1)}%"></i></div>
         <div class="gv-st"><div><small>Pieni</small><b>${x.v.length}</b></div><div><small>Km</small><b>${x.k ? fmtNum(x.k, 0) : '—'}</b></div><div><small>km/L</small><b>${x.cons ? fmtNum(x.cons, 1) : '—'}</b></div><div><small>Ultimo</small><b>${x.last && validD(x.last.data) ? parseD(x.last.data).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) : '—'}</b></div></div>
       </div>`).join('');
-
-    // linea del tempo
-    const ds = rows.map(r => parseD(r.data).getTime()).filter(t => !isNaN(t));
-    let t0 = Math.min(...ds), t1 = Math.max(...ds);
-    if (gasP) { const [y, m] = gasP.split('-').map(Number); t0 = new Date(y, m - 1, 1).getTime(); t1 = new Date(y, m, 0).getTime(); }
-    const span = Math.max(1, t1 - t0), W = 1000, LH = 34, PL = 112, PR = 16;
-    const lanes = vs.map(x => x.p), H = lanes.length * LH + 30, mxL = Math.max(...rows.map(r => num(r.litri)), 1);
-    const X = t => PL + (t - t0) / span * (W - PL - PR);
-    const ticks = []; { const d = new Date(t0); d.setDate(1); if (d.getTime() < t0) d.setMonth(d.getMonth() + (gasP ? 0 : 1)); if (gasP) { for (let i = 1; i <= new Date(t1).getDate(); i += 5) ticks.push([new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), i).getTime(), String(i)]); } else { while (d.getTime() <= t1) { ticks.push([d.getTime(), MESI[d.getMonth()].slice(0, 3)]); d.setMonth(d.getMonth() + 1); } } }
-    $('#ga-tl').innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="ga-tsvg">
-      ${ticks.map(([t, l]) => `<line class="ga-tk" x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="0" y2="${H - 22}"/><text class="ga-tkl" x="${X(t).toFixed(1)}" y="${H - 6}">${esc(l)}</text>`).join('')}
-      ${lanes.map((p, i) => { const y = i * LH + LH / 2; const pts = rows.filter(r => plate(r.targa) === p).sort((a, b) => String(a.data).localeCompare(String(b.data)));
-        return `<g class="ga-lane" data-gtarga="${esc(p)}"><text class="ga-ll" x="0" y="${y + 4}">${esc(plateFmt(p))}</text><line class="ga-lt" x1="${PL}" x2="${W - PR}" y1="${y}" y2="${y}"/>
-          ${pts.length > 1 ? `<path class="ga-lp" pathLength="1" style="--d:${300 + i * 90}ms" d="M${pts.map(r => `${X(parseD(r.data).getTime()).toFixed(1)} ${y}`).join(' L')}"/>` : ''}
-          ${pts.map((r, j) => `<circle class="ga-dot" data-gas="${esc(r.id)}" style="--d:${500 + i * 90 + j * 40}ms" cx="${X(parseD(r.data).getTime()).toFixed(1)}" cy="${y}" r="${(3 + 7 * Math.sqrt(num(r.litri) / mxL)).toFixed(1)}"><title>${esc(shortDate(r.data))} · ${esc(L(num(r.litri), 2))}${num(r.km) ? ' · ' + fmtNum(num(r.km), 0) + ' km' : ''}${r.operatore ? ' · ' + esc(r.operatore) : ''}</title></circle>`).join('')}</g>`; }).join('')}
-    </svg>`;
 
     // andamento
     if (gasP) {
@@ -1988,6 +1974,142 @@
     } catch (e) { busy(); toast(e.message); }
   }
 
+  /* =========================================================
+     DASHBOARD GENERALE — tutte le aree di spesa
+     ========================================================= */
+  let ovP = '', ovAnim = true;
+  const AREAS = [
+    { k: 'att', t: 'Attrezzatura', go: 'attrezzatura', ic: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>' },
+    { k: 'gls', t: 'Spedizioni GLS', go: 'gls', ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' },
+    { k: 'gas', t: 'Gasolio', go: 'gasolio', ic: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/>' }
+  ];
+  const ovMonthOf = { att: r => validD(r.data) ? String(r.data).slice(0, 7) : '', gls: r => r.mese || '', gas: r => String(r.data || '').slice(0, 7) };
+  const ovRows = () => ({ att: db.movimenti || [], gls: glsRows(), gas: gasRows() });
+  const ovVal = { att: arr => sumT(arr), gls: arr => gTot(arr) * gMul(), gas: arr => gCost(arr) * gMul() };
+  function renderOverview() {
+    const D = ovRows();
+    const months = [...new Set(AREAS.flatMap(a => D[a.k].map(ovMonthOf[a.k])).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+    if (ovP && !months.includes(ovP)) ovP = '';
+    $('#ov-per').innerHTML = `<option value=""${ovP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === ovP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(ovP);
+    $('#ov-prev').disabled = ix >= opts.length - 1; $('#ov-next').disabled = ix <= 0;
+    sub(`${ivaLbl()} · attrezzatura, spedizioni e gasolio`);
+    const pick = (k, m) => m ? D[k].filter(r => ovMonthOf[k](r) === m) : D[k];
+    const P = {}; AREAS.forEach(a => { P[a.k] = pick(a.k, ovP); });
+    const V = {}; AREAS.forEach(a => { V[a.k] = ovVal[a.k](P[a.k]); });
+    const T = V.att + V.gls + V.gas;
+    const prevK = ovP ? months[months.indexOf(ovP) - 1] : null;
+    const PV = prevK ? AREAS.reduce((o, a) => (o[a.k] = ovVal[a.k](pick(a.k, prevK)), o), {}) : null;
+    const PT = PV ? PV.att + PV.gls + PV.gas : 0;
+    const lit = gSum(P.gas, 'litri'), noPrice = P.gas.length && !P.gas.some(r => gPrezzo(r) > 0);
+    const per = ovP ? mLabel(ovP) : months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : 'nessun dato';
+    const anim = ovAnim && !reduced(); ovAnim = false;
+    const body = $('#ov-body');
+    body.classList.toggle('cc-anim', anim);
+    const byM = months.map(m => { const o = { m }; AREAS.forEach(a => { o[a.k] = ovVal[a.k](pick(a.k, m)); }); o.t = o.att + o.gls + o.gas; return o; });
+    const undated = sumT(D.att.filter(r => !validD(r.data)));
+    const top = byM.slice().sort((a, b) => b.t - a.t)[0];
+    const avgM = byM.length ? byM.reduce((s, x) => s + x.t, 0) / byM.length : 0;
+    const dPct = (a, b) => b ? (a / b - 1) * 100 : null;
+    const dChip = (a, b, cls = '') => { const p = dPct(a, b); if (p == null || !isFinite(p)) return ''; return `<span class="ov-d ${p > 0 ? 'up' : 'down'} ${cls}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}%</span>`; };
+    // controlli
+    const zero = P.att.filter(r => !num(r.prezzo)).length;
+    const glsBad = P.gls.filter(r => r.contratto === 'C2' && num(r.kgTass) < 30).length, glsNoD = P.gls.filter(r => r.gg === '' || r.gg == null).length;
+    const gasNoKm = P.gas.filter(r => !num(r.km)).length, gasNoOp = P.gas.filter(r => !String(r.operatore || '').trim() || String(r.operatore).trim() === '?').length;
+    const AL = [
+      zero && { a: 'att', h: `${fmtNum(zero, 0)} righe senza prezzo`, d: 'Attrezzatura · il totale è sottostimato', go: 'movzero' },
+      glsBad && { a: 'gls', h: `${glsBad} spedizioni leggere sul Contratto 2`, d: 'GLS · con il Contratto 1 costerebbero meno', go: 'gls' },
+      glsNoD && { a: 'gls', h: `${glsNoD} consegne non registrate`, d: 'GLS · verificare il tracking', go: 'gls' },
+      noPrice && { a: 'gas', h: 'Prezzo del gasolio non impostato', d: `Gasolio · ${fmtNum(lit, 0)} litri senza costo`, go: 'gasprice' },
+      gasNoKm && { a: 'gas', h: `${gasNoKm} rifornimenti senza km`, d: 'Gasolio · consumo non calcolabile', go: 'gasolio' },
+      gasNoOp && { a: 'gas', h: `${gasNoOp} rifornimenti senza operatore`, d: 'Gasolio · chi ha fatto il pieno?', go: 'gasolio' }
+    ].filter(Boolean);
+    // sparkline per area
+    const spark = (k, i) => {
+      const vals = k === 'gas' && noPrice ? months.map(m => gSum(pick('gas', m), 'litri')) : byM.map(x => x[k]); if (vals.length < 2) return '';
+      const mx = Math.max(...vals, 1), w = 200, h = 44, st = w / (vals.length - 1);
+      const pts = vals.map((v, j) => [j * st, h - 4 - (v / mx) * (h - 10)]);
+      const d = pts.map((p, j) => `${j ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+      const sel = ovP ? months.indexOf(ovP) : -1;
+      return `<svg class="ov-spark" viewBox="-4 0 208 ${h}" preserveAspectRatio="none"><path class="ov-sa a-${k}" d="${d} L200 ${h} L0 ${h} Z"/><path class="ov-sl a-${k}" pathLength="1" style="--d:${400 + i * 120}ms" d="${d}"/>${sel >= 0 ? `<circle class="ov-sd a-${k}" cx="${pts[sel][0].toFixed(1)}" cy="${pts[sel][1].toFixed(1)}" r="3.2"/>` : ''}</svg>`;
+    };
+    const stats = {
+      att: () => { const cc = new Set(P.att.map(r => r.centro).filter(Boolean)).size; return [[fmtNum(P.att.length, 0), 'righe'], [cc, 'centri'], [fmtNum(new Set(P.att.map(prodKey)).size, 0), 'prodotti']]; },
+      gls: () => [[P.gls.length, 'spedizioni'], [fmtNum(gSum(P.gls, 'kgTass'), 0) + ' kg', 'tassabili'], [gSum(P.gls, 'kgTass') ? fmtNum(gTot(P.gls) / gSum(P.gls, 'kgTass') * gMul(), 3) + ' €' : '—', 'al kg']],
+      gas: () => [[fmtNum(lit, 0) + ' L', 'litri'], [P.gas.length, 'pieni'], [new Set(P.gas.map(r => plate(r.targa))).size, 'mezzi']]
+    };
+    body.innerHTML = `
+      <div class="gl-hero ov-hero">
+        <div class="gh-top"><div class="gh-art">${ovArt(AREAS.map(a => T ? V[a.k] / T : 1 / 3))}</div>
+        <div class="gh-main">
+          <span class="gh-lbl">Spesa totale · ${esc(per)}</span>
+          <div class="gh-big k-ovt">0 €</div>
+          <div class="gh-sub">${AREAS.map(a => `<span class="ov-chip"><i class="a-${a.k}"></i>${a.t.replace('Spedizioni ', '')} ${T ? fmtNum(pct(V[a.k], T), 0) : 0}%</span>`).join('')}${PV ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs(dPct(T, PT) || 0), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div>
+        </div></div>
+        <div class="ov-stack">${AREAS.map(a => `<i class="a-${a.k}" style="flex:${Math.max(V[a.k], T * .004) || 1}" title="${esc(a.t)}: ${esc(eur(V[a.k]))}"></i>`).join('')}</div>
+        <div class="gh-kpis">
+          ${AREAS.map((a, i) => `<div class="gh-k"><span><i class="ov-dot a-${a.k}"></i>${a.t}</span><b data-ovk="${i}">0 €</b><small>${a.k === 'gas' && noPrice ? fmtNum(lit, 0) + ' L · prezzo da impostare' : (T ? fmtNum(pct(V[a.k], T), 1) + '% del totale' : '—')}</small></div>`).join('')}
+          <div class="gh-k"><span>Media mensile</span><b data-ovk="3">0 €</b><small>${byM.length} mesi con dati</small></div>
+          <div class="gh-k"><span>Mese più costoso</span><b>${top ? esc(MESI[Number(top.m.slice(5)) - 1].replace(/^./, c => c.toUpperCase())) : '—'}</b><small>${top ? esc(eur0(top.t)) : ''}</small></div>
+          <div class="gh-k"><span>Da controllare</span><b data-ovk="4">0</b><small>${AL.length ? 'vedi elenco sotto' : 'tutto in ordine'}</small></div>
+        </div>
+      </div>
+      <div class="ov-areas">${AREAS.map((a, i) => { const st = stats[a.k]();
+        return `<a class="card ov-area" href="#${a.go}" style="--d:${150 + i * 90}ms">
+          <div class="ov-ah"><span class="ov-ic a-${a.k}"><svg viewBox="0 0 24 24">${a.ic}</svg></span><span class="ov-at">${a.t}</span><span class="ov-go">Apri<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+          <div class="ov-av"><b data-ova="${i}">0 €</b>${PV ? dChip(V[a.k], PV[a.k]) : ''}</div>
+          ${a.k === 'gas' && noPrice ? `<div class="ov-note">${fmtNum(lit, 0)} litri · imposta il prezzo €/L per il costo</div>` : `<div class="ov-note">${T ? fmtNum(pct(V[a.k], T), 1) : 0}% della spesa${ovP ? '' : a.k === 'att' && undated ? ` · ${eur0(undated)} senza data` : ` · media ${eur0(byM.length ? byM.reduce((s, x) => s + x[a.k], 0) / byM.length : 0)}/mese`}</div>`}
+          ${spark(a.k, i)}
+          <div class="ov-as">${st.map(([v, l]) => `<div><b>${esc(String(v))}</b><small>${l}</small></div>`).join('')}</div>
+        </a>`; }).join('')}</div>
+      <div class="card ov-trend"><div class="card-h"><h3>Spesa mese per mese</h3>${!ovP && undated ? `<span class="muted small">${esc(eur0(undated))} di attrezzatura senza data non sono nel grafico</span>` : ''}<span class="ov-leg">${AREAS.map(a => `<span><i class="a-${a.k}"></i>${a.t}</span>`).join('')}</span></div><div class="ov-bars" id="ov-bars"></div></div>
+      <div class="ov-2">
+        <div class="card"><div class="card-h"><h3>Da controllare</h3><span class="muted small">${AL.length ? AL.length + ' punti' : 'nessun problema'}</span></div>
+          ${AL.length ? `<div class="ov-al">${AL.map((x, i) => `<button type="button" class="ov-ar" data-ovgo="${x.go}" style="--d:${200 + i * 60}ms"><span class="ov-ad a-${x.a}"></span><span class="ov-am"><b>${esc(x.h)}</b><small>${esc(x.d)}</small></span><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>'}</div>
+        <div class="card"><div class="card-h"><h3>Ultimi movimenti</h3><span class="muted small">tutte le aree</span></div><div class="ov-feed" id="ov-feed"></div></div>
+      </div>
+      <div class="ov-3" id="ov-tops"></div>`;
+
+    countTo($('.k-ovt', body), T, eur0);
+    $$('[data-ovk]', body).forEach(el => { const i = +el.dataset.ovk; el._v = 0; const v = i < 3 ? V[AREAS[i].k] : i === 3 ? avgM : AL.length; if (i === 2 && noPrice) { el.textContent = '—'; return; } countTo(el, v, i === 4 ? x => fmtNum(Math.round(x), 0) : eur0); });
+    $$('[data-ova]', body).forEach(el => { const a = AREAS[+el.dataset.ova]; el._v = 0; if (a.k === 'gas' && noPrice) { el.textContent = fmtNum(lit, 0) + ' L'; return; } countTo(el, V[a.k], eur0); });
+
+    // barre impilate
+    const mx = Math.max(...byM.map(x => x.t), 1);
+    $('#ov-bars').innerHTML = byM.length ? byM.map((x, i) => `<div class="ov-b${x.m === ovP ? ' on' : ''}" data-ovm="${x.m}" title="${esc(mLabel(x.m))}: ${esc(eur(x.t))}"><span class="ov-bv">${esc(eur0(x.t))}</span><div class="ov-bc" style="height:${Math.max(1.5, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${AREAS.slice().reverse().map(a => x[a.k] ? `<i class="a-${a.k}" style="flex:${x[a.k]}"></i>` : '').join('')}</div><span class="ov-bl">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}${x.m.slice(0, 4) !== String(new Date().getFullYear()) ? ' ' + x.m.slice(2, 4) : ''}</span></div>`).join('') : '<div class="empty">Nessun dato con data</div>';
+
+    // ultimi movimenti
+    const feed = [
+      ...P.att.filter(r => validD(r.data)).map(r => ({ a: 'att', d: r.data, t: r.descrizione, s: r.centro, v: tot(r), go: 'movimenti' })),
+      ...P.gls.map(r => ({ a: 'gls', d: r.data, t: `${r.destinatario}`, s: `${r.citta} (${r.prov})`, v: num(r.totale) * gMul(), go: 'gls' })),
+      ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' }))
+    ].sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
+    $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi a-${x.a}"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
+
+    // classifiche
+    const top5 = (arr, kf, vf, lf) => [...groupBy(arr, kf)].map(([k, v]) => ({ k, v: vf(v), n: v.length, l: lf ? lf(v) : '' })).filter(x => x.k && x.k !== '—').sort((a, b) => b.v - a.v).slice(0, 5);
+    const T1 = top5(P.att, r => r.centro || '—', sumT), T2 = top5(P.gls, r => r.citta + ' (' + r.prov + ')', v => gTot(v) * gMul(), v => String(v[0].destinatario || '').toUpperCase()), T3 = top5(P.gas, r => plate(r.targa), v => noPrice ? gSum(v, 'litri') : gCost(v) * gMul(), v => (v.map(r => gasNorm(r.uso)).filter(Boolean)[0] || ''));
+    const box = (title, link, list, fmt, nm) => { const m = Math.max(...list.map(x => x.v), 1); return `<div class="card"><div class="card-h"><h3>${title}</h3><a class="link" href="#${link}">Tutti</a></div>${list.length ? `<div class="ov-top">${list.map((x, i) => `<div class="ov-tr" style="--d:${200 + i * 60}ms"><span class="ov-tn">${i + 1}</span><span class="ov-tm"><b>${esc(nm ? nm(x.k) : x.k)}</b><small>${x.l ? esc(x.l) + ' · ' : ''}${x.n} ${link === 'gasolio' ? 'pieni' : link === 'gls' ? 'sped.' : 'righe'}</small><span class="gd-b"><i style="width:${(x.v / m * 100).toFixed(1)}%"></i></span></span><b>${fmt(x.v)}</b></div>`).join('')}</div>` : '<div class="empty">Nessun dato</div>'}</div>`; };
+    $('#ov-tops').innerHTML = box('Centri più costosi · attrezzatura', 'attrezzatura', T1, eur0) + box('Destinazioni GLS', 'gls', T2, eur0) + box(noPrice ? 'Mezzi · litri' : 'Mezzi · gasolio', 'gasolio', T3, noPrice ? v => fmtNum(v, 0) + ' L' : eur0, plateFmt);
+  }
+
+  // grafica: anello della composizione con orbite e impulsi
+  function ovArt(fr) {
+    const cx = 520, cy = 130, R = 78, C = ['#ffffff', '#7ee0b5', '#ffc15e'];
+    let acc = 0;
+    const segs = fr.map((f, i) => { const s = `<circle class="ov-rs" r="${R}" cx="${cx}" cy="${cy}" pathLength="1" stroke="${C[i]}" style="stroke-dasharray:${Math.max(0, f - .012).toFixed(4)} 1;stroke-dashoffset:${(-acc).toFixed(4)};--d:${300 + i * 220}ms"/>`; acc += f; return s; }).join('');
+    return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg ov-svg">
+      <defs><pattern id="ovdots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern></defs>
+      <rect x="300" width="340" height="260" fill="url(#ovdots)"/>
+      <g class="ov-orb" transform="translate(${cx} ${cy})"><circle r="${R + 30}"/><circle r="${R + 58}"/></g>
+      <g class="ov-sat" style="--r:${R + 30}px;--t:14s"><circle cx="${cx + R + 30}" cy="${cy}" r="3.2"/></g>
+      <g class="ov-sat" style="--r:${R + 58}px;--t:22s;--o:180deg"><circle cx="${cx + R + 58}" cy="${cy}" r="2.4"/></g>
+      <g transform="rotate(-90 ${cx} ${cy})"><circle class="ov-rb" r="${R}" cx="${cx}" cy="${cy}"/>${segs}</g>
+      <circle class="ov-rp" r="${R - 20}" cx="${cx}" cy="${cy}"/>
+      ${[0, 1, 2, 3, 4].map(i => `<line class="ov-tick" x1="${cx}" y1="${cy - R - 12}" x2="${cx}" y2="${cy - R - 6}" transform="rotate(${i * 72} ${cx} ${cy})"/>`).join('')}
+    </svg>`;
+  }
+
   /* ================= Eventi ================= */
   function bind() {
     window.addEventListener('hashchange', go);
@@ -2002,7 +2124,7 @@
 
     document.addEventListener('click', e => {
       const t = e.target;
-      const s = t.closest('[data-soc]'); if (s) { soc = s.dataset.soc; LS.set('cdc_soc', soc); if (view === 'centri' || view === 'home') ccAnim = true; render(); return; }
+      const s = t.closest('[data-soc]'); if (s) { soc = s.dataset.soc; LS.set('cdc_soc', soc); if (view === 'attrezzatura') ccAnim = true; render(); return; }
       const go2 = t.closest('[data-go]'); if (go2) { location.hash = go2.dataset.go; return; }
       if (t.closest('#k-zero-card')) { Object.assign(f, { q: '', centro: '', cat: '', per: 'zero' }); location.hash = 'movimenti'; return; }
       const gm = t.closest('[data-gomov]'); if (gm) { Object.assign(f, { q: '', cat: '', per: '', centro: gm.dataset.gomov }); mLimit = 150; location.hash = 'movimenti'; return; }
@@ -2020,7 +2142,10 @@
       if (t.closest('#m-xls')) { exportXlsx(filtered(), f.per === 'zero' ? 'senza-prezzo' : 'movimenti-filtrati'); return; }
       if (t.closest('#m-imp') || t.closest('#zb-imp')) { importExcel(false); return; }
       const th = t.closest('[data-theme-set]'); if (th) { const v = th.dataset.themeSet; try { localStorage.setItem('cdc_theme', v); } catch {} applyTheme(v, true); toast(v === 'auto' ? 'Tema automatico' : v === 'dark' ? 'Tema scuro' : 'Tema chiaro'); return; }
-      if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'centri' || view === 'home') ccAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
+      if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'attrezzatura') ccAnim = true; if (view === 'home') ovAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
+      const ovm = t.closest('[data-ovm]'); if (ovm) { ovP = ovP === ovm.dataset.ovm ? '' : ovm.dataset.ovm; ovAnim = true; renderOverview(); return; }
+      if (t.closest('#ov-prev') || t.closest('#ov-next')) { const o = [...$('#ov-per').options].map(x => x.value), i = o.indexOf(ovP) + (t.closest('#ov-prev') ? 1 : -1); if (i >= 0 && i < o.length) { ovP = o[i]; ovAnim = true; renderOverview(); } return; }
+      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
       if (t.closest('#ga-imp')) { importGas(); return; }
       if (t.closest('#ga-xls')) { exportGas(); return; }
       if (t.closest('#ga-add')) { formGas(); return; }
@@ -2064,6 +2189,7 @@
     $('#a-sort').onchange = e => { a.sort = e.target.value; renderArt(); };
     $('#gl-mese').onchange = e => { gMonth = e.target.value; glsAnim = true; renderGls(); };
     $('#ga-per').onchange = e => { gasP = e.target.value; gasAnim = true; renderGas(); };
+    $('#ov-per').onchange = e => { ovP = e.target.value; ovAnim = true; renderOverview(); };
     document.addEventListener('input', e => { if (e.target.id === 'ga-q') { clearTimeout(qt); qt = setTimeout(() => { gasF.q = e.target.value; renderGasList(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'ga-ft') { gasF.targa = e.target.value; $$('.gv-c').forEach(x => x.classList.toggle('on', x.dataset.gtarga === gasF.targa)); renderGasList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'gl-q') { clearTimeout(qt); qt = setTimeout(() => { gF.q = e.target.value; renderGlsList(); }, 180); } });

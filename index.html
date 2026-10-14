@@ -16,8 +16,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=18">
-  <link rel="stylesheet" href="cdc.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="cdc.css?v=19">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -71,9 +71,8 @@
   <div id="app" class="app" hidden>
     <nav class="nav">
       <div class="brand"><img src="logo.svg" alt="" width="34" height="34"><div><strong>Centro di Costo</strong><span>Soluzione Veicolare</span></div></div>
-      <a href="#home" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5"/></svg><span>Home</span></a>
-      <a href="#movimenti" data-view="movimenti"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Movimenti</span></a>
-      <a href="#articoli" data-view="articoli"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>Articoli</span></a>
+      <a href="#home" data-view="home"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="9" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.5"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.5"/><rect x="3" y="15" width="7.5" height="6" rx="1.5"/></svg><span>Dashboard</span></a>
+      <a href="#attrezzatura" data-view="attrezzatura"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>Attrezzatura</span></a>
       <a href="#gls" data-view="gls"><svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg><span>GLS</span></a>
       <a href="#gasolio" data-view="gasolio"><svg viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg><span>Gasolio</span></a>
       <a href="#impostazioni" data-view="impostazioni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Impostazioni</span></a>
@@ -90,8 +89,21 @@
         </div>
       </header>
 
-      <!-- HOME -->
+      <!-- DASHBOARD -->
       <section id="v-home" class="view" data-v="home" hidden>
+        <div class="gl-bar">
+          <div class="gl-month">
+            <button class="icon-btn" id="ov-prev" aria-label="Periodo precedente">‹</button>
+            <select id="ov-per" aria-label="Periodo"></select>
+            <button class="icon-btn" id="ov-next" aria-label="Periodo successivo">›</button>
+          </div>
+        </div>
+        <div id="ov-body"></div>
+      </section>
+
+      <!-- ATTREZZATURA · PANORAMICA -->
+      <section id="v-attr" class="view" data-v="attrezzatura" hidden>
+        <div class="sub-tabs"><a href="#attrezzatura" data-st="attrezzatura">Panoramica</a><a href="#movimenti" data-st="movimenti">Acquisti</a><a href="#articoli" data-st="articoli">Prodotti</a></div>
         <div class="soc-bar" id="h-soc"></div>
         <div class="kpis">
           <div class="card kpi"><div class="kpi-h"><span class="label">Totale speso</span><span class="kpi-ic"><svg viewBox="0 0 24 24"><path d="M17 6.5A7 7 0 1 0 17 17.5M4 10h9M4 14h9"/></svg></span></div><div class="big" id="k-tot">0 €</div><span class="muted small" id="k-tot-s"></span></div>
@@ -122,6 +134,7 @@
 
       <!-- MOVIMENTI -->
       <section id="v-movimenti" class="view" data-v="movimenti" hidden>
+        <div class="sub-tabs"><a href="#attrezzatura" data-st="attrezzatura">Panoramica</a><a href="#movimenti" data-st="movimenti">Acquisti</a><a href="#articoli" data-st="articoli">Prodotti</a><span class="st-h">ogni riga di DDT o fattura: cosa, quando, per quale centro</span></div>
         <div class="filters f4">
           <input id="f-q" type="search" placeholder="Cerca descrizione, codice, documento…">
           <select id="f-centro"></select>
@@ -142,6 +155,7 @@
 
       <!-- ARTICOLI -->
       <section id="v-articoli" class="view" data-v="articoli" hidden>
+        <div class="sub-tabs"><a href="#attrezzatura" data-st="attrezzatura">Panoramica</a><a href="#movimenti" data-st="movimenti">Acquisti</a><a href="#articoli" data-st="articoli">Prodotti</a><span class="st-h">gli stessi acquisti raggruppati per prodotto: prezzi, quantità e storico</span></div>
         <div class="filters f3">
           <input id="a-q" type="search" placeholder="Cerca prodotto o codice…">
           <select id="a-sort">
@@ -265,6 +279,6 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>
