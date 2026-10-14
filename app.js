@@ -829,7 +829,7 @@
       if (/^(riepilogo|articoli|prodotti|info|istruzioni|categorie|elenchi)/i.test(name)) return;
       const hi = aoa.findIndex(r => r.some(c => nh(c) === 'descrizione'));
       if (hi < 0) return;
-      const H = aoa[hi].map(nh);
+      const H = aoa[hi].map(h => /€|eur|\//i.test(String(h)) && /kg/i.test(String(h)) ? '~' + nh(h) : nh(h));
       const col = (...keys) => { for (const k of keys) { const i = H.indexOf(k); if (i >= 0) return i; } return -1; };
       const c = { cod: col('cod', 'codice', 'codart'), des: col('descrizione'), um: col('um'), q: col('quant', 'quantita', 'qta', 'qt'), pa: col('pacq', 'prezzoacquisto', 'costo'), pr: col('prezzo', 'prezzounit', 'prezzounitario'), ind: col('indirizzo', 'centro', 'centrodicosto', 'sede'), id: col('idnonmodificare', 'id'), soc: col('societa'), cat: col('categoria'), note: col('note'), doc: col('ndoc', 'documento', 'numdoc'), dt: col('data'), iva: col('imposte', 'iva'), forn: col('fornitore') };
       const isAtt = /attrezzat/i.test(name);
@@ -1282,7 +1282,7 @@
      ========================================================= */
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const mLabel = k => { const [y, m] = k.split('-').map(Number); return MESI[m - 1].replace(/^./, c => c.toUpperCase()) + ' ' + y; };
-  const GLS_ORIG = { citta: 'San Cesareo', prov: 'RM', lat: 41.82, lon: 12.80 };
+  const GLS_ORIG = { citta: 'Roma', prov: 'RM', lat: 41.902, lon: 12.496 };
   const CONTR = { C1: 'Contratto 1 · Pacchi', C2: 'Contratto 2 · Pesante e pedane' };
   const TIPI = ['Pacco', 'Collo voluminoso', 'Pedana'];
   const BANDS = [[0, 3], [3, 5], [5, 10], [10, 20], [20, 50], [50, 100], [100, 250], [250, 500], [500, 1000], [1000, Infinity]];
@@ -1303,6 +1303,17 @@
   const regOf = r => r.regione || ((window.GLS_GEO || { PROV: {} }).PROV[String(r.prov || '').toUpperCase()] || [])[2] || 'Altro';
   const glsScriptOk = () => isLocal() || !db.v || db.v >= 'cdc-1.1';
 
+  const pdfSeen = {};
+  function glsPdf() {
+    const a = $('#gl-pdf'); if (!a) return;
+    const m = gMonth, url = `analisi/gls-${m}.pdf`;
+    const show = ok => { if (m !== gMonth) return; a.hidden = !ok; if (ok) { a.href = url; a.setAttribute('download', `Analisi GLS ${mLabel(m)}.pdf`); } };
+    if (m in pdfSeen) return show(pdfSeen[m]);
+    a.hidden = true;
+    fetch(url, { method: 'HEAD', cache: 'no-cache' }).then(r => { pdfSeen[m] = r.ok && !/html/i.test(r.headers.get('content-type') || ''); show(pdfSeen[m]); }).catch(() => {});
+  }
+  const sgn = p => (p > 0 ? '+' : p < 0 ? '−' : '') + fmtNum(Math.abs(p), 0) + '%';
+
   function renderGls() {
     const months = glsMonths();
     const cur = ymOf(new Date());
@@ -1312,53 +1323,53 @@
     sel.innerHTML = opts.map(k => `<option value="${k}"${k === gMonth ? ' selected' : ''}>${esc(mLabel(k))}${months.includes(k) ? '' : ' · da caricare'}</option>`).join('');
     const ix = opts.indexOf(gMonth);
     $('#gl-prev').disabled = ix >= opts.length - 1; $('#gl-next').disabled = ix <= 0;
-    sub(ivaLbl() + ' · spedizioni GLS da San Cesareo');
+    sub(ivaLbl() + ' · spedizioni GLS da Roma');
+    glsPdf();
     const rows = glsRows().filter(r => r.mese === gMonth);
     const anim = glsAnim && !reduced(); glsAnim = false;
     const body = $('#gl-body');
     body.classList.toggle('cc-anim', anim);
     const warn = glsScriptOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati GLS.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.1 (Code.gs nuovo). Finché non lo aggiorni l'importazione è bloccata.</span></div>`;
     if (!rows.length) {
-      body.innerHTML = warn + `<div class="card empty-state gl-empty">${glsVan(true)}<h3>${esc(mLabel(gMonth))}: nessuna spedizione caricata</h3><p class="muted">Importa il resoconto del mese con «Importa mese» (modello GLS compilato o file esportato).</p></div>`;
+      body.innerHTML = warn + `<div class="gl-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${glsArt()}</div><div class="gh-main"><span class="gh-lbl">GLS Attrezzati · ${esc(mLabel(gMonth))}</span><h3>Nessuna spedizione caricata</h3><p>Importa il resoconto del mese con «Importa mese».</p></div></div></div>`;
       return;
     }
     const T = gTot(rows), n = rows.length, colli = gSum(rows, 'colli'), kr = gSum(rows, 'kgReali'), kt = gSum(rows, 'kgTass');
     const prevK = months[months.indexOf(gMonth) - 1], prev = prevK ? glsRows().filter(r => r.mese === prevK) : null;
     const dlt = (a, b) => { if (!b) return ''; const p = (a / b - 1) * 100; return `<span class="gl-d ${p > 0 ? 'up' : 'down'}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>`; };
-    const vol = kr ? kt / kr - 1 : 0;
+    const vol = kr ? (kt / kr - 1) * 100 : 0;
+    const nLoc = new Set(rows.map(r => r.citta + '|' + r.prov)).size, nReg = new Set(rows.map(regOf)).size;
+    const K = [['Spedizioni', n, v => fmtNum(Math.round(v), 0), `${fmtNum(colli, 0)} colli`],
+      ['Peso reale', kr, v => fmtNum(v, 0) + ' kg', `${fmtNum(kr / n, 0)} kg medi`],
+      ['Peso tassabile', kt, v => fmtNum(v, 0) + ' kg', `${sgn(vol)} sul reale`],
+      ['Medio spedizione', T / n * gMul(), v => eur(v), ivaLbl()],
+      ['Medio collo', T / colli * gMul(), v => eur(v), `${fmtNum(colli / n, 1)} colli/sped.`],
+      ['€ / kg tassabile', T / kt * gMul(), v => fmtNum(v, 3) + ' €', `${fmtNum(T / kr * gMul(), 3)} € sul reale`]];
     body.innerHTML = warn + `
-      <div class="card gl-hero">
+      <div class="gl-hero">
+        <div class="gh-top"><div class="gh-art">${glsArt()}</div>
         <div class="gh-main">
-          <span class="label">Costo spedizioni · ${esc(mLabel(gMonth))}</span>
-          <div class="ch-big k-gtot">0 €</div>
-          <div class="gh-sub"><span>${n} spedizioni</span><span>${fmtNum(colli, 0)} colli</span><span>${new Set(rows.map(r => r.contratto)).size} contratti</span>${dlt(T, prev && gTot(prev))}</div>
-        </div>
-        <div class="gh-scene">${glsVan(false)}</div>
+          <span class="gh-lbl">Costo spedizioni · ${esc(mLabel(gMonth))}</span>
+          <div class="gh-big k-gtot">0 €</div>
+          <div class="gh-sub"><span>${n} spedizioni</span><span>${nLoc} località</span><span>${nReg} regioni</span>${dlt(T, prev && gTot(prev))}</div>
+        </div></div>
+        <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-gk="${i}">0</b><small>${s}</small></div>`).join('')}</div>
       </div>
-      <div class="kpis gl-kpis">
-        ${[['Spedizioni', n, v => fmtNum(Math.round(v), 0), `${fmtNum(colli, 0)} colli`],
-           ['Peso reale', kr, v => fmtNum(v, 0) + ' kg', `${fmtNum(kr / n, 1)} kg medi`],
-           ['Peso tassabile', kt, v => fmtNum(v, 0) + ' kg', `<b class="${vol > .25 ? 'up' : ''}">+${fmtNum(vol * 100, 0)}%</b> sul reale`],
-           ['Medio / spedizione', T / n * gMul(), v => eur(v), ivaLbl()],
-           ['Medio / collo', T / colli * gMul(), v => eur(v), `${fmtNum(colli / n, 1)} colli a spedizione`],
-           ['€ / kg tassabile', T / kt * gMul(), v => fmtNum(v, 3) + ' €', `${fmtNum(T / kr * gMul(), 3)} € sul reale`]]
-          .map(([l, v, f, s], i) => `<div class="card kpi"><span class="label">${l}</span><div class="big" data-gk="${i}">0</div><span class="muted small">${s}</span></div>`).join('')}
+      <div class="card gl-mapcard">
+        <div class="card-h"><h3>Destinazioni</h3><span class="gl-leg2"><i class="o"></i>Roma · partenza <i class="p"></i>destinazione, grandezza = costo</span></div>
+        <div class="gl-mapgrid"><div class="gl-map" id="gl-map"></div><div class="gl-dest" id="gl-dest"></div></div>
       </div>
-      <div class="gl-grid">
-        <div class="card gl-mapcard"><div class="card-h"><h3>Destinazioni</h3><span class="muted small">partenza da San Cesareo</span></div><div class="gl-map" id="gl-map"></div></div>
-        <div class="card"><div class="card-h"><h3>Regioni</h3><span class="muted small">${new Set(rows.map(regOf)).size} regioni · ${new Set(rows.map(r => r.citta + r.prov)).size} località</span></div><div class="bars" id="gl-reg"></div>
-          <div class="cf-sub" style="margin-top:18px">Località più costose</div><div class="gl-top" id="gl-top"></div></div>
-      </div>
-      ${months.length > 1 ? `<div class="card"><div class="card-h"><h3>Andamento mensile</h3><span class="muted small">${months.length} mesi caricati</span></div><div class="mbars gl-months" id="gl-months"></div></div>` : ''}
       <div class="gl-3">
         <div class="card"><div class="card-h"><h3>Contratti</h3></div><div id="gl-contr"></div></div>
         <div class="card"><div class="card-h"><h3>Composizione del costo</h3></div><div id="gl-comp"></div></div>
         <div class="card"><div class="card-h"><h3>Tipologia</h3></div><div id="gl-tipo"></div></div>
       </div>
       <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>Regioni</h3><span class="muted small">${nReg} regioni</span></div><div class="bars" id="gl-reg"></div></div>
         <div class="card"><div class="card-h"><h3>Fasce di peso tassabile</h3><span class="muted small">costo per fascia</span></div><div id="gl-band"></div></div>
-        <div class="card"><div class="card-h"><h3>Spedizioni giorno per giorno</h3><span class="muted small" id="gl-day-s"></span></div><div class="mbars gl-days" id="gl-days"></div></div>
       </div>
+      <div class="card"><div class="card-h"><h3>Spedizioni giorno per giorno</h3><span class="muted small" id="gl-day-s"></span></div><div class="mbars gl-days" id="gl-days"></div></div>
+      ${months.length > 1 ? `<div class="card"><div class="card-h"><h3>Andamento mensile</h3><span class="muted small">${months.length} mesi caricati</span></div><div class="mbars gl-months" id="gl-months"></div></div>` : ''}
       <div class="card"><div class="card-h"><h3>Centri di costo e riaddebito</h3><span class="muted small">costo GLS + IVA 22%</span></div><div class="mx-wrap" id="gl-cdc"></div></div>
       <div class="card" id="gl-anom"></div>
       <div class="card gl-list"><div class="card-h"><h3>Tutte le spedizioni</h3><span class="muted small" id="gl-cnt"></span></div>
@@ -1366,17 +1377,13 @@
         <div id="gl-ship"></div></div>`;
 
     countTo($('.k-gtot', body), T * gMul(), eur0);
-    const kv = [n, kr, kt, T / n * gMul(), T / colli * gMul(), T / kt * gMul()];
-    const kf = [v => fmtNum(Math.round(v), 0), v => fmtNum(v, 0) + ' kg', v => fmtNum(v, 0) + ' kg', v => eur(v), v => eur(v), v => fmtNum(v, 3) + ' €'];
-    $$('[data-gk]', body).forEach(el => { const i = +el.dataset.gk; el._v = 0; countTo(el, kv[i], kf[i]); });
+    $$('[data-gk]', body).forEach(el => { const i = +el.dataset.gk; el._v = 0; countTo(el, K[i][1], K[i][2]); });
 
-    glsMapRender($('#gl-map'), rows, anim);
+    glsMapRender($('#gl-map'), $('#gl-dest'), rows, anim);
     // regioni
     const byR = [...groupBy(rows, regOf)].map(([k, v]) => ({ k, v: gTot(v), n: v.length })).sort((a, b) => b.v - a.v);
     const mr = Math.max(...byR.map(x => x.v), 1);
-    $('#gl-reg').innerHTML = byR.map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 60}ms"><div class="bar-top"><span>${esc(x.k)}<em>${fmtNum(pct(x.v, T), 1)}%</em></span><span>${gE0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mr * 100).toFixed(2)}%"></div></div></div>`).join('');
-    const byC = [...groupBy(rows, r => r.citta + '|' + r.prov)].map(([k, v]) => ({ c: v[0].citta, p: v[0].prov, v: gTot(v), n: v.length, kt: gSum(v, 'kgTass') })).sort((a, b) => b.v - a.v);
-    $('#gl-top').innerHTML = byC.slice(0, 6).map((x, i) => `<div class="gt-row" style="--d:${300 + i * 60}ms"><span class="gt-n">${i + 1}</span><span class="gt-m"><b>${esc(x.c)} <small>(${esc(x.p)})</small></b><small>${x.n} sped. · ${fmtNum(x.kt, 0)} kg tass. · ${fmtNum(x.v / x.kt * gMul(), 3)} €/kg</small></span><b>${gE0(x.v)}</b></div>`).join('');
+    $('#gl-reg').innerHTML = byR.map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} sped. · ${fmtNum(pct(x.v, T), 1)}%</em></span><span>${gE0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mr * 100).toFixed(2)}%"></div></div></div>`).join('');
 
     if (months.length > 1) {
       const vals = months.map(k => gTot(glsRows().filter(r => r.mese === k))), mx = Math.max(...vals, 1);
@@ -1384,31 +1391,33 @@
     }
     // contratti
     const cs = ['C1', 'C2'].map(c => { const v = rows.filter(r => r.contratto === c); return { c, v, t: gTot(v), n: v.length, colli: gSum(v, 'colli'), kt: gSum(v, 'kgTass'), kr: gSum(v, 'kgReali') }; }).filter(x => x.n);
-    $('#gl-contr').innerHTML = `<div class="gl-split">${cs.map((x, i) => `<i class="gs-${i}" style="flex:${Math.max(x.t, T * .02)}" title="${esc(CONTR[x.c] || x.c)}"></i>`).join('')}</div>
-      <div class="gl-cs">${cs.map((x, i) => `<div><span class="gl-dot gs-${i}"></span><b>${esc(CONTR[x.c] || x.c)}</b>
-        <div class="kv"><div><span>Costo</span><strong>${gE(x.t)} · ${fmtNum(pct(x.t, T), 1)}%</strong></div><div><span>Spedizioni / colli</span><strong>${x.n} / ${x.colli}</strong></div><div><span>Medio a spedizione</span><strong>${gE(x.t / x.n)}</strong></div><div><span>€ / kg tassabile</span><strong>${fmtNum(x.t / x.kt * gMul(), 3)} €</strong></div><div><span>Tassabile vs reale</span><strong>+${fmtNum((x.kt / x.kr - 1) * 100, 0)}%</strong></div></div></div>`).join('')}</div>`;
-    // composizione
+    $('#gl-contr').innerHTML = `<div class="gl-split">${cs.map((x, i) => `<i class="gs-${i}" style="flex:${Math.max(x.t, T * .03)}"></i>`).join('')}</div>
+      <div class="gl-cs">${cs.map((x, i) => `<div class="gl-c"><div class="gl-ch"><span><span class="gl-dot gs-${i}"></span>${esc(CONTR[x.c] || x.c)}</span><b>${gE0(x.t)}<em>${fmtNum(pct(x.t, T), 0)}%</em></b></div>
+        <div class="gl-ct"><div><small>Sped. / colli</small><b>${x.n} / ${x.colli}</b></div><div><small>Medio</small><b>${gE(x.t / x.n)}</b></div><div><small>€ / kg tass.</small><b>${fmtNum(x.t / x.kt * gMul(), 3)}</b></div><div><small>Tass. vs reale</small><b>${x.kr ? sgn((x.kt / x.kr - 1) * 100) : '—'}</b></div></div></div>`).join('')}</div>`;
+    // composizione: anello
     const comp = [['Nolo', gSum(rows, 'nolo')], ['Fuel surcharge', gSum(rows, 'fuel')], ['Supplementi', gSum(rows, 'suppl')]];
     const ct = comp.reduce((s, x) => s + x[1], 0) || 1;
-    $('#gl-comp').innerHTML = `<div class="gl-stack">${comp.map((x, i) => `<i class="gc-${i}" style="width:${(x[1] / ct * 100).toFixed(2)}%"></i>`).join('')}</div>
-      <ul class="dn-leg gl-leg">${comp.map((x, i) => `<li><i class="gc-${i}"></i><span>${x[0]}</span><b>${gE(x[1])}</b><em>${fmtNum(x[1] / ct * 100, 1)}%</em></li>`).join('')}</ul>
-      <div class="gl-note">Fuel = <b>${fmtNum(comp[1][1] / (comp[0][1] || 1) * 100, 1)}%</b> del nolo · supplementi medi <b>${gE(comp[2][1] / n)}</b> a spedizione</div>`;
+    let acc = 0; const C = 2 * Math.PI * 42;
+    const ring = comp.map((x, i) => { const f = x[1] / ct, seg = `<circle class="gc-${i} gl-rs" r="42" cx="60" cy="60" pathLength="1" style="stroke-dasharray:${Math.max(0, f - .006).toFixed(4)} 1;stroke-dashoffset:${(-acc).toFixed(4)};--d:${300 + i * 150}ms"/>`; acc += f; return seg; }).join('');
+    $('#gl-comp').innerHTML = `<div class="gl-ring"><svg viewBox="0 0 120 120"><circle r="42" cx="60" cy="60" class="gl-rb"/>${ring}</svg><div class="gl-rc"><b>${gE0(ct)}</b><small>totale</small></div></div>
+      <ul class="dn-leg gl-leg">${comp.map((x, i) => `<li><i class="gc-${i}"></i><span>${x[0]}</span><b>${gE(x[1])}</b><em>${fmtNum(x[1] / ct * 100, 1)}%</em></li>`).join('')}</ul>`;
     // tipologia
     const TI = { 'Pacco': '<path d="M3 8l9-4 9 4v8l-9 4-9-4z"/><path d="M3 8l9 4 9-4M12 12v8"/>', 'Collo voluminoso': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 5v5"/>', 'Pedana': '<path d="M3 17h18M5 17v3M12 17v3M19 17v3"/><rect x="5" y="6" width="14" height="11" rx="1"/><path d="M5 11h14"/>' };
-    $('#gl-tipo').innerHTML = `<div class="gl-tipi">${TIPI.map(t => { const v = rows.filter(r => r.tipologia === t); if (!v.length) return ''; const tt = gTot(v);
-      return `<div class="gl-ti"><span class="gl-tic"><svg viewBox="0 0 24 24">${TI[t]}</svg></span><div><b>${esc(t)}</b><small>${v.length} sped. · ${gSum(v, 'colli')} colli · ${fmtNum(gSum(v, 'kgTass'), 0)} kg</small></div><div class="gl-tv"><b>${gE0(tt)}</b><small>${gE(tt / v.length)} medio</small></div></div>`; }).join('')}</div>`;
+    const tps = [...new Set([...TIPI, ...rows.map(r => r.tipologia)])].map(t => ({ t, v: rows.filter(r => r.tipologia === t) })).filter(x => x.v.length);
+    $('#gl-tipo').innerHTML = `<div class="gl-tipi">${tps.map(({ t, v }) => { const tt = gTot(v);
+      return `<div class="gl-ti"><span class="gl-tic"><svg viewBox="0 0 24 24">${TI[t] || TI.Pacco}</svg></span><div><b>${esc(t)}</b><small>${v.length} sped. · ${gSum(v, 'colli')} colli · ${fmtNum(gSum(v, 'kgTass'), 0)} kg</small><span class="gl-tb"><i style="width:${(tt / T * 100).toFixed(1)}%"></i></span></div><div class="gl-tv"><b>${gE0(tt)}</b><small>${gE(tt / v.length)} medio</small></div></div>`; }).join('')}</div>`;
     // fasce di peso
     const bands = BANDS.map(([a, b]) => { const v = rows.filter(r => num(r.kgTass) >= a && num(r.kgTass) < b); return { l: b === Infinity ? `oltre ${fmtNum(a, 0)} kg` : `${fmtNum(a, 0)}–${fmtNum(b, 0)} kg`, v, t: gTot(v), kt: gSum(v, 'kgTass') }; }).filter(x => x.v.length);
     const mb = Math.max(...bands.map(x => x.t), 1);
-    $('#gl-band').innerHTML = `<div class="gl-bands">${bands.map((x, i) => `<div class="gb-row gl-anim-row" style="--d:${150 + i * 50}ms"><span class="gb-l">${x.l}</span><span class="gb-t"><i style="width:${(x.t / mb * 100).toFixed(1)}%"></i></span><span class="gb-v"><b>${gE0(x.t)}</b><small>${x.v.length} sped. · ${fmtNum(x.t / x.kt * gMul(), 2)} €/kg</small></span></div>`).join('')}</div>`;
+    $('#gl-band').innerHTML = `<div class="gl-bands">${bands.map((x, i) => `<div class="gb-row gl-anim-row" style="--d:${150 + i * 50}ms"><span class="gb-l">${x.l}<small>${x.v.length} sped. · ${fmtNum(x.t / (x.kt || 1) * gMul(), 2)} €/kg</small></span><span class="gb-t"><i style="width:${(x.t / mb * 100).toFixed(1)}%"></i></span><b class="gb-v">${gE0(x.t)}</b></div>`).join('')}</div>`;
     // giorni
     const [yy, mm] = gMonth.split('-').map(Number), nd = new Date(yy, mm, 0).getDate();
     const byD = groupBy(rows, r => String(r.data).slice(0, 10));
     const days = [...Array(nd)].map((_, i) => { const k = `${gMonth}-${pad(i + 1)}`, v = byD.get(k) || []; const wd = new Date(yy, mm - 1, i + 1).getDay(); return { d: i + 1, k, v, t: gTot(v), we: wd === 0 || wd === 6 }; });
     const md = Math.max(...days.map(x => x.t), 1);
-    $('#gl-days').innerHTML = days.map((x, i) => `<div class="mb${x.we ? ' we' : ''}" title="${x.d} ${esc(MESI[mm - 1])}: ${x.v.length} sped. · ${esc(gE(x.t))}"><span class="mbv">${x.v.length || ''}</span><i class="${x.t === md ? 'cur' : ''}" style="height:${x.t ? Math.max(3, x.t / md * 100) : 0}%;animation-delay:${i * 18}ms"></i><span class="mbl">${x.d % 5 === 1 || x.d === nd ? x.d : ''}</span></div>`).join('');
+    $('#gl-days').innerHTML = days.map((x, i) => `<div class="mb${x.we ? ' we' : ''}" title="${x.d} ${esc(MESI[mm - 1])}: ${x.v.length} sped. · ${esc(gE(x.t))}"><span class="mbv">${x.t ? esc(gE0(x.t)) : ''}</span><i class="${x.t === md ? 'cur' : ''}" style="height:${x.t ? Math.max(3, x.t / md * 100) : 0}%;animation-delay:${i * 18}ms"></i><span class="mbl">${x.d}</span></div>`).join('');
     const act = days.filter(x => x.v.length).length;
-    $('#gl-day-s').textContent = `${act} giorni di spedizione · media ${fmtNum(n / (act || 1), 1)} al giorno`;
+    $('#gl-day-s').textContent = `${act} giorni di spedizione · media ${fmtNum(n / (act || 1), 1)} sped. al giorno`;
     // centri di costo
     const byCC = [...groupBy(rows, r => r.cdc || '—')].map(([k, v]) => ({ k, nome: v[0].cdcNome || '', v, t: gTot(v), rd: v[0].riaddebito || '' })).sort((a, b) => String(a.k).localeCompare(String(b.k)));
     const isR = x => /^s[iì]/i.test(x.rd);
@@ -1417,9 +1426,7 @@
       ${byCC.map(x => `<tr data-gcdc="${esc(x.k)}"><td><b class="gl-cc">${esc(x.k)}</b> ${esc(x.nome)}</td><td>${x.v.length}</td><td>${gSum(x.v, 'colli')}</td><td>${fmtNum(gSum(x.v, 'kgTass'), 1)}</td><td>${eur(gTot(x.v.filter(r => r.contratto === 'C1')))}</td><td>${eur(gTot(x.v.filter(r => r.contratto === 'C2')))}</td><td><b>${eur(x.t)}</b></td><td>${fmtNum(pct(x.t, T), 1)}%</td><td>${eur(x.t * 1.22)}</td><td><span class="chip ${isR(x) ? 'paid' : /^no/i.test(x.rd) ? '' : 'soon'}">${esc(x.rd || '—')}</span></td></tr>`).join('')}
       <tr class="tot"><td>Totale</td><td>${n}</td><td>${colli}</td><td>${fmtNum(kt, 1)}</td><td>${eur(gTot(rows.filter(r => r.contratto === 'C1')))}</td><td>${eur(gTot(rows.filter(r => r.contratto === 'C2')))}</td><td>${eur(T)}</td><td>100%</td><td>${eur(T * 1.22)}</td><td></td></tr>
       <tr class="gl-rr"><td colspan="6">di cui riaddebitabile ai clienti</td><td>${eur(tR)}</td><td>${fmtNum(pct(tR, T), 1)}%</td><td>${eur(tR * 1.22)}</td><td></td></tr></tbody></table>`;
-    // anomalie
     renderGlsAnom(rows);
-    // elenco
     $('#gl-fcdc').innerHTML = `<option value="">Tutti i centri di costo</option>` + byCC.map(x => `<option value="${esc(x.k)}"${gF.cdc === x.k ? ' selected' : ''}>${esc(x.k)} ${esc(x.nome)}</option>`).join('');
     $('#gl-fcon').innerHTML = `<option value="">Tutti i contratti</option>` + ['C1', 'C2'].map(c => `<option value="${c}"${gF.contr === c ? ' selected' : ''}>${esc(CONTR[c])}</option>`).join('');
     renderGlsList(rows);
@@ -1463,77 +1470,74 @@
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span><small>${x.ids.slice(0, 6).map(esc).join(' · ')}${x.ids.length > 6 ? ' …' : ''}</small></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
   }
 
-  // mappa: archi da San Cesareo alle destinazioni
-  function glsMapRender(el, rows, anim) {
-    const OX = 80, P = (lat, lon) => { const [x, y] = proj([lon, lat]); return [x + OX, y]; };
+  // mappa: archi da Roma alle destinazioni, numerati come l'elenco a lato
+  const glsName = v => {
+    const by = [...groupBy(v, r => String(r.destinatario || '').trim().toUpperCase())].map(([, a]) => ({ a, t: gTot(a) })).sort((a, b) => b.t - a.t);
+    const r = by[0].a[0];
+    return { nm: (String(r.destinatario || '').trim() || r.citta).toUpperCase().replace(/\s+/g, ' '), more: by.length - 1 };
+  };
+  function glsMapRender(el, list, rows, anim) {
+    const P = (lat, lon) => proj([lon, lat]);
     const [ox, oy] = P(GLS_ORIG.lat, GLS_ORIG.lon);
-    const g = [...groupBy(rows, r => r.citta + '|' + r.prov)].map(([k, v]) => ({ k, c: v[0].citta, p: v[0].prov, v, t: gTot(v), n: v.length, geo: geoOf(v[0]) })).filter(x => x.geo);
-    const mx = Math.max(...g.map(x => x.t), 1);
-    g.forEach(x => { [x.x, x.y] = P(x.geo.lat, x.geo.lon); x.r = 2.6 + 8.5 * Math.sqrt(x.t / mx); x.home = Math.hypot(x.x - ox, x.y - oy) < 4; });
-    g.sort((a, b) => b.t - a.t);
-    const arcs = g.filter(x => !x.home).map((x, i) => {
-      const dx = x.x - ox, dy = x.y - oy, L = Math.hypot(dx, dy) || 1, b = Math.min(70, L * .28) * (dx < 0 ? 1 : -1);
+    const g = [...groupBy(rows, r => r.citta + '|' + r.prov)].map(([k, v]) => ({ k, c: v[0].citta, p: v[0].prov, v, t: gTot(v), n: v.length, kt: gSum(v, 'kgTass'), geo: geoOf(v[0]), ...glsName(v) })).sort((a, b) => b.t - a.t);
+    g.forEach((x, i) => { x.i = i + 1; });
+    const gm = g.filter(x => x.geo), mx = Math.max(...g.map(x => x.t), 1);
+    gm.forEach(x => { [x.x, x.y] = P(x.geo.lat, x.geo.lon); x.r = 2.2 + 7.5 * Math.sqrt(x.t / mx); x.home = Math.hypot(x.x - ox, x.y - oy) < 2.5; if (x.i <= 12) x.r = Math.max(x.r, 5.6); });
+    const far = gm.filter(x => !x.home);
+    const arcs = far.map((x, j) => {
+      const dx = x.x - ox, dy = x.y - oy, L = Math.hypot(dx, dy) || 1, b = Math.min(46, L * .22) * (dx < 0 ? 1 : -1);
       const cx = (ox + x.x) / 2 - dy / L * b, cy = (oy + x.y) / 2 + dx / L * b;
-      const w = .8 + 3.2 * Math.sqrt(x.t / mx);
-      return `<path id="garc-${i}" class="cm-arc gl-arc" pathLength="1" style="--d:${700 + i * 45}ms;stroke-width:${w.toFixed(2)}" d="M${ox.toFixed(1)} ${oy.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}"/>` +
-        (i < 8 ? `<circle class="cm-dot" r="2.4"><animateMotion dur="${(1.8 + L / 180).toFixed(2)}s" begin="${(1.6 + i * .2).toFixed(2)}s" repeatCount="indefinite" calcMode="spline" keyPoints="0;1" keyTimes="0;1" keySplines=".45 0 .55 1"><mpath href="#garc-${i}"/></animateMotion></circle>` : '');
+      const d = `M${ox.toFixed(1)} ${oy.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}`;
+      const w = .5 + 1.9 * Math.sqrt(x.t / mx);
+      return `<path class="cm-arc gl-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${500 + j * 40}ms;stroke-width:${w.toFixed(2)}" d="${d}"/>` +
+        (x.i <= 10 ? `<path class="gl-flow" pathLength="1" style="--d:${(1.4 + j * .23).toFixed(2)}s;--t:${(1.6 + L / 160).toFixed(2)}s;stroke-width:${(w + .6).toFixed(2)}" d="${d}"/>` : '');
     }).join('');
-    // etichette a richiamo sui lati
-    const top = g.filter(x => !x.home).slice(0, 7);
-    const sides = { L: top.filter(x => x.x < 230).sort((a, b) => a.y - b.y), R: top.filter(x => x.x >= 230).sort((a, b) => a.y - b.y) };
-    let lab = '';
-    Object.entries(sides).forEach(([s, arr]) => {
-      let yPrev = -99;
-      arr.forEach((x, i) => {
-        const ly = Math.max(x.y, yPrev + 34); yPrev = ly;
-        const lx = s === 'L' ? 76 : 484, an = s === 'L' ? 'end' : 'start', ex = s === 'L' ? lx + 4 : lx - 4;
-        lab += `<g class="cm-lbl" style="--d:${1300 + i * 80}ms"><path class="cm-lead" d="M${x.x.toFixed(1)} ${x.y.toFixed(1)} L${ex} ${(ly - 4).toFixed(1)}"/><text x="${lx}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n"><title>${esc(x.c)}</title>${esc(x.c.length > 12 ? x.c.slice(0, 11).trim().toUpperCase() + '…' : x.c.toUpperCase())}</text><text x="${lx}" y="${(ly + 8).toFixed(1)}" text-anchor="${an}" class="cm-v">${esc(gE0(x.t))} · ${x.n} sped.</text></g>`;
-      });
-    });
-    el.innerHTML = `<svg viewBox="0 0 560 440" class="cm-svg gl-svg" role="img" aria-label="Mappa delle spedizioni GLS">
-      <path class="cm-land" pathLength="1" transform="translate(${OX} 0)" d="${IT_PATH}"/>
+    const pins = gm.slice().reverse().map(x => `<g class="gl-pin${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${800 + x.i * 35}ms" transform="translate(${x.x.toFixed(1)} ${x.y.toFixed(1)})"><circle class="cm-hit" r="${(x.r + 4).toFixed(1)}"/><circle class="gl-halo" r="${(x.r + 2.4).toFixed(1)}"/><circle class="cm-c" r="${x.r.toFixed(1)}"/>${x.i <= 12 ? `<text class="gl-pn" dy=".35em">${x.i}</text>` : ''}</g>`).join('');
+    const right = false;
+    el.innerHTML = `<svg viewBox="26 4 346 388" class="gl-svg" role="img" aria-label="Mappa delle spedizioni GLS">
+      <defs><radialGradient id="glsea" cx="50%" cy="45%" r="65%"><stop offset="0" stop-color="var(--accent)" stop-opacity=".07"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient></defs>
+      <rect x="26" y="4" width="346" height="388" fill="url(#glsea)"/>
+      <path class="cm-land gl-land" pathLength="1" d="${IT_PATH}"/>
       ${arcs}
-      ${g.slice().reverse().map((x, i) => `<g class="cm-pin gl-pin" data-gpin="${esc(x.k)}" style="--d:${900 + (g.length - i) * 40}ms" transform="translate(${x.x.toFixed(1)} ${x.y.toFixed(1)})"><circle class="cm-hit" r="${(x.r + 6).toFixed(1)}"/><circle class="cm-c" r="${x.r.toFixed(1)}"/></g>`).join('')}
-      <g class="gl-orig" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)})"><circle class="gl-op" r="7"/><circle class="gl-op gl-op2" r="7"/><rect x="-5.5" y="-5.5" width="11" height="11" rx="3" class="gl-oc"/></g>
-      <g class="cm-lbl" style="--d:1200ms"><text x="${(ox + 12).toFixed(1)}" y="${(oy + 22).toFixed(1)}" class="cm-n gl-on">SAN CESAREO · partenza</text></g>
-      ${lab}
+      ${pins}
+      <g class="gl-orig" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)})"><circle class="gl-op" r="6"/><circle class="gl-op gl-op2" r="6"/><circle r="5.2" class="gl-oc"/><circle r="1.9" class="gl-oi"/></g>
+      <g class="gl-olab" transform="translate(${(ox + (right ? 9 : -9)).toFixed(1)} ${(oy + 3).toFixed(1)})"><text text-anchor="${right ? 'start' : 'end'}" class="gl-on">ROMA</text><text text-anchor="${right ? 'start' : 'end'}" dy="8" class="gl-os">partenza</text></g>
     </svg>`;
+    // elenco aziende / destinazioni
+    list.innerHTML = `<div class="gd-h"><span>${g.length} destinazioni</span><span>costo</span></div><div class="gd-l">${g.map(x => `<div class="gd-r${x.home ? ' home' : ''}" data-gdest="${esc(x.k)}" style="--d:${300 + Math.min(x.i, 14) * 45}ms"><span class="gd-n${x.i <= 12 ? ' nb' : ''}">${x.i}</span><span class="gd-m"><b title="${esc(x.nm)}">${esc(x.nm)}${x.more ? ` <em>+${x.more}</em>` : ''}</b><small>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped. · ${fmtNum(x.kt, 0)} kg</small><span class="gd-b"><i style="width:${(x.t / mx * 100).toFixed(1)}%"></i></span></span><b class="gd-v">${gE0(x.t)}</b></div>`).join('')}</div>`;
+    const hl = k => { $$('.gl-pin.hl,.gd-r.hl,.gl-arc.hl', el.parentNode).forEach(e => e.classList.remove('hl')); if (!k) return; $$(`[data-gpin="${CSS.escape(k)}"],[data-gdest="${CSS.escape(k)}"],[data-ga="${CSS.escape(k)}"]`, el.parentNode).forEach(e => e.classList.add('hl')); };
+    const pick = k => { const x = g.find(z => z.k === k); if (!x) return; gF.q = x.c; $('#gl-q').value = x.c; renderGlsList(); $('#gl-ship').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     const tipH = e => {
       const pin = e.target.closest('.gl-pin'); let tip = $('.cm-tip', el);
-      if (!pin) { if (tip) tip.remove(); return; }
+      if (!pin) { if (tip) tip.remove(); hl(''); return; }
       const x = g.find(z => z.k === pin.dataset.gpin); if (!x) return;
+      hl(x.k);
       if (!tip) { tip = document.createElement('div'); tip.className = 'tip cm-tip'; el.appendChild(tip); }
-      tip.innerHTML = `${esc(x.c)} (${esc(x.p)})<br><b>${gE(x.t)}</b> · ${x.n} sped. · ${fmtNum(gSum(x.v, 'kgTass'), 0)} kg`;
+      tip.innerHTML = `<b>${x.i}. ${esc(x.nm)}</b><br>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped.<br><b>${gE(x.t)}</b> · ${fmtNum(x.kt, 0)} kg tass.`;
       const r = pin.getBoundingClientRect(), w = el.getBoundingClientRect();
       tip.style.left = (r.left + r.width / 2 - w.left) + 'px'; tip.style.top = (r.top - w.top - 4) + 'px';
     };
-    el.onmousemove = tipH; el.onmouseleave = () => { const t = $('.cm-tip', el); if (t) t.remove(); };
-    el.onclick = e => { const pin = e.target.closest('.gl-pin'); if (!pin) return; const x = g.find(z => z.k === pin.dataset.gpin); if (x) { gF.q = x.c; $('#gl-q').value = x.c; renderGlsList(); $('#gl-ship').scrollIntoView({ behavior: 'smooth', block: 'center' }); } };
+    el.onmousemove = tipH; el.onmouseleave = () => { const t = $('.cm-tip', el); if (t) t.remove(); hl(''); };
+    el.onclick = e => { const pin = e.target.closest('.gl-pin'); if (pin) pick(pin.dataset.gpin); };
+    list.onmouseover = e => { const r = e.target.closest('.gd-r'); hl(r ? r.dataset.gdest : ''); };
+    list.onmouseleave = () => hl('');
+    list.onclick = e => { const r = e.target.closest('.gd-r'); if (r) pick(r.dataset.gdest); };
   }
 
-  // furgone animato (illustrazione originale)
-  function glsVan(small) {
-    return `<svg viewBox="0 0 320 130" class="gl-van${small ? ' sm' : ''}" aria-hidden="true">
-      <defs><linearGradient id="gvsky" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".10"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
-      <rect x="0" y="0" width="320" height="104" rx="14" fill="url(#gvsky)"/>
-      <g class="gv-hills"><path d="M0 96 Q40 70 80 92 T170 88 T260 90 T340 86 V104 H0Z" fill="var(--accent)" opacity=".07"/></g>
-      <line class="gv-road" x1="0" y1="110" x2="320" y2="110"/>
-      <line class="gv-dash" x1="0" y1="110" x2="320" y2="110"/>
-      <g class="gv-pin" transform="translate(278 44)"><path d="M0 22 C-9 10 -9 0 0 0 C9 0 9 10 0 22Z" fill="var(--danger)"/><circle cx="0" cy="7" r="3" fill="#fff"/></g>
-      <g class="gv-car">
-        <g class="gv-body">
-          <g class="gv-speed"><line x1="-34" y1="66" x2="-12" y2="66"/><line x1="-44" y1="78" x2="-16" y2="78"/><line x1="-30" y1="90" x2="-12" y2="90"/></g>
-          <rect x="0" y="52" width="86" height="48" rx="7" fill="var(--accent)"/>
-          <path d="M86 64 h22 l16 18 v18 H86z" fill="var(--accent)"/>
-          <path d="M92 68 h14 l11 13 H92z" fill="#fff" opacity=".85"/>
-          <rect x="10" y="62" width="44" height="6" rx="3" fill="#fff" opacity=".9"/>
-          <rect x="10" y="73" width="28" height="4" rx="2" fill="#fff" opacity=".6"/>
-          <rect x="120" y="90" width="6" height="5" rx="1.5" fill="#ffd166"/>
-          <g class="gv-box"><rect x="58" y="38" width="20" height="16" rx="2" fill="#c98a4b"/><path d="M58 44 h20 M68 38 v16" stroke="#a46b33" stroke-width="1.5"/></g>
-        </g>
-        <g class="gv-wheel" transform="translate(24 101)"><circle r="10" fill="var(--ink)"/><circle r="4" fill="var(--surface)"/><path d="M0 -7 V7 M-7 0 H7" stroke="var(--surface)" stroke-width="1.6"/></g>
-        <g class="gv-wheel" transform="translate(104 101)"><circle r="10" fill="var(--ink)"/><circle r="4" fill="var(--surface)"/><path d="M0 -7 V7 M-7 0 H7" stroke="var(--surface)" stroke-width="1.6"/></g>
-      </g>
+  // grafica in movimento: rotte che partono da Roma (linee e impulsi di luce)
+  function glsArt() {
+    const O = [92, 168], E = [[600, 34], [628, 82], [585, 118], [640, 150], [596, 196], [632, 226], [560, 70]];
+    const R = E.map(([x, y], i) => { const c1 = [O[0] + 150 + i * 12, O[1] - 60 - (168 - y) * .5], c2 = [x - 160, y + (i % 2 ? 30 : -24)]; return `M${O[0]} ${O[1]} C${c1[0].toFixed(0)} ${c1[1].toFixed(0)} ${c2[0].toFixed(0)} ${c2[1].toFixed(0)} ${x} ${y}`; });
+    return `<svg viewBox="0 0 640 260" preserveAspectRatio="xMaxYMid slice" aria-hidden="true" class="gh-svg">
+      <defs><pattern id="ghdots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".13"/></pattern>
+      <radialGradient id="ghglow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+      <rect width="640" height="260" fill="url(#ghdots)"/>
+      <g class="gh-rings" transform="translate(${O[0]} ${O[1]})"><circle r="38"/><circle r="74"/><circle r="116"/></g>
+      ${R.map((d, i) => `<path class="gh-r" pathLength="1" style="--d:${200 + i * 110}ms" d="${d}"/>`).join('')}
+      ${R.map((d, i) => `<path class="gh-f${i === 1 ? ' red' : ''}" pathLength="1" style="--d:${(1.2 + i * .55).toFixed(2)}s;--t:${(2.6 + (i % 3) * .5).toFixed(1)}s" d="${d}"/>`).join('')}
+      ${E.map(([x, y], i) => `<g class="gh-e" style="--d:${900 + i * 110}ms" transform="translate(${x} ${y})"><circle class="gh-ep" r="4"/><circle r="3" class="gh-ec"/></g>`).join('')}
+      <circle cx="${O[0]}" cy="${O[1]}" r="40" fill="url(#ghglow)"/>
+      <g class="gh-o" transform="translate(${O[0]} ${O[1]})"><circle class="gh-op" r="9"/><circle r="7" class="gh-oc"/><circle r="2.6" class="gh-oi"/></g>
     </svg>`;
   }
 
@@ -1555,7 +1559,7 @@
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
       const hi = aoa.findIndex(r => r.some(c => /^nspedizione$|^numerospedizione$|^nsped$/.test(nh(c))) && r.some(c => /kgtass|pesotass/.test(nh(c))));
       if (hi < 0) return;
-      const H = aoa[hi].map(nh);
+      const H = aoa[hi].map(h => /€|eur|\//i.test(String(h)) && /kg/i.test(String(h)) ? '~' + nh(h) : nh(h));
       const col = (...ks) => { for (const k of ks) { const i = H.findIndex(h => h === k); if (i >= 0) return i; } for (const k of ks) { const i = H.findIndex(h => h.startsWith(k)); if (i >= 0) return i; } return -1; };
       const c = { data: col('data', 'dataspedizione'), con: col('contratto', 'contr'), ns: col('nspedizione', 'numerospedizione', 'nsped'), rif: col('rif', 'riferimento'), dest: col('destinatario'), citta: col('citta', 'localita', 'destinazione'), prov: col('provincia', 'prov'), cdc: col('centrodicosto', 'cdc'), cdcn: col('nomecentrodicosto', 'cliente'), tipo: col('tipologia', 'tipo'), colli: col('colli'), kr: col('kgreali', 'pesoreale'), kt: col('kgtassabili', 'kgtass', 'pesotassabile'), nolo: col('nolo'), fuel: col('fuel'), sup: col('supplementi', 'suppl'), tot: col('totale', 'costo', 'costogls'), gg: col('giorniconsegna', 'gg', 'giorni'), rd: col('riaddebitabile', 'riaddebito'), note: col('note') };
       aoa.slice(hi + 1).forEach(r => {
@@ -1571,9 +1575,10 @@
         const con = String(r[c.con] ?? '').toUpperCase().replace(/CONTRATTO\s*/, 'C').replace(/^(\d)$/, 'C$1').trim() || 'C1';
         const nolo = num(r[c.nolo]), fuel = num(r[c.fuel]), sup = num(r[c.sup]);
         const tot = c.tot >= 0 && r[c.tot] !== '' ? num(r[c.tot]) : nolo + fuel + sup;
+        const sup2 = Math.abs(tot - nolo - fuel - sup) > .02 && tot > nolo + fuel ? r2(tot - nolo - fuel) : sup;
         const gg = c.gg >= 0 && r[c.gg] !== '' && !/^-+$/.test(String(r[c.gg]).trim()) ? num(r[c.gg]) : '';
         const cdcRaw = String(r[c.cdc] ?? '').trim(), cm = cdcRaw.match(/^(CC-\d+)\s*[·\-–]?\s*(.*)$/i);
-        const row = { id: 'g' + ns, mese: d.slice(0, 7), data: d, contratto: con, nsped: ns, rif: String(r[c.rif] ?? '').trim(), destinatario: String(r[c.dest] ?? '').trim(), citta, prov, regione: '', cdc: cm ? cm[1].toUpperCase() : cdcRaw, cdcNome: (c.cdcn >= 0 ? String(r[c.cdcn] ?? '').trim() : '') || (cm ? cm[2] : ''), tipologia: String(r[c.tipo] ?? '').trim() || 'Pacco', colli: num(r[c.colli]) || 1, kgReali: num(r[c.kr]), kgTass: num(r[c.kt]), nolo, fuel, suppl: sup, totale: r2(tot), gg, riaddebito: c.rd >= 0 ? String(r[c.rd] ?? '').trim() : '', note: c.note >= 0 ? String(r[c.note] ?? '').trim() : '' };
+        const row = { id: 'g' + ns, mese: d.slice(0, 7), data: d, contratto: con, nsped: ns, rif: String(r[c.rif] ?? '').trim(), destinatario: String(r[c.dest] ?? '').trim(), citta, prov, regione: '', cdc: cm ? cm[1].toUpperCase() : cdcRaw, cdcNome: (c.cdcn >= 0 ? String(r[c.cdcn] ?? '').trim() : '') || (cm ? cm[2] : ''), tipologia: String(r[c.tipo] ?? '').trim() || 'Pacco', colli: num(r[c.colli]) || 1, kgReali: num(r[c.kr]), kgTass: num(r[c.kt]), nolo, fuel, suppl: sup2, totale: r2(tot), gg, riaddebito: c.rd >= 0 ? String(r[c.rd] ?? '').trim() : '', note: c.note >= 0 ? String(r[c.note] ?? '').trim() : '' };
         row.regione = regOf(row);
         out.push(row);
       });
