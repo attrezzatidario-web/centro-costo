@@ -179,11 +179,42 @@
   }
   const setConfig = (chiave, value) => write([{ action: 'upsert', sheet: 'Config', row: { chiave, valore: JSON.stringify(value) } }]);
 
-  async function api(action, extra) {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, ...extra }) });
+  // accesso: token di sessione rilasciato dallo script dopo la password (la password non viene salvata)
+  let tok = LS.get('cdc_tok', '');
+  class AuthError extends Error {}
+  async function post(action, extra) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: tok, ...extra }), credentials: 'omit', referrerPolicy: 'no-referrer' });
     const j = await r.json();
+    if (!j.ok && j.auth) { lockApp(j.error); throw new AuthError(j.error); }
     if (!j.ok) throw new Error(j.error || 'Errore');
-    return j.result;
+    return j;
+  }
+  async function api(action, extra) { return (await post(action, extra)).result; }
+  function lockApp(msg) {
+    tok = ''; LS.set('cdc_tok', '');
+    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [] };
+    try { localStorage.removeItem('cdc_data'); } catch {}
+    showLogin(msg);
+  }
+  function showLogin(msg) {
+    $('#app').hidden = true; $('#setup').hidden = false;
+    const e = $('#login-err'); e.hidden = !msg; e.textContent = msg || '';
+    setTimeout(() => $('#login-pw') && $('#login-pw').focus(), 60);
+  }
+  async function doLogin(ev) {
+    ev.preventDefault();
+    const pw = $('#login-pw').value, err = $('#login-err'); err.hidden = true;
+    if (!pw) return;
+    const btn = $('#login-go'); btn.disabled = true; btn.textContent = 'Verifico…';
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'login', password: pw, device: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '' }), credentials: 'omit', referrerPolicy: 'no-referrer' });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'Accesso non riuscito');
+      tok = j.result; LS.set('cdc_tok', tok);
+      $('#login-pw').value = '';
+      start(); toast('Accesso effettuato');
+    } catch (e) { err.textContent = e instanceof TypeError ? 'Nessuna connessione: riprova' : e.message; err.hidden = false; }
+    finally { btn.disabled = false; btn.textContent = 'Entra'; }
   }
   async function flush() {
     if (isLocal() || syncing || !queue.length || !url) return setSync();
@@ -193,6 +224,7 @@
       await api('batch', { ops: batch });
       queue = queue.slice(batch.length); save(); online = true;
     } catch (e) {
+      if (e instanceof AuthError) { syncing = false; return; }
       if (e instanceof TypeError) online = false; else toast('Errore salvataggio: ' + e.message);
     } finally { syncing = false; setSync(); }
     if (queue.length && online) setTimeout(flush, 4000);
@@ -201,14 +233,14 @@
     if (isLocal()) { if (showToast) toast('Modalità solo dispositivo'); return; }
     try {
       setSync('Aggiorno…');
-      const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=all&t=' + Date.now());
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error);
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []) };
+      if (!tok) { showLogin(); return; }
+      const j = await post('all');
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [] };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
     } catch (e) {
+      if (e instanceof AuthError) return;
       online = false;
       if (showToast) toast('Impossibile collegarsi');
     }
@@ -1310,15 +1342,32 @@
   const regOf = r => r.regione || ((window.GLS_GEO || { PROV: {} }).PROV[String(r.prov || '').toUpperCase()] || [])[2] || 'Altro';
   const glsScriptOk = () => isLocal() || !db.v || db.v >= 'cdc-1.1';
 
-  const pdfSeen = {};
   function glsPdf() {
-    const a = $('#gl-pdf'); if (!a) return;
-    const m = gMonth, url = `analisi/gls-${m}.pdf`;
-    if (m === ALLM) { a.hidden = true; return; }
-    const show = ok => { if (m !== gMonth) return; a.hidden = !ok; if (ok) { a.href = url; a.setAttribute('download', `Analisi GLS ${mLabel(m)}.pdf`); } };
-    if (m in pdfSeen) return show(pdfSeen[m]);
-    a.hidden = true;
-    fetch(url, { method: 'HEAD', cache: 'no-cache' }).then(r => { pdfSeen[m] = r.ok && !/html/i.test(r.headers.get('content-type') || ''); show(pdfSeen[m]); }).catch(() => {});
+    const a = $('#gl-pdf'), up = $('#gl-pdfup'); if (!a) return;
+    const has = gMonth !== ALLM && (db.pdf || []).includes(gMonth);
+    a.hidden = !has; up.hidden = gMonth === ALLM || has || isLocal();
+  }
+  async function openPdf() {
+    const m = gMonth;
+    try {
+      busy('Apro l\'analisi…');
+      const b64 = await api('pdf', { mese: m });
+      const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const href = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = href; a.download = `Analisi GLS ${mLabel(m)}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 60000);
+    } catch (e) { if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); }
+  }
+  async function uploadPdf() {
+    const m = gMonth;
+    let file; try { file = await pickFile('application/pdf,.pdf'); } catch { return; }
+    if (file.size > 15 * 1024 * 1024) return toast('PDF troppo grande (massimo 15 MB)');
+    try {
+      busy('Carico il PDF…');
+      const buf = new Uint8Array(await file.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
+      db.pdf = await api('uploadPdf', { mese: m, data: btoa(bin) }); save(); glsPdf();
+      toast(`Analisi di ${mLabel(m)} salvata nel tuo Google Drive`);
+    } catch (e) { if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); }
   }
   const sgn = p => (p > 0 ? '+' : p < 0 ? '−' : '') + fmtNum(Math.abs(p), 0) + '%';
 
@@ -2206,6 +2255,8 @@
       const gat = t.closest('[data-gtarga]'); if (gat) { gasF.targa = gasF.targa === gat.dataset.gtarga ? '' : gat.dataset.gtarga; $$('.gv-c').forEach(x => x.classList.toggle('on', x.dataset.gtarga === gasF.targa)); $('#ga-ft').value = gasF.targa; renderGasList(); if (gasF.targa) $('#ga-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const gaq = t.closest('[data-gaq]'); if (gaq) { gasF.q = ''; gasF.targa = ''; $('#ga-q').value = ''; $('#ga-ft').value = ''; const ids = gaq.dataset.gaq.split(' '); renderGasList(gasRows().filter(r => ids.includes(String(r.id)))); $('#ga-cnt').textContent += ' · filtro controllo'; $('#ga-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       if (t.closest('#ga-more')) { gasLimit = 9999; renderGasList(); return; }
+      if (t.closest('#gl-pdf')) { e.preventDefault(); openPdf(); return; }
+      if (t.closest('#gl-pdfup')) { uploadPdf(); return; }
       if (t.closest('#gl-imp')) { importGls(); return; }
       if (t.closest('#gl-xls')) { exportGls(); return; }
       if (t.closest('#gl-prev') || t.closest('#gl-next')) { const o = [...$('#gl-mese').options].map(x => x.value), i = o.indexOf(gMonth) + (t.closest('#gl-prev') ? 1 : -1); if (o[i]) { gMonth = o[i]; glsAnim = true; renderGls(); } return; }
@@ -2267,22 +2318,9 @@
     $('#s-cc-add').onclick = () => addChip('#s-cc-in', 'centri', centri);
     $('#s-cat-add').onclick = () => addChip('#s-cat-in', 'categorie', categorie);
 
-    $('#setup-go').onclick = async () => {
-      const v = $('#setup-url').value.trim();
-      const err = $('#setup-err'); err.hidden = true;
-      if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)) { err.textContent = 'URL non valido: deve iniziare con https://script.google.com/'; err.hidden = false; return; }
-      try {
-        busy('Collego…');
-        const r = await fetch(v + (v.includes('?') ? '&' : '?') + 'action=all');
-        const j = await r.json();
-        if (!j.ok) throw new Error(j.error);
-        url = v; LS.set('cdc_url', url);
-        db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v }; save();
-        start();
-      } catch (e) { err.textContent = 'Collegamento non riuscito. Controlla che l\'App web sia accessibile a «Chiunque».'; err.hidden = false; } finally { busy(); }
-    };
-    $('#setup-local').onclick = () => { url = 'local'; LS.set('cdc_url', url); start(); };
-
+    $('#login-form').addEventListener('submit', doLogin);
+    $('#s-logout').onclick = async () => { if (!confirm('Uscire da questo dispositivo? I dati salvati qui vengono cancellati (restano nel Foglio Google).')) return; if (queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate: uscendo andranno perse. Continuare?`)) return; try { await api('logout'); } catch {} queue = []; LS.set('cdc_queue', []); lockApp(); toast('Uscito'); };
+    $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); }, 200); });
@@ -2290,9 +2328,9 @@
   }
 
   function start() {
-    const linked = !!url;
-    $('#setup').hidden = linked; $('#app').hidden = !linked;
-    if (!linked) return;
+    if (top !== self) { try { top.location = self.location; } catch { document.body.innerHTML = ''; } return; }
+    if (!isLocal() && !tok) { showLogin(); return; }
+    $('#setup').hidden = true; $('#app').hidden = false;
     setSync(); go();
     if (!isLocal()) pull();
   }
