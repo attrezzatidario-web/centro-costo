@@ -901,3 +901,38 @@ body.has-sel .fab { display: none; }
 .gv-nick svg { width: 13px; height: 13px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; opacity: 0; transition: opacity .15s; }
 .gv-nick:hover svg { opacity: 1; }
 @media (hover: none) { .gv-nick svg { opacity: .6; } }
+/* furgone animato nelle schede dei mezzi */
+@media (min-width: 760px) { .ga-veh { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+.gv-top.has-van { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.gv-road { --vw: 116px; position: relative; height: 54px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+.gv-road::after { content: ""; position: absolute; left: 0; right: 0; bottom: 3px; height: 1.5px; background: repeating-linear-gradient(90deg, var(--line) 0 10px, transparent 10px 18px); background-size: 18px 100%; animation: vnroad .5s linear infinite; }
+@keyframes vnroad { to { background-position: -18px 0; } }
+.gv-van { position: absolute; bottom: 0; width: var(--vw); left: calc(50% - var(--vw) / 2); animation: vndrive 11s cubic-bezier(.45, 0, .2, 1) infinite; }
+.gv-van svg { width: 100%; height: auto; display: block; overflow: visible; }
+@keyframes vndrive {
+  0% { left: calc(var(--vw) * -1.1); } 28% { left: calc(50% - var(--vw) / 2); } 72% { left: calc(50% - var(--vw) / 2); } 100% { left: calc(100% + 10px); }
+}
+.gv-c:hover .gv-van { animation-duration: 6s; }
+.vn-s1 { stop-color: #ffffff; } .vn-s2 { stop-color: #e4e9f0; }
+.vn-out { stroke: #b6c0ce; stroke-width: 1.1; stroke-linejoin: round; }
+.vn-trim { fill: #3a4352; }
+.vn-hl { stroke: #fff; stroke-width: 1.2; stroke-linecap: round; opacity: .9; }
+.vn-arch { fill: none; stroke: #2a313d; stroke-width: 2.2; stroke-linecap: round; }
+.vn-ws { stroke: #8d99aa; stroke-width: 1; stroke-linecap: round; }
+.vn-ln { stroke: #c3ccd8; stroke-width: .9; }
+.vn-hd { stroke: #9aa6b6; stroke-width: 1.4; stroke-linecap: round; }
+.vn-mir { fill: #3a4352; }
+.vn-lamp { fill: #f4f7fb; stroke: #9aa6b6; stroke-width: .7; }
+.vn-gr { stroke: #3a4352; stroke-width: 1.6; stroke-linecap: round; }
+.vn-tail { fill: #e2523f; opacity: .85; }
+.vn-sh { fill: #1b2433; opacity: .13; }
+.vn-ty { fill: #232a35; } .vn-rim { fill: #c9d1dc; } .vn-sp { fill: #8b96a6; }
+.vn-body { animation: vnbob .45s ease-in-out infinite alternate; }
+@keyframes vnbob { to { transform: translateY(-.7px); } }
+.vn-sp { transform-box: fill-box; transform-origin: center; animation: vnspin .5s linear infinite; }
+@keyframes vnspin { to { transform: rotate(360deg); } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vn-out { stroke: #8a96a8; } :root:not([data-theme="light"]) .vn-s2 { stop-color: #cfd7e2; } :root:not([data-theme="light"]) .vn-sh { fill: #000; opacity: .35; } }
+:root[data-theme="dark"] .vn-out { stroke: #8a96a8; } :root[data-theme="dark"] .vn-s2 { stop-color: #cfd7e2; } :root[data-theme="dark"] .vn-sh { fill: #000; opacity: .35; }
+@media (prefers-reduced-motion: reduce) { .gv-van, .vn-body, .vn-sp, .gv-road::after { animation: none !important; } }
+
+@media (max-width: 479px) { .gv-road { --vw: 92px; height: 44px; } }

@@ -1688,6 +1688,32 @@
     return out;
   }
 
+  // furgone disegnato (furgone a tetto alto, linee morbide) per i mezzi indicati
+  const VAN_PLATES = ['GC193WV', 'GC163WV'];
+  const BODY = 'M8 40.5 L8 13 Q8 6.5 14.5 6.5 L79 6.5 Q85.5 6.5 89 11 L99.5 25 Q101.3 27.2 104.5 27.8 L110.5 29 Q116 30.2 116 35.5 L116 39.5 Q116 41.5 114 41.5 L103.5 41.5 A9 9 0 0 0 85.5 41.5 L33.5 41.5 A9 9 0 0 0 15.5 41.5 L10 41.5 Q8 41.5 8 40.5 Z';
+  let vanN = 0;
+  function vanSvg() {
+    const id = 'vn' + (++vanN);
+    const wheel = x => `<g transform="translate(${x} 42)"><circle r="7.4" class="vn-ty"/><circle r="4.1" class="vn-rim"/><g class="vn-sp"><circle r="1.2"/><circle cx="2.4" r=".7"/><circle cx="-2.4" r=".7"/><circle cy="2.4" r=".7"/><circle cy="-2.4" r=".7"/></g></g>`;
+    return `<span class="gv-road" aria-hidden="true"><span class="gv-van"><svg viewBox="0 0 124 54">
+      <defs><clipPath id="${id}c"><path d="${BODY}"/></clipPath><linearGradient id="${id}s" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="vn-s1"/><stop offset="1" class="vn-s2"/></linearGradient><linearGradient id="${id}g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#6a7b93"/><stop offset="1" stop-color="#2c3646"/></linearGradient></defs>
+      <ellipse cx="62" cy="49.5" rx="52" ry="2.4" class="vn-sh"/>
+      <g class="vn-body">
+        <path d="${BODY}" fill="url(#${id}s)" class="vn-out"/>
+        <g clip-path="url(#${id}c)"><rect x="0" y="34.5" width="130" height="10" class="vn-trim"/><path d="M14 8.2 H78" class="vn-hl"/></g>
+        <path d="M15.2 41.5 A9.3 9.3 0 0 1 33.8 41.5 M85.2 41.5 A9.3 9.3 0 0 1 103.8 41.5" class="vn-arch"/>
+        <path d="M81 11.5 Q81 10.5 82 10.5 L87 10.5 Q88 10.5 88.7 11.4 L96.6 22.8 Q97.2 24 96 24 L82 24 Q81 24 81 23 Z" fill="url(#${id}g)"/>
+        <path d="M89.6 11.6 L99.2 24.8" class="vn-ws"/>
+        <path d="M79 8 V34 M50 8 V34" class="vn-ln"/>
+        <path d="M50 22 h3 M82.5 27 h3" class="vn-hd"/>
+        <path d="M87.5 19.5 q3 -.4 3.4 2.4 l.2 2.1 h-3.6 z" class="vn-mir"/>
+        <path d="M106.5 30.2 Q109 29.7 112 30.6 Q113.5 31.2 112.6 32.1 L107.4 32.3 Q105.8 31.6 106.5 30.2Z" class="vn-lamp"/>
+        <path d="M113.5 33.4 h2.5" class="vn-gr"/>
+        <rect x="8.2" y="16" width="2" height="7" rx="1" class="vn-tail"/>
+      </g>
+      ${wheel(24.5)}${wheel(94.5)}
+    </svg></span></span>`;
+  }
   function renderGas() {
     const months = gasMonths();
     const sel = $('#ga-per');
@@ -1764,7 +1790,7 @@
     const mv = Math.max(...vs.map(x => x.l), 1);
     const bAll = $('#ga-allv'); bAll.hidden = !others.length; bAll.textContent = showAll ? 'Nascondi altri mezzi' : `Altri ${others.length} mezzi`;
     $('#ga-veh').innerHTML = shown.map((x, i) => `<div class="gv-c${gasF.targa === x.p ? ' on' : ''}" data-gtarga="${esc(x.p)}" style="--d:${120 + i * 60}ms">
-        <div class="gv-top"><span class="gv-plate"><i>I</i><b>${esc(plateFmt(x.p))}</b></span><span class="gv-l"><b>${L(x.l, 0)}</b><small>${fmtNum(pct(x.l, lit), 0)}%</small></span></div>
+        <div class="gv-top${VAN_PLATES.includes(x.p) ? ' has-van' : ''}"><span class="gv-plate"><i>I</i><b>${esc(plateFmt(x.p))}</b></span>${VAN_PLATES.includes(x.p) ? vanSvg() : ''}<span class="gv-l"><b>${L(x.l, 0)}</b><small>${fmtNum(pct(x.l, lit), 0)}%</small></span></div>
         ${gasName(x.p) ? `<div class="gv-nick" data-gname="${esc(x.p)}" title="Cambia nome">${esc(gasName(x.p))}<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></div>` : x.main ? `<button type="button" class="gv-addn" data-gname="${esc(x.p)}">+ Dai un nome</button>` : ''}
         <div class="gv-name">${esc(x.uso)}${x.owner ? ` <em>· ${esc(x.owner)}</em>` : ''}</div>
         <div class="gv-tank"><i style="width:${(x.l / mv * 100).toFixed(1)}%"></i></div>
