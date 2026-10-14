@@ -1670,7 +1670,7 @@
     const out = new Map();
     by.forEach((v, p) => {
       const s = v.slice().sort((a, b) => String(a.data).localeCompare(String(b.data)) || num(a.km) - num(b.km));
-      const usi = [...groupBy(s, r => gasNorm(r.uso) || '—')].sort((a, b) => b[1].length - a[1].length);
+      const usi = [...groupBy(s.filter(r => gasNorm(r.uso)), r => gasNorm(r.uso))].sort((a, b) => b[1].length - a[1].length); if (!usi.length) usi.push(['—', []]);
       const owner = s.map(r => gasNorm(r.proprietario)).filter(Boolean).pop() || '';
       const seg = new Map(); let prev = null;
       s.forEach(r => { const k = num(r.km); if (!k) return; if (prev && k > prev.km && k - prev.km < 5000) seg.set(r.id, k - prev.km); prev = { km: k }; });
@@ -1765,7 +1765,7 @@
       $('#ga-tr-s').textContent = `media ${L(lit / (months.length || 1), 0)} al mese`;
     }
     // utilizzo
-    const byU = [...groupBy(rows, r => gasNorm(r.uso) || '—')].map(([k, v]) => ({ k, v: gSum(v, 'litri'), n: v.length })).sort((a, b) => b.v - a.v);
+    const byU = [...groupBy(rows, r => gasNorm(r.uso) || 'NON INDICATO')].map(([k, v]) => ({ k, v: gSum(v, 'litri'), n: v.length })).sort((a, b) => b.v - a.v);
     const mu = Math.max(...byU.map(x => x.v), 1);
     $('#ga-uso').innerHTML = byU.slice(0, 10).map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} ${x.n === 1 ? 'pieno' : 'pieni'}</em></span><span>${L(x.v, 0)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mu * 100).toFixed(2)}%"></div></div></div>`).join('');
     // operatori
@@ -1806,7 +1806,7 @@
     if (noKm.length) A.push({ t: 'warn', h: 'Chilometri mancanti', d: `${noKm.length} rifornimenti senza km: non si può calcolare il consumo di quei pieni (${[...new Set(noKm.map(r => plateFmt(plate(r.targa))))].join(', ')}).`, v: L(gSum(noKm, 'litri'), 0), ids: noKm.map(r => r.id) });
     V.forEach(x => { let prev = null; x.s.forEach(r => { const k = num(r.km); if (!k) return; if (prev && k < prev.km && ids.has(r.id)) A.push({ t: 'warn', h: `Km che tornano indietro · ${plateFmt(x.p)}`, d: `Il ${esc(shortDate(r.data))} risultano ${fmtNum(k, 0)} km, ma il ${esc(shortDate(prev.r.data))} erano ${fmtNum(prev.km, 0)} km. Probabile errore di data o di battitura.`, v: fmtNum(k - prev.km, 0) + ' km', ids: [prev.r.id, r.id] }); if (prev && k - prev.km >= 5000 && ids.has(r.id)) A.push({ t: 'info', h: `Salto di km anomalo · ${plateFmt(x.p)}`, d: `Tra il ${esc(shortDate(prev.r.data))} e il ${esc(shortDate(r.data))} risultano ${fmtNum(k - prev.km, 0)} km.`, v: 'verificare', ids: [prev.r.id, r.id] }); prev = { km: k, r }; }); });
     const ps = [...new Set(rows.map(r => plate(r.targa)))], lev = (a, b) => { if (a.length !== b.length) return 9; let d = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++; return d; };
-    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) if (lev(ps[i], ps[j]) === 1) { const v = rows.filter(r => [ps[i], ps[j]].includes(plate(r.targa))); A.push({ t: 'info', h: 'Targhe quasi uguali', d: `${plateFmt(ps[i])} e ${plateFmt(ps[j])} differiscono di un solo carattere: controlla se è lo stesso mezzo.`, v: v.length + ' pieni', ids: v.map(r => r.id) }); }
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) if (lev(ps[i], ps[j]) <= 2) { const v = rows.filter(r => [ps[i], ps[j]].includes(plate(r.targa))); A.push({ t: 'info', h: 'Targhe quasi uguali', d: `${plateFmt(ps[i])} e ${plateFmt(ps[j])} sono quasi uguali: controlla se è lo stesso mezzo scritto male.`, v: v.length + ' pieni', ids: v.map(r => r.id) }); }
     const big = rows.filter(r => num(r.litri) > 70);
     if (big.length) A.push({ t: 'info', h: 'Rifornimenti molto grandi', d: `${big.length} rifornimenti oltre 70 litri: verificare se il serbatoio del mezzo li può contenere.`, v: L(gSum(big, 'litri'), 0), ids: big.map(r => r.id) });
     const noOp = rows.filter(r => !String(r.operatore || '').trim() || String(r.operatore).trim() === '?');
@@ -1895,7 +1895,7 @@
 
   /* ---------- Import / export gasolio ---------- */
   function parseGas(wb) {
-    const out = [];
+    const out = []; out.noDate = []; out.dup = [];
     wb.SheetNames.forEach(name => {
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
       const hi = aoa.findIndex(r => r.some(c => /^targa/.test(nh(c))) && r.some(c => /^litri/.test(nh(c))));
@@ -1905,13 +1905,13 @@
       const c = { data: col('data'), targa: col('targa', 'targauso', 'mezzo'), km: col('kilometri', 'chilometri', 'km'), litri: col('litri'), prop: col('proprietario'), op: col('operatore'), note: col('note'), uso: col('movimenti', 'movimento', 'utilizzo', 'uso'), prezzo: col('prezzolitro', 'prezzo', 'eurolitro'), imp: col('importo', 'costo', 'totale'), cc: col('centrodicosto', 'centro') };
       const rowsIn = [];
       aoa.slice(hi + 1).forEach(r => {
-        const tg = plate(r[c.targa]), lt = num(r[c.litri]);
+        const tg = plate(r[c.targa]), lt = Math.abs(num(r[c.litri])); // il segno meno nel file non conta
         if (!tg || !(lt > 0)) return;
         let d = r[c.data];
         if (d instanceof Date) d = new Date(d.getTime() + 12 * 36e5); // evita problemi di fuso
         else if (typeof d === 'number' && d > 20000) d = new Date(Math.round((d - 25569) * 864e5) + 12 * 36e5);
         else { const m = String(d || '').trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); d = m ? new Date(+(m[3].length === 2 ? '20' + m[3] : m[3]), +m[2] - 1, +m[1], 12) : null; }
-        if (!d || isNaN(d)) return;
+        if (!d || isNaN(d)) { out.noDate.push(`${plateFmt(tg)} ${fmtNum(lt, 2)} L`); return; }
         const kmv = r[c.km], km = typeof kmv === 'number' && kmv > 100 ? Math.round(kmv) : typeof kmv === 'string' && num(kmv) > 100 ? Math.round(num(kmv)) : '';
         let prezzo = c.prezzo >= 0 ? num(r[c.prezzo]) : 0;
         if (!prezzo && c.imp >= 0 && num(r[c.imp])) prezzo = r2(num(r[c.imp]) / lt * 1000) / 1000;
@@ -1922,10 +1922,13 @@
       });
       // anno sbagliato (es. 1962): si usa l'anno più frequente del file
       const ys = groupBy(rowsIn.filter(x => x.d.getFullYear() >= 2000), x => x.d.getFullYear()), Y = [...ys].sort((a, b) => b[1].length - a[1].length)[0];
-      rowsIn.forEach((x, i) => {
+      const seen = new Set();
+      rowsIn.forEach(x => {
         if (x.d.getFullYear() < 2000 && Y) { const old = x.d.toLocaleDateString('it-IT'); x.d.setFullYear(Y[0]); x.note = `data corretta: nel file era ${old}`; }
         const data = ymd(x.d);
-        let h = 0; const s = `${data}|${x.targa}|${x.litri}|${x.km}|${i}`; for (let k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) | 0;
+        const s = `${data}|${x.targa}|${x.litri}|${x.km}`;
+        if (seen.has(s)) { out.dup.push(`${plateFmt(x.targa)} ${x.d.toLocaleDateString('it-IT')}`); return; }
+        seen.add(s); let h = 0; for (let k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) | 0;
         out.push({ id: 'f' + (h >>> 0).toString(36), data, targa: x.targa, km: x.km, litri: x.litri, prezzo: x.prezzo, proprietario: x.proprietario, operatore: x.operatore, centro: x.centro, uso: x.uso, note: x.note });
       });
     });
@@ -1942,7 +1945,7 @@
       const months = [...new Set(rows.map(r => r.data.slice(0, 7)))].sort();
       const old = gasRows().filter(r => months.includes(String(r.data).slice(0, 7)));
       const fixed = rows.filter(r => /data corretta/.test(r.note)).length, noKm = rows.filter(r => !r.km).length;
-      if (!confirm(`${rows.length} rifornimenti · ${fmtNum(gSum(rows, 'litri'), 2)} litri · ${months.map(mLabel).join(', ')}.${old.length ? `\nSostituisce i ${old.length} rifornimenti già presenti in questi mesi.` : ''}${fixed ? `\n${fixed} data con anno sbagliato corretta in automatico.` : ''}${noKm ? `\n${noKm} righe senza chilometri validi.` : ''}\nImportare?`)) return;
+      if (!confirm(`${rows.length} rifornimenti · ${fmtNum(gSum(rows, 'litri'), 2)} litri · ${months.map(mLabel).join(', ')}.${old.length ? `\nSostituisce i ${old.length} rifornimenti già presenti in questi mesi.` : ''}${fixed ? `\n${fixed} data con anno sbagliato corretta in automatico.` : ''}${noKm ? `\n${noKm} righe senza chilometri validi.` : ''}${rows.dup.length ? `\n${rows.dup.length} righe doppie saltate (${rows.dup.join(', ')}).` : ''}${rows.noDate.length ? `\n${rows.noDate.length} righe senza data saltate (${rows.noDate.join(', ')}).` : ''}\nImportare?`)) return;
       const nid = new Set(rows.map(r => r.id));
       write([...old.filter(r => !nid.has(r.id)).map(r => ({ action: 'delete', sheet: 'Gasolio', id: r.id })), ...rows.map(row => ({ action: 'upsert', sheet: 'Gasolio', row }))]);
       gasP = ''; gasAnim = true; render();
