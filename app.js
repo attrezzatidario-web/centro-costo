@@ -1382,6 +1382,7 @@
     glsMapRender($('#gl-map'), $('#gl-dest'), rows, anim);
     // regioni
     const byR = [...groupBy(rows, regOf)].map(([k, v]) => ({ k, v: gTot(v), n: v.length })).sort((a, b) => b.v - a.v);
+    if (byR.length > 10) { const o = byR.splice(9); byR.push({ k: `Altre ${o.length} regioni`, v: o.reduce((s, x) => s + x.v, 0), n: o.reduce((s, x) => s + x.n, 0) }); }
     const mr = Math.max(...byR.map(x => x.v), 1);
     $('#gl-reg').innerHTML = byR.map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} sped. · ${fmtNum(pct(x.v, T), 1)}%</em></span><span>${gE0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mr * 100).toFixed(2)}%"></div></div></div>`).join('');
 
