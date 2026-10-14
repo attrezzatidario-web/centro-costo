@@ -471,3 +471,154 @@ body.has-sel .fab { display: none; }
 .a-cnt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lb-m { display: none; }
 @media (max-width: 639px) { .lb-d { display: none; } .lb-m { display: inline; } }
+
+/* =========================================================
+   GLS ATTREZZATI
+   ========================================================= */
+#v-gls { --c1: #3362ab; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c-other: #b6bac3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #v-gls { --c1: #6d93db; --c2: #d95926; --c3: #199e70; } }
+:root[data-theme="dark"] #v-gls { --c1: #6d93db; --c2: #d95926; --c3: #199e70; }
+#gl-body { display: grid; gap: 12px; }
+@media (min-width: 900px) { #gl-body { gap: 16px; } }
+.gl-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gl-month { display: inline-flex; align-items: center; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
+.gl-month select { border: 0; background-color: transparent; height: 34px !important; min-height: 34px !important; font-weight: 700; font-size: 14.5px !important; width: auto; padding: 0 30px 0 8px; }
+.gl-month .icon-btn { width: 32px; height: 32px; font-size: 20px; border-radius: 9px; }
+.gl-month .icon-btn:disabled { opacity: .3; cursor: default; }
+.gl-act { display: flex; gap: 8px; }
+.gl-warn { display: grid; gap: 4px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)) !important; background: var(--danger-soft); }
+.gl-warn b { color: var(--danger); } .gl-warn span { font-size: 13px; color: var(--ink-2); }
+.gl-empty .gl-van { max-width: 300px; }
+
+/* hero con furgone */
+.gl-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; overflow: hidden; position: relative; }
+@media (min-width: 760px) { .gl-hero { grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); align-items: center; } }
+.gh-main .label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.gh-sub { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.gh-sub span:not(.gl-d)::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: 1px; }
+.gl-d { font-weight: 700; font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+.gl-d.up { background: var(--danger-soft); color: var(--danger); } .gl-d.down { background: color-mix(in srgb, #1baf7a 15%, transparent); color: #168a60; }
+.gh-scene { margin: -6px -8px -12px; }
+.gl-van { width: 100%; height: auto; display: block; overflow: visible; }
+.gv-road { stroke: var(--line); stroke-width: 6; stroke-linecap: round; }
+.gv-dash { stroke: var(--surface); stroke-width: 2; stroke-dasharray: 14 12; animation: gvroad .6s linear infinite; }
+@keyframes gvroad { to { stroke-dashoffset: -26; } }
+.gv-car { animation: gvin 1.6s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes gvin { from { transform: translateX(-200px); } to { transform: translateX(96px); } }
+.gl-van.sm .gv-car { animation: gvin 1.6s cubic-bezier(.2, .8, .2, 1) both; }
+.gv-body { animation: gvbob .5s ease-in-out infinite alternate; transform-origin: 60px 100px; }
+@keyframes gvbob { to { transform: translateY(-1.4px); } }
+.gv-wheel > * { animation: gvspin .5s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes gvspin { to { transform: rotate(360deg); } }
+.gv-speed line { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: .35; animation: gvspd .7s ease-in-out infinite; }
+.gv-speed line:nth-child(2) { animation-delay: .15s; } .gv-speed line:nth-child(3) { animation-delay: .3s; }
+@keyframes gvspd { 0% { transform: translateX(8px); opacity: 0; } 50% { opacity: .45; } 100% { transform: translateX(-12px); opacity: 0; } }
+.gv-box { animation: gvbox 2.4s 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+@keyframes gvbox { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-5px) rotate(-4deg); } 90% { transform: translateY(0) rotate(0); } }
+.gv-pin { animation: gvpin 2s 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+@keyframes gvpin { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.gv-hills { animation: gvhill 9s linear infinite; }
+@keyframes gvhill { to { transform: translateX(-60px); } }
+
+.gl-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .gl-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .gl-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.gl-kpis .kpi .big { font-size: 22px; white-space: nowrap; }
+@media (min-width: 900px) { .gl-kpis .kpi .big { font-size: 24px; } }
+.gl-kpis .small b.up { color: var(--danger); }
+.cc-anim .gl-kpis .kpi { animation: rise .5s var(--out) both; }
+.cc-anim .gl-kpis .kpi:nth-child(2) { animation-delay: 60ms; } .cc-anim .gl-kpis .kpi:nth-child(3) { animation-delay: 120ms; } .cc-anim .gl-kpis .kpi:nth-child(4) { animation-delay: 180ms; } .cc-anim .gl-kpis .kpi:nth-child(5) { animation-delay: 240ms; } .cc-anim .gl-kpis .kpi:nth-child(6) { animation-delay: 300ms; }
+
+.gl-grid, .gl-2, .gl-3 { display: grid; gap: 12px; }
+@media (min-width: 900px) {
+  .gl-grid { grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; }
+  .gl-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  .gl-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+}
+.gl-map { position: relative; margin: 0 -8px; }
+.gl-svg { max-height: 600px; }
+.gl-arc { opacity: .55; }
+.gl-orig .gl-oc { fill: var(--danger); stroke: var(--surface); stroke-width: 2; }
+.gl-op { fill: none; stroke: var(--danger); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; animation: cmpulse 2.4s 1.2s var(--out) infinite; }
+.gl-op2 { animation-delay: 2.4s; }
+.gl-on { fill: var(--danger) !important; font-size: 10px !important; }
+.gl-pin .cm-c { fill: var(--accent); fill-opacity: .82; }
+.gl-pin:hover .cm-c { fill-opacity: 1; }
+.cc-anim .gl-orig { animation: cmpop .6s .4s var(--spring) both; transform-box: fill-box; }
+
+.gl-anim-row { }
+.cc-anim .gl-anim-row { animation: rise .45s var(--d) var(--out) both; }
+.cc-anim .gl-anim-row .bar-fill, .cc-anim .gb-t i { animation: crgrow .9s calc(var(--d) + 120ms) var(--out) both; transform-origin: left; }
+.gl-top { display: grid; gap: 4px; margin-top: 8px; }
+.gt-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.gt-row:first-child { border-top: 0; }
+.cc-anim .gt-row { animation: rise .45s var(--d) var(--out) both; }
+.gt-n { width: 26px; height: 26px; border-radius: 8px; background: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 12px; color: var(--ink-2); }
+.gt-row:first-child .gt-n { background: var(--accent); color: var(--accent-ink); }
+.gt-m { display: grid; min-width: 0; }
+.gt-m b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .gt-m b small { color: var(--muted); font-weight: 500; }
+.gt-m > small { color: var(--muted); font-size: 11.5px; }
+.gt-row > b { font-variant-numeric: tabular-nums; }
+.gl-months .mb.gl-mb { cursor: pointer; }
+
+/* contratti */
+.gl-split { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+.gl-split i { display: block; height: 100%; }
+.gs-0 { background: var(--c1); } .gs-1 { background: var(--c2); }
+.cc-anim .gl-split { animation: crgrow 1s .3s var(--out) both; transform-origin: left; }
+.gl-cs { display: grid; gap: 14px; }
+.gl-cs > div > b { font-size: 13.5px; }
+.gl-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+.gl-cs .kv { margin-top: 4px; } .gl-cs .kv > div { padding: 6px 0; font-size: 13px; }
+/* composizione */
+.gl-stack { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg); }
+.gl-stack i { display: block; height: 100%; }
+.cc-anim .gl-stack { animation: crgrow 1s .35s var(--out) both; transform-origin: left; }
+.gc-0 { background: var(--c1) !important; } .gc-1 { background: var(--c2) !important; } .gc-2 { background: var(--c3) !important; }
+.gl-leg { margin-top: 14px; } .gl-leg li { grid-template-columns: 10px minmax(0, 1fr) auto 44px; }
+.gl-note { margin-top: 12px; font-size: 12.5px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 8px 12px; }
+.gl-note b { color: var(--ink); }
+/* tipologia */
+.gl-tipi { display: grid; gap: 10px; }
+.gl-ti { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border-radius: 12px; background: var(--bg); }
+.cc-anim .gl-ti { animation: rise .45s var(--out) both; } .cc-anim .gl-ti:nth-child(2) { animation-delay: 80ms; } .cc-anim .gl-ti:nth-child(3) { animation-delay: 160ms; }
+.gl-tic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--surface); color: var(--accent); }
+.gl-tic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.gl-ti > div { display: grid; min-width: 0; } .gl-ti b { font-size: 13.5px; } .gl-ti small { font-size: 11.5px; color: var(--muted); }
+.gl-tv { text-align: right; } .gl-tv b { font-variant-numeric: tabular-nums; }
+/* fasce */
+.gl-bands { display: grid; gap: 9px; }
+.gb-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px; gap: 10px; align-items: center; font-size: 12.5px; }
+.gb-l { color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+.gb-t { height: 10px; border-radius: 5px; background: var(--bg); overflow: hidden; }
+.gb-t i { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
+.gb-v { display: grid; text-align: right; } .gb-v b { font-variant-numeric: tabular-nums; } .gb-v small { color: var(--muted); font-size: 11px; }
+@media (max-width: 479px) { .gb-row { grid-template-columns: 80px minmax(0, 1fr) 104px; } }
+/* giorni */
+.gl-days { gap: 3px; height: 150px; }
+.gl-days .mb i { max-width: 18px; }
+.gl-days .mb.we i { opacity: .45; }
+.gl-days .mbv { font-size: 9px; }
+/* tabella centri di costo */
+.gl-tab td:first-child { max-width: none; white-space: nowrap; }
+.gl-tab tbody tr[data-gcdc] { cursor: pointer; }
+.gl-tab tbody tr[data-gcdc]:hover td { background: var(--bg); }
+.gl-cc { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--accent); margin-right: 4px; }
+.gl-tab .chip.paid { background: var(--accent-soft); color: var(--accent); }
+.gl-rr td { color: var(--accent); font-weight: 600; border-bottom: 0; }
+/* anomalie */
+.gl-an { display: grid; gap: 8px; }
+.ga-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; border-radius: 12px; background: var(--bg); cursor: pointer; transition: transform .15s var(--out); }
+.ga-row:hover { transform: translateX(2px); }
+.ga-row.warn .ci-ic { background: var(--danger-soft); color: var(--danger); }
+.cc-anim .ga-row { animation: rise .45s calc(var(--d) + 300ms) var(--out) both; }
+.ga-m { display: grid; gap: 3px; min-width: 0; }
+.ga-m b { font-size: 13.5px; } .ga-m span { font-size: 12.5px; color: var(--ink-2); line-height: 1.45; } .ga-m small { font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.ga-v { font-size: 13px; white-space: nowrap; color: var(--ink); }
+.ga-row.warn .ga-v { color: var(--danger); }
+@media (max-width: 479px) { .ga-row { grid-template-columns: 30px minmax(0, 1fr); } .ga-v { grid-column: 2; } }
+/* elenco */
+.gl-f { margin-bottom: 10px; }
+.gl-st .chip.gk-C1, .ic.gk-C1 { background: color-mix(in srgb, var(--c1) 14%, transparent); color: var(--c1); }
+.gl-st .chip.gk-C2, .ic.gk-C2 { background: color-mix(in srgb, var(--c2) 16%, transparent); color: var(--c2); }
+.gl-st tbody tr { cursor: pointer; }
