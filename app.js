@@ -1657,6 +1657,8 @@
   // noleggi mensili dei mezzi principali (IVA esclusa), modificabili dall'app
   const GAS_RENT_DEF = { FA586HA: 650, GC193WV: 900, GC163WV: 900, FA665TY: 750 };
   const gasRent = () => { const c = cfg('gasNoleggio'); return c && typeof c === 'object' && Object.keys(c).length ? c : GAS_RENT_DEF; };
+  const gasNomi = () => { const c = cfg('gasNomi'); return c && typeof c === 'object' ? c : {}; };
+  const gasName = p => String(gasNomi()[plate(p)] || '').trim();
   const gasRentTot = () => Object.values(gasRent()).reduce((a, v) => a + num(v), 0);
   const monthSpan = (a, b) => { const o = []; let [y, m] = a.split('-').map(Number); const [y2, m2] = b.split('-').map(Number); while (y < y2 || (y === y2 && m <= m2)) { o.push(`${y}-${pad(m)}`); if (++m > 12) { m = 1; y++; } } return o; };
   const gasRows = () => db.gasolio || [];
@@ -1735,7 +1737,7 @@
         <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-gak="${i}">0</b><small>${s}</small></div>`).join('')}</div>
       </div>
       <div class="card"><div class="card-h"><h3>Mezzi principali</h3><span class="ga-vh"><span class="muted small">clic per vedere i rifornimenti</span><button class="btn sm" id="ga-allv" type="button"></button></span></div><div class="ga-veh" id="ga-veh"></div></div>
-      <div class="card"><div class="card-h"><h3>Costo dei mezzi a noleggio</h3><span class="ga-vh"><span class="muted small">${rm.length} ${rm.length === 1 ? 'mese' : 'mesi'} di noleggio · ${ivaLbl()}</span><button class="btn sm" id="ga-rent" type="button">Modifica noleggi</button></span></div><div class="mx-wrap" id="ga-cost"></div></div>
+      <div class="card"><div class="card-h"><h3>Costo dei mezzi a noleggio</h3><span class="ga-vh"><span class="muted small">${rm.length} ${rm.length === 1 ? 'mese' : 'mesi'} di noleggio · ${ivaLbl()}</span><button class="btn sm" id="ga-rent" type="button">Nomi e noleggi</button></span></div><div class="mx-wrap" id="ga-cost"></div></div>
       <div class="gl-2">
         <div class="card"><div class="card-h"><h3>${gasP ? 'Litri giorno per giorno' : 'Litri mese per mese'}</h3><span class="muted small" id="ga-tr-s"></span></div><div class="mbars ga-bars" id="ga-tr"></div></div>
         <div class="card"><div class="card-h"><h3>Per utilizzo</h3><span class="muted small">da colonna «movimenti»</span></div><div class="bars" id="ga-uso"></div></div>
@@ -1763,6 +1765,7 @@
     const bAll = $('#ga-allv'); bAll.hidden = !others.length; bAll.textContent = showAll ? 'Nascondi altri mezzi' : `Altri ${others.length} mezzi`;
     $('#ga-veh').innerHTML = shown.map((x, i) => `<div class="gv-c${gasF.targa === x.p ? ' on' : ''}" data-gtarga="${esc(x.p)}" style="--d:${120 + i * 60}ms">
         <div class="gv-top"><span class="gv-plate"><i>I</i><b>${esc(plateFmt(x.p))}</b></span><span class="gv-l"><b>${L(x.l, 0)}</b><small>${fmtNum(pct(x.l, lit), 0)}%</small></span></div>
+        ${gasName(x.p) ? `<div class="gv-nick" data-gname="${esc(x.p)}" title="Cambia nome">${esc(gasName(x.p))}<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></div>` : x.main ? `<button type="button" class="gv-addn" data-gname="${esc(x.p)}">+ Dai un nome</button>` : ''}
         <div class="gv-name">${esc(x.uso)}${x.owner ? ` <em>· ${esc(x.owner)}</em>` : ''}</div>
         <div class="gv-tank"><i style="width:${(x.l / mv * 100).toFixed(1)}%"></i></div>
         ${x.main ? `<div class="gv-rent"><span>Noleggio <b>${eur0(x.rent * gMul())}</b>/mese</span><span>Totale periodo <b>${eur0((x.rent * rm.length + x.fuel) * gMul())}</b></span></div>` : ''}
@@ -1771,7 +1774,7 @@
 
     // costo dei mezzi a noleggio
     const mm = vs.filter(x => x.main), oth = vs.filter(x => !x.main);
-    const cr = x => { const rp = x.rent * rm.length, t = rp + x.fuel; return `<td><span class="gv-plate sm"><i>I</i><b>${esc(plateFmt(x.p))}</b></span> <span class="m2">${esc(x.uso)}</span></td><td>${eur0(x.rent * gMul())}</td><td>${eur0(rp * gMul())}</td><td>${fmtNum(x.l, 0)} L</td><td>${hasCost ? eur0(x.fuel * gMul()) : '—'}</td><td><b>${eur0(t * gMul())}</b></td><td>${fmtNum(pct(t, totC), 1)}%</td><td>${x.k ? fmtNum(t * gMul() / x.k, 3) + ' €' : '—'}</td>`; };
+    const cr = x => { const rp = x.rent * rm.length, t = rp + x.fuel; return `<td><span class="gv-plate sm"><i>I</i><b>${esc(plateFmt(x.p))}</b></span> ${gasName(x.p) ? `<b class="ga-nm">${esc(gasName(x.p))}</b>` : ''}<span class="m2">${esc(x.uso)}</span></td><td>${eur0(x.rent * gMul())}</td><td>${eur0(rp * gMul())}</td><td>${fmtNum(x.l, 0)} L</td><td>${hasCost ? eur0(x.fuel * gMul()) : '—'}</td><td><b>${eur0(t * gMul())}</b></td><td>${fmtNum(pct(t, totC), 1)}%</td><td>${x.k ? fmtNum(t * gMul() / x.k, 3) + ' €' : '—'}</td>`; };
     const oL = gSum(oth.flatMap(x => x.v), 'litri'), oF = oth.reduce((a, x) => a + x.fuel, 0);
     $('#ga-cost').innerHTML = `<table class="mx gl-tab ga-ct"><thead><tr><th>Mezzo</th><th>Noleggio / mese</th><th>Noleggio periodo</th><th>Litri</th><th>Carburante</th><th>Totale</th><th>%</th><th>€ / km</th></tr></thead><tbody>
       ${mm.map(x => `<tr data-gtarga="${esc(x.p)}">${cr(x)}</tr>`).join('')}
@@ -1804,7 +1807,7 @@
     $('#ga-wd').innerHTML = `<div class="ga-wd">${wd.map((x, i) => `<div class="ga-w" style="--d:${150 + i * 60}ms"><div class="ga-wb"><i style="height:${(x.v / mw * 100).toFixed(1)}%"></i></div><b>${x.v ? fmtNum(x.v, 0) : '–'}</b><small>${WD[i]}</small><em>${x.n ? x.n + (x.n === 1 ? ' pieno' : ' pieni') : ''}</em></div>`).join('')}</div>`;
 
     renderGasAnom(rows, V);
-    $('#ga-ft').innerHTML = `<option value="">Tutti i mezzi</option>` + vs.map(x => `<option value="${esc(x.p)}"${gasF.targa === x.p ? ' selected' : ''}>${esc(plateFmt(x.p))} · ${esc(x.uso)}</option>`).join('');
+    $('#ga-ft').innerHTML = `<option value="">Tutti i mezzi</option>` + vs.map(x => `<option value="${esc(x.p)}"${gasF.targa === x.p ? ' selected' : ''}>${esc(plateFmt(x.p))} · ${esc(gasName(x.p) || x.uso)}</option>`).join('');
     renderGasList(rows);
   }
 
@@ -1822,7 +1825,7 @@
       $('#ga-list').innerHTML = `<table class="tbl gl-st"><thead><tr><th>Data</th><th>Targa</th><th>Utilizzo</th><th>Operatore</th><th>Proprietario</th><th class="r">Km</th><th class="r">Litri</th><th class="r">€/L</th><th class="r">Costo</th></tr></thead><tbody>
         ${sh.map(r => `<tr data-gas="${esc(r.id)}"><td class="d">${dd(r.data)}</td><td><span class="gv-plate sm"><i>I</i><b>${esc(plateFmt(plate(r.targa)))}</b></span></td><td class="m2">${esc(r.uso)}</td><td class="m2">${esc(r.operatore || '—')}</td><td class="m2">${esc(r.proprietario || '—')}</td><td class="num">${num(r.km) ? fmtNum(num(r.km), 0) : '<span class="chip soon">—</span>'}</td><td class="num amt">${fmtNum(num(r.litri), 2)}</td><td class="num">${gPrezzo(r) ? fmtNum(gPrezzo(r) * gMul(), 3) : '—'}</td><td class="num">${gPrezzo(r) ? gE(num(r.litri) * gPrezzo(r)) : '—'}</td></tr>`).join('')}</tbody></table>${more}`;
     } else {
-      $('#ga-list').innerHTML = `<div class="list">${sh.map(r => `<div class="item" data-gas="${esc(r.id)}"><span class="ic ga-ic"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg></span><div class="main"><div class="t">${esc(plateFmt(plate(r.targa)))} · ${esc(r.uso)}</div><div class="s">${dd(r.data)} · ${esc(r.operatore || '—')}${num(r.km) ? ' · ' + fmtNum(num(r.km), 0) + ' km' : ''}</div></div><div class="amt">${fmtNum(num(r.litri), 1)} L</div></div>`).join('')}</div>${more}`;
+      $('#ga-list').innerHTML = `<div class="list">${sh.map(r => `<div class="item" data-gas="${esc(r.id)}"><span class="ic ga-ic"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg></span><div class="main"><div class="t">${esc(plateFmt(plate(r.targa)))} · ${esc(gasName(r.targa) || r.uso)}</div><div class="s">${dd(r.data)} · ${esc(r.operatore || '—')}${num(r.km) ? ' · ' + fmtNum(num(r.km), 0) + ' km' : ''}</div></div><div class="amt">${fmtNum(num(r.litri), 1)} L</div></div>`).join('')}</div>${more}`;
     }
   }
 
@@ -1913,11 +1916,16 @@
       },
       isNew ? null : () => { if (!confirm('Eliminare questo rifornimento?')) return; write([{ action: 'delete', sheet: 'Gasolio', id: r.id }]); toast('Rifornimento eliminato'); return true; });
   }
-  function formGasRent() {
-    const R = gasRent(), list = [...Object.entries(R), ['', ''], ['', '']];
-    openSheet('Noleggi mensili', `<p class="muted small" style="margin:0 0 12px">Canone mensile IVA esclusa dei mezzi a noleggio. Questi mezzi sono quelli mostrati in evidenza nella sezione Gasolio. Lascia vuoto l'importo per togliere un mezzo.</p>
-      ${list.map(([p, v], i) => `<div class="f-row"><label class="f"><span>Targa</span><input name="t${i}" value="${esc(p)}" autocapitalize="characters" placeholder="Es. GC193WV"></label><label class="f"><span>€ al mese</span><input name="v${i}" inputmode="decimal" value="${esc(v === '' ? '' : fmtIn(v))}" placeholder="0"></label></div>`).join('')}`,
-      fd => { const o = {}; list.forEach((_, i) => { const p = plate(fd.get('t' + i)), v = num(fd.get('v' + i)); if (p && v > 0) o[p] = v; }); setConfig('gasNoleggio', o); toast('Noleggi salvati'); return true; });
+  function formGasRent(focus) {
+    const R = gasRent(), N = gasNomi(), list = [...Object.entries(R), ['', ''], ['', '']];
+    openSheet('Mezzi principali', `<p class="muted small" style="margin:0 0 12px">Nome, targa e canone mensile (IVA esclusa) dei mezzi a noleggio: sono quelli mostrati in evidenza nella sezione Gasolio. Lascia vuoto il canone per togliere un mezzo.</p>
+      ${list.map(([p, v], i) => `<div class="ga-fr"><label class="f"><span>Nome</span><input name="n${i}" value="${esc(N[plate(p)] || '')}" placeholder="Es. Furgone Vasy"${plate(p) === focus || (!focus && i === 0) ? ' data-focus' : ''}></label><label class="f"><span>Targa</span><input name="t${i}" value="${esc(p)}" autocapitalize="characters" placeholder="Es. GC193WV"></label><label class="f"><span>€ al mese</span><input name="v${i}" inputmode="decimal" value="${esc(v === '' ? '' : fmtIn(v))}" placeholder="0"></label></div>`).join('')}`,
+      fd => {
+        const o = {}, nm = { ...N };
+        list.forEach((_, i) => { const p = plate(fd.get('t' + i)), v = num(fd.get('v' + i)), n = String(fd.get('n' + i) || '').trim(); if (!p) return; if (v > 0) o[p] = v; if (n) nm[p] = n; else delete nm[p]; });
+        write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'gasNoleggio', valore: JSON.stringify(o) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'gasNomi', valore: JSON.stringify(nm) } }]);
+        toast('Mezzi salvati'); return true;
+      });
   }
   function formGasPrice() {
     openSheet('Prezzo del gasolio', `<p class="muted small" style="margin:0 0 12px">Prezzo medio al litro IVA esclusa, usato per stimare i costi dei rifornimenti che non hanno un prezzo proprio.</p>
@@ -2005,8 +2013,8 @@
       w2['!cols'] = [12, 30, 13, 10, 12, 8, 14].map(w => ({ wch: w }));
       U.book_append_sheet(wb, w2, 'Mezzi');
       const rmx = rentMonths(gasP), RN = gasRent();
-      const w3 = U.aoa_to_sheet([['TARGA', 'NOLEGGIO €/MESE', 'MESI', 'NOLEGGIO PERIODO', 'CARBURANTE', 'TOTALE'], ...Object.entries(RN).map(([p, v]) => { const f = gCost(rows.filter(r => plate(r.targa) === plate(p))); return [plateFmt(plate(p)), num(v), rmx.length, num(v) * rmx.length, r2(f), r2(num(v) * rmx.length + f)]; })]);
-      w3['!cols'] = [12, 16, 8, 18, 14, 14].map(w => ({ wch: w }));
+      const w3 = U.aoa_to_sheet([['TARGA', 'NOME', 'NOLEGGIO €/MESE', 'MESI', 'NOLEGGIO PERIODO', 'CARBURANTE', 'TOTALE'], ...Object.entries(RN).map(([p, v]) => { const f = gCost(rows.filter(r => plate(r.targa) === plate(p))); return [plateFmt(plate(p)), gasName(p), num(v), rmx.length, num(v) * rmx.length, r2(f), r2(num(v) * rmx.length + f)]; })]);
+      w3['!cols'] = [12, 22, 16, 8, 18, 14, 14].map(w => ({ wch: w }));
       U.book_append_sheet(wb, w3, 'Noleggi');
       XLSX.writeFile(wb, `gasolio-${gasP || 'completo'}.xlsx`);
       busy(); toast('Excel scaricato');
@@ -2127,7 +2135,7 @@
 
     // classifiche
     const top5 = (arr, kf, vf, lf) => [...groupBy(arr, kf)].map(([k, v]) => ({ k, v: vf(v), n: v.length, l: lf ? lf(v) : '' })).filter(x => x.k && x.k !== '—').sort((a, b) => b.v - a.v).slice(0, 5);
-    const T1 = top5(P.att, r => r.centro || '—', sumT), T2 = top5(P.gls, r => r.citta + ' (' + r.prov + ')', v => gTot(v) * gMul(), v => String(v[0].destinatario || '').toUpperCase()), T3 = top5(P.gas, r => plate(r.targa), v => noPrice ? gSum(v, 'litri') : gCost(v) * gMul(), v => (v.map(r => gasNorm(r.uso)).filter(Boolean)[0] || ''));
+    const T1 = top5(P.att, r => r.centro || '—', sumT), T2 = top5(P.gls, r => r.citta + ' (' + r.prov + ')', v => gTot(v) * gMul(), v => String(v[0].destinatario || '').toUpperCase()), T3 = top5(P.gas, r => plate(r.targa), v => noPrice ? gSum(v, 'litri') : gCost(v) * gMul(), v => gasName(v[0].targa) || (v.map(r => gasNorm(r.uso)).filter(Boolean)[0] || ''));
     const box = (title, link, list, fmt, nm) => { const m = Math.max(...list.map(x => x.v), 1); return `<div class="card"><div class="card-h"><h3>${title}</h3><a class="link" href="#${link}">Tutti</a></div>${list.length ? `<div class="ov-top">${list.map((x, i) => `<div class="ov-tr" style="--d:${200 + i * 60}ms"><span class="ov-tn">${i + 1}</span><span class="ov-tm"><b>${esc(nm ? nm(x.k) : x.k)}</b><small>${x.l ? esc(x.l) + ' · ' : ''}${x.n} ${link === 'gasolio' ? 'pieni' : link === 'gls' ? 'sped.' : 'righe'}</small><span class="gd-b"><i style="width:${(x.v / m * 100).toFixed(1)}%"></i></span></span><b>${fmt(x.v)}</b></div>`).join('')}</div>` : '<div class="empty">Nessun dato</div>'}</div>`; };
     $('#ov-tops').innerHTML = box('Centri più costosi · attrezzatura', 'attrezzatura', T1, eur0) + box('Destinazioni GLS', 'gls', T2, eur0) + box(noPrice ? 'Mezzi · litri' : 'Mezzi · gasolio', 'gasolio', T3, noPrice ? v => fmtNum(v, 0) + ' L' : eur0, plateFmt);
   }
@@ -2190,6 +2198,7 @@
       if (t.closest('#ga-add')) { formGas(); return; }
       if (t.closest('#ga-price') || t.closest('#ga-price2')) { formGasPrice(); return; }
       if (t.closest('#ga-rent')) { formGasRent(); return; }
+      const gnm = t.closest('[data-gname]'); if (gnm) { e.stopPropagation(); formGasRent(gnm.dataset.gname); return; }
       if (t.closest('#ga-allv')) { gasShowAll = !gasShowAll; renderGas(); return; }
       if (t.closest('#ga-prev') || t.closest('#ga-next')) { const o = [...$('#ga-per').options].map(x => x.value), i = o.indexOf(gasP) + (t.closest('#ga-prev') ? 1 : -1); if (i >= 0 && i < o.length) { gasP = o[i]; gasAnim = true; renderGas(); } return; }
       const gap = t.closest('[data-gaper]'); if (gap) { gasP = gap.dataset.gaper; gasAnim = true; renderGas(); return; }
