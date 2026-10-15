@@ -41,6 +41,7 @@
   let db = LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
   if (!db.gls) db.gls = [];
   if (!db.gasolio) db.gasolio = [];
+  if (!db.fatture) db.fatture = [];
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
   const isLocal = () => url === 'local';
@@ -147,7 +148,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -192,7 +193,7 @@
   async function api(action, extra) { return (await post(action, extra)).result; }
   function lockApp(msg) {
     tok = ''; LS.set('cdc_tok', '');
-    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [] };
+    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [] };
     try { localStorage.removeItem('cdc_data'); } catch {}
     showLogin(msg);
   }
@@ -235,7 +236,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [] };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []) };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -270,7 +271,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', impostazioni: 'Impostazioni' };
   function go() {
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
@@ -278,13 +279,14 @@
     if (view === 'home') ovAnim = true;
     if (view === 'gls') glsAnim = true;
     if (view === 'gasolio') gasAnim = true;
+    if (view === 'fatture') faAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
     $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home';
-    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' ? 'hidden' : '';
+    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -313,7 +315,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, impostazioni: renderSettings }[view];
+    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -1511,7 +1513,7 @@
     }
   }
 
-  function renderGlsAnom(rows) {
+  function glsChecks(rows) {
     const A = [];
     const c1 = rows.filter(r => r.contratto === 'C1' && num(r.kgTass) < 30), c1avg = c1.length ? gTot(c1) / c1.length : 0;
     const bad = rows.filter(r => r.contratto === 'C2' && num(r.kgTass) < 30);
@@ -1526,6 +1528,10 @@
     if (int.length) A.push({ t: 'info', h: 'Costi interni', d: `${int.length} spedizioni verso le nostre sedi (${[...new Set(int.map(r => r.citta))].map(esc).join(', ')}): da non riaddebitare.`, v: gE(gTot(int)), ids: int.map(r => r.nsped) });
     const nd = rows.filter(r => r.gg === '' || r.gg == null);
     if (nd.length) A.push({ t: 'info', h: 'Consegna non registrata', d: `${nd.length} spedizioni senza data di consegna (${[...new Set(nd.map(r => r.citta))].map(esc).join(', ')}): verificare il tracking prima di fatturare.`, v: '—', ids: nd.map(r => r.nsped) });
+    return A;
+  }
+  function renderGlsAnom(rows) {
+    const A = glsChecks(rows);
     const I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
     $('#gl-anom').innerHTML = `<div class="card-h"><h3>Anomalie e possibili risparmi</h3><span class="muted small">${A.length ? A.length + ' punti da controllare' : 'nessuna anomalia'}</span></div>` +
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span><small>${x.ids.slice(0, 6).map(esc).join(' · ')}${x.ids.length > 6 ? ' …' : ''}</small></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
@@ -1878,7 +1884,7 @@
     }
   }
 
-  function renderGasAnom(rows, V) {
+  function gasChecks(rows, V) {
     const A = [], ids = new Set(rows.map(r => r.id));
     const noKm = rows.filter(r => !num(r.km));
     if (noKm.length) A.push({ t: 'warn', h: 'Chilometri mancanti', d: `${noKm.length} rifornimenti senza km: non si può calcolare il consumo di quei pieni (${[...new Set(noKm.map(r => plateFmt(plate(r.targa))))].join(', ')}).`, v: L(gSum(noKm, 'litri'), 0), ids: noKm.map(r => r.id) });
@@ -1891,6 +1897,10 @@
     if (noOp.length) A.push({ t: 'info', h: 'Operatore non indicato', d: `${noOp.length} rifornimenti senza chi li ha fatti.`, v: L(gSum(noOp, 'litri'), 0), ids: noOp.map(r => r.id) });
     const fix = rows.filter(r => /data corretta/i.test(r.note || ''));
     if (fix.length) A.push({ t: 'info', h: 'Date corrette in importazione', d: fix.map(r => `${plateFmt(plate(r.targa))}: ${esc(r.note)}`).join(' · '), v: fix.length + '', ids: fix.map(r => r.id) });
+    return A;
+  }
+  function renderGasAnom(rows, V) {
+    const A = gasChecks(rows, V);
     const I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
     $('#ga-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` +
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gaq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia</div>');
@@ -2112,14 +2122,9 @@
     const zero = P.att.filter(r => !num(r.prezzo)).length;
     const glsBad = P.gls.filter(r => r.contratto === 'C2' && num(r.kgTass) < 30).length, glsNoD = P.gls.filter(r => r.gg === '' || r.gg == null).length;
     const gasNoKm = P.gas.filter(r => !num(r.km)).length, gasNoOp = P.gas.filter(r => !String(r.operatore || '').trim() || String(r.operatore).trim() === '?').length;
-    const AL = [
-      zero && { a: 'att', h: `${fmtNum(zero, 0)} righe senza prezzo`, d: 'Attrezzatura · il totale è sottostimato', go: 'movzero' },
-      glsBad && { a: 'gls', h: `${glsBad} spedizioni leggere sul Contratto 2`, d: 'GLS · con il Contratto 1 costerebbero meno', go: 'gls' },
-      glsNoD && { a: 'gls', h: `${glsNoD} consegne non registrate`, d: 'GLS · verificare il tracking', go: 'gls' },
-      noPrice && { a: 'gas', h: 'Prezzo del gasolio non impostato', d: `Gasolio · ${fmtNum(lit, 0)} litri senza costo`, go: 'gasprice' },
-      gasNoKm && { a: 'gas', h: `${gasNoKm} rifornimenti senza km`, d: 'Gasolio · consumo non calcolabile', go: 'gasolio' },
-      gasNoOp && { a: 'gas', h: `${gasNoOp} rifornimenti senza operatore`, d: 'Gasolio · chi ha fatto il pieno?', go: 'gasolio' }
-    ].filter(Boolean);
+    P.fat = ovP ? faRows().filter(r => String(r.data).slice(0, 7) === ovP) : faRows();
+    const CK = allChecks(P, ovP), AL = CK, OVA = { att: 'Attrezzatura', gls: 'GLS', gas: 'Gasolio', fat: 'Fatture' };
+    const ckW = CK.filter(x => x.t === 'warn').length;
     // sparkline per area
     const spark = (k, i) => {
       const vals = byM.map(x => x[k]); if (vals.length < 2) return '';
@@ -2147,7 +2152,7 @@
           ${AREAS.map((a, i) => `<div class="gh-k"><span><i class="ov-dot a-${a.k}"></i>${a.t}</span><b data-ovk="${i}">0 €</b><small>${a.k === 'gas' && noPrice ? 'solo noleggi · prezzo €/L da impostare' : (T ? fmtNum(pct(V[a.k], T), 1) + '% del totale' : '—')}</small></div>`).join('')}
           <div class="gh-k"><span>Media mensile</span><b data-ovk="3">0 €</b><small>${byM.length} mesi con dati</small></div>
           <div class="gh-k"><span>Mese più costoso</span><b>${top ? esc(MESI[Number(top.m.slice(5)) - 1].replace(/^./, c => c.toUpperCase())) : '—'}</b><small>${top ? esc(eur0(top.t)) : ''}</small></div>
-          <div class="gh-k"><span>Da controllare</span><b data-ovk="4">0</b><small>${AL.length ? 'vedi elenco sotto' : 'tutto in ordine'}</small></div>
+          <div class="gh-k"><span>Da controllare</span><b data-ovk="4">0</b><small>${AL.length ? `${ckW} importanti` : 'tutto in ordine'}</small></div>
         </div>
       </div>
       <div class="ov-areas">${AREAS.map((a, i) => { const st = stats[a.k]();
@@ -2157,11 +2162,19 @@
           ${a.k === 'gas' && noPrice ? `<div class="ov-note">noleggi · ${fmtNum(lit, 0)} litri ancora senza prezzo</div>` : `<div class="ov-note">${T ? fmtNum(pct(V[a.k], T), 1) : 0}% della spesa${ovP ? '' : a.k === 'att' && undated ? ` · ${eur0(undated)} senza data` : ` · media ${eur0(byM.length ? byM.reduce((s, x) => s + x[a.k], 0) / byM.length : 0)}/mese`}</div>`}
           ${spark(a.k, i)}
           <div class="ov-as">${st.map(([v, l]) => `<div><b>${esc(String(v))}</b><small>${l}</small></div>`).join('')}</div>
-        </a>`; }).join('')}</div>
+        </a>`; }).join('')}${(() => { const F = P.fat, open = F.filter(r => !faPaid(r)), late = F.filter(faLate); return `<a class="card ov-area a-fat" href="#fatture" style="--d:420ms">
+          <div class="ov-ah"><span class="ov-ic a-fat"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><span class="ov-at">Fatture fornitori</span><span class="ov-go">Apri<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+          <div class="ov-av"><b>${eur0(open.reduce((a, r) => a + num(r.totale), 0))}</b>${late.length ? `<span class="ov-d up">${late.length} ${late.length === 1 ? "scaduta" : "scadute"}</span>` : ''}</div>
+          <div class="ov-note">da pagare · non sommate alla spesa (sono già negli acquisti)</div>
+          <div class="ov-fbar">${F.length ? `<i style="flex:${F.length - open.length}" class="pd"></i><i style="flex:${open.length - late.length}" class="op"></i><i style="flex:${late.length}" class="lt"></i>` : ''}</div>
+          <div class="ov-as"><div><b>${F.length}</b><small>fatture</small></div><div><b>${eur0(F.reduce((a, r) => a + faV(r), 0))}</b><small>fatturato</small></div><div><b>${F.filter(r => faLink(r).ok).length}/${F.length}</b><small>verificate</small></div></div>
+        </a>`; })()}</div>
       <div class="card ov-trend"><div class="card-h"><h3>Spesa mese per mese</h3>${!ovP && undated ? `<span class="muted small">${esc(eur0(undated))} di attrezzatura senza data non sono nel grafico</span>` : ''}<span class="ov-leg">${AREAS.map(a => `<span><i class="a-${a.k}"></i>${a.t}</span>`).join('')}</span></div><div class="ov-bars" id="ov-bars"></div></div>
+      <div class="card ov-ck" id="ov-ck"><div class="card-h"><h3>Cose da verificare</h3><span class="muted small">${CK.length ? `${CK.length} punti · ${ckW} importanti` : 'tutto coincide'}</span></div>
+        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'fat'].map(k => [k, OVA[k], CK.filter(x => x.a === k).length])].map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}"${n || !k ? '' : ' disabled'}>${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
+        ${CK.length ? `<div class="ov-cl">${CK.map((x, i) => `<button type="button" class="ov-ci ${x.t}" data-ovgo="${x.go}" data-cka="${x.a}" style="--d:${150 + Math.min(i, 12) * 45}ms"><span class="ov-cl-l"></span><span class="ov-cm"><span class="ov-ct"><em class="ov-tag t-${x.a}">${OVA[x.a]}</em><b>${x.h}</b></span><small>${x.d}</small></span><b class="ov-cv">${x.v}</b><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>` : '<div class="empty">Tutto coincide: nessuna anomalia trovata</div>'}</div>
       <div class="ov-2">
-        <div class="card"><div class="card-h"><h3>Da controllare</h3><span class="muted small">${AL.length ? AL.length + ' punti' : 'nessun problema'}</span></div>
-          ${AL.length ? `<div class="ov-al">${AL.map((x, i) => `<button type="button" class="ov-ar" data-ovgo="${x.go}" style="--d:${200 + i * 60}ms"><span class="ov-ad a-${x.a}"></span><span class="ov-am"><b>${esc(x.h)}</b><small>${esc(x.d)}</small></span><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>'}</div>
+        <div class="card ov-aic" id="ov-ai"></div>
         <div class="card"><div class="card-h"><h3>Ultimi movimenti</h3><span class="muted small">tutte le aree</span></div><div class="ov-feed" id="ov-feed"></div></div>
       </div>
       <div class="ov-3" id="ov-tops"></div>`;
@@ -2182,6 +2195,7 @@
     ].sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
     $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi a-${x.a}"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
 
+    renderOvAI(() => ovSummary(P, V, byM, CK));
     // classifiche
     const top5 = (arr, kf, vf, lf) => [...groupBy(arr, kf)].map(([k, v]) => ({ k, v: vf(v), n: v.length, l: lf ? lf(v) : '' })).filter(x => x.k && x.k !== '—').sort((a, b) => b.v - a.v).slice(0, 5);
     const T1 = top5(P.att, r => r.centro || '—', sumT), T2 = top5(P.gls, r => r.citta + ' (' + r.prov + ')', v => gTot(v) * gMul(), v => String(v[0].destinatario || '').toUpperCase()), T3 = top5(P.gas, r => plate(r.targa), v => noPrice ? gSum(v, 'litri') : gCost(v) * gMul(), v => gasName(v[0].targa) || (v.map(r => gasNorm(r.uso)).filter(Boolean)[0] || ''));
@@ -2206,17 +2220,363 @@
     </svg>`;
   }
 
+  /* =========================================================
+     FATTURE FORNITORI (es. Lyreco)
+     ========================================================= */
+  let faP = '', faAnim = true, faF = { q: '', forn: '', stato: '' }, faLimit = 80;
+  const faRows = () => db.fatture || [];
+  const faOk = () => isLocal() || !db.v || db.v >= 'cdc-1.4';
+  const faMonths = () => [...new Set(faRows().map(r => String(r.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+  const faV = r => num(ivaOn ? r.totale || num(r.imponibile) + num(r.imposta) : r.imponibile || num(r.totale) - num(r.imposta));
+  const faSum = arr => arr.reduce((a, r) => a + faV(r), 0);
+  const faPaid = r => /pagat/i.test(r.stato || '');
+  const faLate = r => !faPaid(r) && validD(r.scadenza) && String(r.scadenza).slice(0, 10) < today();
+  const faSoon = r => !faPaid(r) && validD(r.scadenza) && !faLate(r) && (parseD(r.scadenza) - parseD(today())) / 864e5 <= 7;
+  const faRighe = r => { try { const x = JSON.parse(r.righe || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } };
+  const faDdt = r => String(r.ddt || '').split(/[,;\s]+/).map(x => x.replace(/[^0-9a-z]/gi, '').toUpperCase()).filter(x => x.length > 2);
+  const normDoc = s => String(s || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
+  const fornKey = s => String(s || '').toUpperCase().replace(/S\.?R\.?L\.?|S\.?P\.?A\.?|ITALIA|[^A-Z0-9 ]/g, ' ').trim().split(/\s+/)[0] || '';
+  // collega la fattura agli acquisti registrati: prima per numero di DDT/fattura, poi per codici articolo dello stesso fornitore
+  function faLink(r) {
+    const docs = new Set([...faDdt(r), normDoc(r.numero)].filter(Boolean)), fk = fornKey(r.fornitore);
+    let rows = db.movimenti.filter(m => m.ndoc && docs.has(normDoc(m.ndoc)));
+    let how = rows.length ? 'documento' : '';
+    if (!rows.length) {
+      const codes = new Set(faRighe(r).map(x => String(x.codice || '').trim().toUpperCase()).filter(Boolean));
+      if (codes.size) {
+        const d0 = validD(r.data) ? parseD(r.data).getTime() : null;
+        rows = db.movimenti.filter(m => codes.has(String(m.codice || '').trim().toUpperCase()) && (!fk || !m.fornitore || fornKey(m.fornitore) === fk) && (!d0 || !validD(m.data) || Math.abs(parseD(m.data) - d0) < 75 * 864e5));
+        if (rows.length) how = 'codici';
+      }
+    }
+    const tot = r2(rows.reduce((a, m) => a + totN(m), 0)), imp = num(r.imponibile);
+    const diff = rows.length ? r2(imp - tot) : null;
+    return { rows, tot, how, diff, ok: rows.length && Math.abs(diff) <= Math.max(1, imp * .01) };
+  }
+  // prezzi fatturati diversi dall'ultimo prezzo d'acquisto in archivio
+  function faPriceDiffs(r) {
+    const out = [];
+    faRighe(r).forEach(x => {
+      const c = String(x.codice || '').trim().toUpperCase(); if (!c || !num(x.prezzo)) return;
+      const ms = db.movimenti.filter(m => String(m.codice || '').trim().toUpperCase() === c && num(m.prezzo)).sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+      if (!ms.length) return;
+      const ref = num(ms[0].prezzo), p = num(x.prezzo), d = (p / ref - 1);
+      if (Math.abs(d) > .02) out.push({ codice: c, descrizione: x.descrizione || ms[0].descrizione, prezzo: p, rif: ref, d, q: num(x.quantita) || 1 });
+    });
+    return out;
+  }
+  function faChecks(rows) {
+    const A = [];
+    const late = rows.filter(faLate); if (late.length) A.push({ t: 'warn', h: 'Fatture scadute da pagare', d: `${late.length} fatture oltre la scadenza: ${late.slice(0, 4).map(r => `${esc(r.fornitore)} n. ${esc(r.numero)}`).join(', ')}${late.length > 4 ? '…' : ''}.`, v: eur(late.reduce((a, r) => a + num(r.totale), 0)), ids: late.map(r => r.id) });
+    const soon = rows.filter(faSoon); if (soon.length) A.push({ t: 'info', h: 'In scadenza nei prossimi 7 giorni', d: `${soon.length} fatture da pagare a breve.`, v: eur(soon.reduce((a, r) => a + num(r.totale), 0)), ids: soon.map(r => r.id) });
+    const badTot = rows.filter(r => num(r.totale) && num(r.imponibile) && Math.abs(num(r.imponibile) + num(r.imposta) - num(r.totale)) > .05);
+    if (badTot.length) A.push({ t: 'warn', h: 'Totali che non tornano', d: `In ${badTot.length} fatture imponibile + IVA non è uguale al totale.`, v: badTot.length + '', ids: badTot.map(r => r.id) });
+    const badR = rows.filter(r => { const R = faRighe(r); if (!R.length || !num(r.imponibile)) return false; const s = R.reduce((a, x) => a + (num(x.totale) || num(x.quantita) * num(x.prezzo)), 0); return Math.abs(s - num(r.imponibile)) > Math.max(1, num(r.imponibile) * .01); });
+    if (badR.length) A.push({ t: 'info', h: 'Righe diverse dall\'imponibile', d: `In ${badR.length} fatture la somma delle righe non coincide con l'imponibile (spese di trasporto, sconti o righe non lette).`, v: badR.length + '', ids: badR.map(r => r.id) });
+    const dup = [...groupBy(rows.filter(r => r.numero), r => fornKey(r.fornitore) + '|' + normDoc(r.numero))].filter(([, v]) => v.length > 1);
+    dup.forEach(([, v]) => A.push({ t: 'warn', h: 'Fattura registrata due volte', d: `${esc(v[0].fornitore)} n. ${esc(v[0].numero)} compare ${v.length} volte.`, v: eur(num(v[0].totale)), ids: v.map(r => r.id) }));
+    const L = rows.map(r => ({ r, l: faLink(r) }));
+    const diff = L.filter(x => x.l.rows.length && !x.l.ok);
+    if (diff.length) A.push({ t: 'warn', h: 'Fattura diversa dagli acquisti registrati', d: diff.slice(0, 3).map(x => `${esc(x.r.fornitore)} n. ${esc(x.r.numero)}: fattura ${eur(num(x.r.imponibile))}, acquisti ${eur(x.l.tot)}`).join(' · ') + (diff.length > 3 ? ' …' : ''), v: eur(diff.reduce((a, x) => a + Math.abs(x.l.diff), 0)), ids: diff.map(x => x.r.id) });
+    const none = L.filter(x => !x.l.rows.length);
+    if (none.length) A.push({ t: 'info', h: 'Fatture senza acquisti collegati', d: `${none.length} fatture non trovano righe in Attrezzatura (stesso numero DDT o stessi codici): verifica che la merce sia stata registrata.`, v: eur(none.reduce((a, x) => a + num(x.r.imponibile), 0)), ids: none.map(x => x.r.id) });
+    const pd = rows.flatMap(r => faPriceDiffs(r).map(x => ({ ...x, r }))).filter(x => x.d > 0);
+    if (pd.length) A.push({ t: 'warn', h: 'Prezzi più alti del solito', d: pd.sort((a, b) => b.d - a.d).slice(0, 3).map(x => `${esc(String(x.descrizione).slice(0, 48))}: ${eurP(x.prezzo)} invece di ${eurP(x.rif)} (+${fmtNum(x.d * 100, 0)}%)`).join(' · '), v: eur(pd.reduce((a, x) => a + (x.prezzo - x.rif) * x.q, 0)) + ' in più', ids: [...new Set(pd.map(x => x.r.id))] });
+    const noPdf = rows.filter(r => !r.pdf); if (noPdf.length && rows.length) A.push({ t: 'info', h: 'Fatture senza documento allegato', d: `${noPdf.length} fatture non hanno il PDF salvato.`, v: noPdf.length + '', ids: noPdf.map(r => r.id) });
+    return A;
+  }
+
+  function renderFat() {
+    const months = faMonths();
+    if (faP && !months.includes(faP)) faP = '';
+    $('#fa-per').innerHTML = `<option value=""${faP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === faP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(faP);
+    $('#fa-prev').disabled = ix >= opts.length - 1; $('#fa-next').disabled = ix <= 0;
+    $('#fa-ai').hidden = !aiReady();
+    sub(`${ivaOn ? 'IVA inclusa' : 'imponibile, IVA esclusa'} · fatture dei fornitori`);
+    const all = faRows(), rows = faP ? all.filter(r => String(r.data).slice(0, 7) === faP) : all;
+    const anim = faAnim && !reduced(); faAnim = false;
+    const body = $('#fa-body'); body.classList.toggle('cc-anim', anim);
+    const warn = faOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare le fatture.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.4 (Code.gs nuovo).</span></div>`;
+    if (!rows.length) {
+      body.innerHTML = warn + `<div class="gl-hero fa-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${faArt()}</div><div class="gh-main"><span class="gh-lbl">Fatture fornitori</span><h3>Nessuna fattura registrata</h3><p>${aiReady() ? 'Premi «Leggi fattura» e carica il PDF: l\'IA compila tutto da sola.' : 'Aggiungi una fattura o importa un Excel. Con la chiave Gemini l\'app legge da sola i PDF.'}</p></div></div></div>`;
+      return;
+    }
+    const T = faSum(rows), imp = rows.reduce((a, r) => a + num(r.imponibile), 0), iva = rows.reduce((a, r) => a + num(r.imposta), 0), tt = rows.reduce((a, r) => a + num(r.totale), 0);
+    const open = rows.filter(r => !faPaid(r)), late = rows.filter(faLate);
+    const L = rows.map(r => ({ r, l: faLink(r) })), okN = L.filter(x => x.l.ok).length, difN = L.filter(x => x.l.rows.length && !x.l.ok).length;
+    const forn = new Set(rows.map(r => fornKey(r.fornitore))).size;
+    const per = faP ? mLabel(faP) : months.length > 1 ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : months.length ? mLabel(months[0]) : '';
+    const nF = n => `${n} ${n === 1 ? 'fattura' : 'fatture'}`;
+    const K = [['Imponibile', imp, eur0, nF(rows.length)], ['IVA', iva, eur0, imp ? fmtNum(iva / imp * 100, 1) + '% medio' : ''], ['Totale', tt, eur0, 'IVA inclusa'],
+      ['Da pagare', open.reduce((a, r) => a + num(r.totale), 0), eur0, nF(open.length)], ['Scadute', late.reduce((a, r) => a + num(r.totale), 0), eur0, nF(late.length)],
+      ['Verifica acquisti', okN, v => `${Math.round(v)} / ${rows.length}`, difN ? `${difN} con differenze` : 'coincidono']];
+    body.innerHTML = warn + `
+      <div class="gl-hero fa-hero">
+        <div class="gh-top"><div class="gh-art">${faArt()}</div>
+        <div class="gh-main"><span class="gh-lbl">Fatture fornitori · ${esc(per)}</span><div class="gh-big k-fat">0 €</div>
+          <div class="gh-sub"><span>${nF(rows.length)}</span><span>${forn} ${forn === 1 ? 'fornitore' : 'fornitori'}</span>${late.length ? `<span class="gl-d up">${late.length} ${late.length === 1 ? "scaduta" : "scadute"}</span>` : ''}</div></div></div>
+        <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-fak="${i}">0</b><small>${s}</small></div>`).join('')}</div>
+      </div>
+      <div class="card" id="fa-anom"></div>
+      <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>Per fornitore</h3><span class="muted small">${ivaLbl()}</span></div><div class="bars" id="fa-forn"></div></div>
+        <div class="card"><div class="card-h"><h3>Scadenze</h3><span class="muted small">${open.length} da pagare</span></div><div id="fa-due"></div></div>
+      </div>
+      ${months.length > 1 && !faP ? `<div class="card"><div class="card-h"><h3>Mese per mese</h3><span class="muted small">${ivaLbl()}</span></div><div class="mbars fa-bars" id="fa-tr"></div></div>` : ''}
+      <div class="card gl-list"><div class="card-h"><h3>Tutte le fatture</h3><span class="muted small" id="fa-cnt"></span></div>
+        <div class="filters f3 gl-f"><input id="fa-q" type="search" placeholder="Cerca fornitore, numero, DDT…" value="${esc(faF.q)}"><select id="fa-ff"></select><select id="fa-fs"><option value="">Tutti gli stati</option><option value="open"${faF.stato === 'open' ? ' selected' : ''}>Da pagare</option><option value="late"${faF.stato === 'late' ? ' selected' : ''}>Scadute</option><option value="paid"${faF.stato === 'paid' ? ' selected' : ''}>Pagate</option><option value="diff"${faF.stato === 'diff' ? ' selected' : ''}>Non coincidono con gli acquisti</option></select></div>
+        <div id="fa-list"></div></div>`;
+    countTo($('.k-fat', body), T, eur0);
+    $$('[data-fak]', body).forEach(el => { const i = +el.dataset.fak; el._v = 0; countTo(el, K[i][1], K[i][2]); });
+    // anomalie
+    const A = faChecks(rows), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
+    $('#fa-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` + (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-faq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia</div>');
+    // fornitori
+    const byF = [...groupBy(rows, r => String(r.fornitore || '—').trim().toUpperCase())].map(([k, v]) => ({ k, v: faSum(v), n: v.length })).sort((a, b) => b.v - a.v), mf = Math.max(...byF.map(x => x.v), 1);
+    $('#fa-forn').innerHTML = byF.slice(0, 10).map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms" data-faforn="${esc(x.k)}"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} ${x.n === 1 ? 'fattura' : 'fatture'}</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mf * 100).toFixed(2)}%"></div></div></div>`).join('');
+    // scadenze
+    const due = open.slice().sort((a, b) => String(a.scadenza || '9999').localeCompare(String(b.scadenza || '9999'))).slice(0, 8);
+    $('#fa-due').innerHTML = due.length ? `<div class="fa-due">${due.map((r, i) => { const d = validD(r.scadenza) ? Math.round((parseD(r.scadenza) - parseD(today())) / 864e5) : null; return `<div class="fa-dr${faLate(r) ? ' late' : faSoon(r) ? ' soon' : ''}" data-fat="${esc(r.id)}" style="--d:${200 + i * 50}ms"><span class="fa-dd"><b>${d == null ? '—' : d < 0 ? Math.abs(d) : d}</b><small>${d == null ? 'senza scad.' : d < 0 ? 'gg fa' : d === 0 ? 'oggi' : 'giorni'}</small></span><span class="fa-dm"><b>${esc(r.fornitore)}</b><small>n. ${esc(r.numero)} · scade ${validD(r.scadenza) ? esc(shortDate(r.scadenza)) : '—'}</small></span><b>${eur(num(r.totale))}</b></div>`; }).join('')}</div>` : '<div class="empty">Tutto pagato</div>';
+    if ($('#fa-tr')) { const mm = months.map(k => ({ k, v: faSum(all.filter(r => String(r.data).slice(0, 7) === k)) })), mx = Math.max(...mm.map(x => x.v), 1); $('#fa-tr').innerHTML = mm.map((x, i) => `<div class="mb gl-mb" data-faper="${x.k}" title="${esc(mLabel(x.k))}: ${esc(eur(x.v))}"><span class="mbv">${esc(eur0(x.v))}</span><i class="${x.v === mx ? 'cur' : ''}" style="height:${Math.max(3, x.v / mx * 100)}%;animation-delay:${i * 50}ms"></i><span class="mbl">${esc(MESI[Number(x.k.slice(5)) - 1].slice(0, 3))}</span></div>`).join(''); }
+    $('#fa-ff').innerHTML = `<option value="">Tutti i fornitori</option>` + byF.map(x => `<option value="${esc(x.k)}"${faF.forn === x.k ? ' selected' : ''}>${esc(x.k)}</option>`).join('');
+    renderFatList(rows);
+  }
+  function renderFatList(rows, only) {
+    rows = rows || (faP ? faRows().filter(r => String(r.data).slice(0, 7) === faP) : faRows());
+    const q = faF.q.trim().toLowerCase();
+    const Ls = (only || rows).filter(r => (!faF.forn || String(r.fornitore || '').trim().toUpperCase() === faF.forn) && (!q || `${r.fornitore} ${r.numero} ${r.ddt} ${r.note} ${r.centro}`.toLowerCase().includes(q))
+      && (!faF.stato || (faF.stato === 'open' && !faPaid(r)) || (faF.stato === 'late' && faLate(r)) || (faF.stato === 'paid' && faPaid(r)) || (faF.stato === 'diff' && (() => { const l = faLink(r); return !l.ok; })())))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    $('#fa-cnt').textContent = `${Ls.length} fatture · ${eur(faSum(Ls))}`;
+    if (!Ls.length) { $('#fa-list').innerHTML = '<div class="empty">Nessuna fattura</div>'; return; }
+    const sh = Ls.slice(0, faLimit), more = Ls.length > faLimit ? `<div class="more-row"><button class="btn sm" id="fa-more">Mostra tutte (${Ls.length})</button></div>` : '';
+    const st = r => faPaid(r) ? '<span class="chip paid">Pagata</span>' : faLate(r) ? '<span class="chip late">Scaduta</span>' : '<span class="chip soon">Da pagare</span>';
+    const vf = r => { const l = faLink(r); return l.ok ? '<span class="chip paid">Coincide</span>' : l.rows.length ? `<span class="chip late" title="Acquisti registrati: ${esc(eur(l.tot))}">${l.diff > 0 ? '+' : ''}${esc(eur(l.diff))}</span>` : '<span class="chip">Non collegata</span>'; };
+    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+    if (isDesk()) $('#fa-list').innerHTML = `<table class="tbl gl-st"><thead><tr><th>Data</th><th>Fornitore</th><th>Numero</th><th>Scadenza</th><th class="r">Imponibile</th><th class="r">Totale</th><th>Stato</th><th>Verifica acquisti</th><th></th></tr></thead><tbody>
+      ${sh.map(r => `<tr data-fat="${esc(r.id)}"><td class="d">${dd(r.data)}</td><td><b>${esc(r.fornitore)}</b></td><td class="m2">${esc(r.numero)}</td><td class="m2">${dd(r.scadenza)}</td><td class="num">${eur(num(r.imponibile))}</td><td class="num amt">${eur(num(r.totale))}</td><td>${st(r)}</td><td>${vf(r)}</td><td>${r.pdf ? '<span class="fa-clip" title="PDF salvato"><svg viewBox="0 0 24 24"><path d="M21 12.5 12.7 20.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></span>' : ''}</td></tr>`).join('')}</tbody></table>${more}`;
+    else $('#fa-list').innerHTML = `<div class="list">${sh.map(r => `<div class="item" data-fat="${esc(r.id)}"><span class="ic fa-ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><div class="main"><div class="t">${esc(r.fornitore)} · n. ${esc(r.numero)}</div><div class="s">${dd(r.data)} · ${faPaid(r) ? 'pagata' : faLate(r) ? 'scaduta' : 'da pagare'}</div></div><div class="amt">${eur(faV(r))}</div></div>`).join('')}</div>${more}`;
+  }
+
+  function faDetail(id) {
+    const r = faRows().find(x => x.id === id); if (!r) return;
+    const R = faRighe(r), l = faLink(r), pd = faPriceDiffs(r), pdm = new Map(pd.map(x => [x.codice, x]));
+    openSheet(`${r.fornitore} · n. ${r.numero}`, `
+      <div class="kv">${[['Data', validD(r.data) ? shortDate(r.data) : '—'], ['Scadenza', validD(r.scadenza) ? shortDate(r.scadenza) : '—'], ['Stato', faPaid(r) ? `Pagata${validD(r.pagata) ? ' il ' + shortDate(r.pagata) : ''}` : faLate(r) ? 'Scaduta' : 'Da pagare'], ['Centro di costo', r.centro || '—'], ['DDT / ordini', r.ddt || '—'], ['Note', r.note || '—']].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
+      <div class="iva-sum" style="margin-top:14px"><div><span>Imponibile</span><b>${eur(num(r.imponibile))}</b></div><div><span>IVA</span><b>${eur(num(r.imposta))}</b></div><div class="t"><span>Totale fattura</span><b>${eur(num(r.totale))}</b></div></div>
+      <div class="fa-chk ${l.ok ? 'ok' : l.rows.length ? 'ko' : ''}"><b>${l.ok ? 'Coincide con gli acquisti registrati' : l.rows.length ? 'Non coincide con gli acquisti registrati' : 'Nessun acquisto collegato'}</b><span>${l.rows.length ? `${l.rows.length} righe in Attrezzatura (collegate per ${l.how}) per ${eur(l.tot)} · differenza ${eur(l.diff)}` : 'Nessuna riga di Attrezzatura con lo stesso DDT o gli stessi codici.'}</span></div>
+      ${R.length ? `<div class="fa-rows"><div class="fa-rh"><span>Articolo</span><span>Q.tà</span><span>Prezzo</span><span>Totale</span></div>${R.map(x => { const p = pdm.get(String(x.codice || '').trim().toUpperCase()); return `<div class="fa-rr${p ? ' warn' : ''}"><span><b>${esc(x.descrizione || '')}</b><small>${esc(x.codice || '')}${p ? ` · in archivio ${eurP(p.rif)} (${p.d > 0 ? '+' : ''}${fmtNum(p.d * 100, 0)}%)` : ''}</small></span><span>${qtyFmt(num(x.quantita))}</span><span>${eurP(num(x.prezzo))}</span><span>${eur(num(x.totale) || num(x.quantita) * num(x.prezzo))}</span></div>`; }).join('')}</div>` : ''}
+      <div class="row-btns" style="margin-top:14px">${r.pdf ? '<button type="button" class="btn sm" id="fa-open">Apri documento</button>' : ''}<button type="button" class="btn sm" id="fa-pay">${faPaid(r) ? 'Segna da pagare' : 'Segna pagata oggi'}</button><button type="button" class="btn sm" id="fa-edit">Modifica</button>${R.length && !l.rows.length ? '<button type="button" class="btn sm" id="fa-tomov">Aggiungi le righe ad Attrezzatura</button>' : ''}</div>`,
+      null, () => { if (!confirm('Eliminare questa fattura? (il documento resta nel tuo Drive)')) return; write([{ action: 'delete', sheet: 'Fatture', id: r.id }]); toast('Fattura eliminata'); return true; }, 'Chiudi');
+    $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
+    const o = $('#fa-open'); if (o) o.onclick = () => openDoc(r.pdf, `${r.fornitore} ${r.numero}`);
+    $('#fa-pay').onclick = () => { write([{ action: 'upsert', sheet: 'Fatture', row: { ...r, stato: faPaid(r) ? 'da pagare' : 'pagata', pagata: faPaid(r) ? '' : today() } }]); closeSheet(); toast(faPaid(r) ? 'Segnata da pagare' : 'Segnata come pagata'); };
+    $('#fa-edit').onclick = () => { closeSheet(); setTimeout(() => formFat(r), 250); };
+    const tm = $('#fa-tomov'); if (tm) tm.onclick = () => { closeSheet(); setTimeout(() => openScan({ fornitore: r.fornitore, data: r.data, ndoc: r.numero }, R.filter(x => x.descrizione).map(x => ({ ...x, quantita: num(x.quantita) || 1, prezzo: num(x.prezzo) }))), 250); };
+  }
+  function formFat(r, file) {
+    if (!faOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.4)');
+    const isNew = !r || !faRows().some(x => x.id === r.id);
+    r = { id: 'fa' + uid(), fornitore: '', numero: '', data: today(), scadenza: '', imponibile: '', imposta: '', totale: '', centro: '', categoria: '', stato: 'da pagare', pagata: '', ddt: '', righe: '', pdf: '', note: '', ...(r || {}) };
+    const R = faRighe(r), forn = [...new Set(faRows().map(x => String(x.fornitore || '').trim()).filter(Boolean))];
+    openSheet(isNew ? (R.length ? 'Fattura letta dall\'IA' : 'Nuova fattura') : 'Modifica fattura', `
+      ${R.length && isNew ? `<div class="ai-note">${IC.spark}Dati letti dal documento: controlla prima di salvare (${R.length} righe)</div>` : ''}
+      <div class="f-row"><label class="f"><span>Fornitore</span><input name="fornitore" required list="fa-dl" value="${esc(r.fornitore)}" data-focus placeholder="Es. Lyreco"></label><label class="f"><span>Numero fattura</span><input name="numero" required value="${esc(r.numero)}"></label></div>
+      <datalist id="fa-dl">${forn.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+      <div class="f-row"><label class="f"><span>Data</span><input name="data" type="date" required value="${esc(validD(r.data) ? r.data : today())}"></label><label class="f"><span>Scadenza</span><input name="scadenza" type="date" value="${esc(validD(r.scadenza) ? r.scadenza : '')}"></label></div>
+      <div class="f-row fa-3"><label class="f"><span>Imponibile €</span><input name="imponibile" inputmode="decimal" value="${esc(fmtIn(r.imponibile))}"></label><label class="f"><span>IVA €</span><input name="imposta" inputmode="decimal" value="${esc(fmtIn(r.imposta))}"></label><label class="f"><span>Totale €</span><input name="totale" inputmode="decimal" value="${esc(fmtIn(r.totale))}" placeholder="calcolato"></label></div>
+      <div class="f-row"><label class="f"><span>Centro di costo</span><select name="centro"><option value="">—</option>${opt(centri(), r.centro)}</select></label><label class="f"><span>Stato</span><select name="stato">${opt(['da pagare', 'pagata'], faPaid(r) ? 'pagata' : 'da pagare')}</select></label></div>
+      <label class="f"><span>DDT / ordini collegati</span><input name="ddt" value="${esc(r.ddt)}" placeholder="numeri separati da virgola"></label>
+      <label class="f"><span>Note</span><input name="note" value="${esc(r.note)}"></label>
+      ${file || r.pdf ? `<div class="muted small">${IC.spark ? '' : ''}📎 ${file ? esc(file.name) + ' sarà salvato nel tuo Google Drive' : 'Documento già salvato nel tuo Google Drive'}</div>` : ''}`,
+      async fd => {
+        const row = { ...r, ...Object.fromEntries(fd), imponibile: num(fd.get('imponibile')), imposta: num(fd.get('imposta')), totale: num(fd.get('totale')) || r2(num(fd.get('imponibile')) + num(fd.get('imposta'))), fornitore: String(fd.get('fornitore')).trim(), numero: String(fd.get('numero')).trim() };
+        if (row.stato === 'pagata' && !row.pagata) row.pagata = today();
+        if (row.stato !== 'pagata') row.pagata = '';
+        if (isNew) row.creato = new Date().toISOString();
+        if (isNew && faRows().some(x => fornKey(x.fornitore) === fornKey(row.fornitore) && normDoc(x.numero) === normDoc(row.numero)) && !confirm('Esiste già una fattura con questo fornitore e numero. Salvarla comunque?')) return;
+        if (file && !isLocal()) { try { busy('Salvo il documento nel tuo Drive…'); row.pdf = await api('uploadDoc', { name: `${row.fornitore} ${row.numero} ${row.data}.${file.ext}`, mime: file.mime, data: file.data }); } catch (e) { busy(); return toast('Documento non salvato: ' + e.message); } busy(); }
+        write([{ action: 'upsert', sheet: 'Fatture', row }]);
+        faP = ''; toast(isNew ? 'Fattura salvata' : 'Fattura aggiornata'); return true;
+      }, isNew ? null : () => { if (!confirm('Eliminare questa fattura?')) return; write([{ action: 'delete', sheet: 'Fatture', id: r.id }]); toast('Fattura eliminata'); return true; });
+  }
+  function pickDoc() {
+    return new Promise((resolve, reject) => {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,.pdf,image/*';
+      inp.onchange = async () => {
+        const f = inp.files && inp.files[0]; if (!f) return reject(new Error('annullato'));
+        if (f.size > 15 * 1024 * 1024) return reject(new Error('File troppo grande (massimo 15 MB)'));
+        if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) {
+          const u8 = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < u8.length; i += 32768) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+          return resolve({ name: f.name, mime: 'application/pdf', ext: 'pdf', data: btoa(bin) });
+        }
+        const img = new Image();
+        img.onload = () => { const k = Math.min(1, 2200 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); resolve({ name: f.name, mime: 'image/jpeg', ext: 'jpg', data: c.toDataURL('image/jpeg', .88).split(',')[1] }); };
+        img.onerror = () => reject(new Error('File non leggibile')); img.src = URL.createObjectURL(f);
+      };
+      inp.click();
+    });
+  }
+  async function readFatAI() {
+    if (!faOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.4)');
+    let file; try { file = await pickDoc(); } catch (e) { if (e.message !== 'annullato') toast(e.message); return; }
+    try {
+      busy('L\'IA sta leggendo la fattura…');
+      const x = await aiCall('fattura', { data: file.data, mime: file.mime });
+      busy();
+      const righe = (x.righe || []).filter(y => y && y.descrizione).map(y => ({ codice: String(y.codice || ''), descrizione: String(y.descrizione || ''), quantita: num(y.quantita) || 1, prezzo: num(y.prezzo), totale: num(y.totale) }));
+      formFat({ fornitore: x.fornitore || '', numero: String(x.numero || ''), data: validD(x.data) ? x.data : today(), scadenza: validD(x.scadenza) ? x.scadenza : '', imponibile: num(x.imponibile), imposta: num(x.imposta), totale: num(x.totale), ddt: (x.ddt || []).join(', '), righe: righe.length ? JSON.stringify(righe) : '' }, file);
+    } catch (e) { busy(); toast(e.message); }
+  }
+  async function openDoc(id, name) {
+    try {
+      busy('Apro il documento…');
+      const d = await api('getDoc', { id });
+      const bin = atob(d.data), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const href = URL.createObjectURL(new Blob([u8], { type: d.mime || 'application/pdf' }));
+      const a = document.createElement('a'); a.href = href; a.download = d.name || name || 'documento'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 60000);
+    } catch (e) { if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); }
+  }
+  async function importFat() {
+    if (!faOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.4)');
+    let file; try { file = await pickFile('.xlsx,.xls,.csv'); } catch { return; }
+    try {
+      busy('Leggo il file…'); await loadXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); busy();
+      const out = [];
+      wb.SheetNames.forEach(n => {
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' });
+        const hi = aoa.findIndex(r => r.some(c => /^fornitore/.test(nh(c))) && r.some(c => /^numero|^nfattura/.test(nh(c))));
+        if (hi < 0) return;
+        const H = aoa[hi].map(nh), col = (...ks) => { for (const k of ks) { const i = H.findIndex(h => h === k || h.startsWith(k)); if (i >= 0) return i; } return -1; };
+        const c = { f: col('fornitore'), n: col('numero', 'nfattura'), d: col('data', 'datafattura'), s: col('scadenza'), i: col('imponibile'), v: col('iva', 'imposta'), t: col('totale'), cc: col('centro'), st: col('stato'), ddt: col('ddt'), no: col('note') };
+        const dt = v => v instanceof Date ? ymd(new Date(v.getTime() + 12 * 36e5)) : typeof v === 'number' && v > 20000 ? ymd(new Date(Math.round((v - 25569) * 864e5))) : (() => { const m = String(v || '').match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[2])}-${pad(m[1])}` : validD(v) ? String(v).slice(0, 10) : ''; })();
+        aoa.slice(hi + 1).forEach(r => {
+          const fo = String(r[c.f] ?? '').trim(), nu = String(r[c.n] ?? '').trim(); if (!fo || !nu || /^esempio/i.test(String(r[c.no] ?? ''))) return;
+          const imp = num(r[c.i]), iv = c.v >= 0 ? num(r[c.v]) : 0, to = c.t >= 0 && r[c.t] !== '' ? num(r[c.t]) : r2(imp + iv);
+          const ex = faRows().find(x => fornKey(x.fornitore) === fornKey(fo) && normDoc(x.numero) === normDoc(nu));
+          out.push({ ...(ex || {}), id: ex ? ex.id : 'fa' + uid() + out.length, fornitore: fo, numero: nu, data: dt(r[c.d]) || today(), scadenza: c.s >= 0 ? dt(r[c.s]) : '', imponibile: imp, imposta: iv, totale: to, centro: c.cc >= 0 ? String(r[c.cc] ?? '').trim() : (ex ? ex.centro : ''), stato: c.st >= 0 && /pagat/i.test(String(r[c.st])) ? 'pagata' : (ex ? ex.stato : 'da pagare'), ddt: c.ddt >= 0 ? String(r[c.ddt] ?? '').trim() : (ex ? ex.ddt : ''), note: c.no >= 0 ? String(r[c.no] ?? '').trim() : (ex ? ex.note : ''), creato: ex ? ex.creato : new Date().toISOString() });
+        });
+      });
+      if (!out.length) return toast('Nessuna fattura trovata: servono le colonne Fornitore e Numero');
+      const upd = out.filter(x => faRows().some(y => y.id === x.id)).length;
+      if (!confirm(`${out.length} fatture · ${eur(out.reduce((a, r) => a + num(r.totale), 0))}.${upd ? `\n${upd} già presenti verranno aggiornate.` : ''}\nImportare?`)) return;
+      write(out.map(row => ({ action: 'upsert', sheet: 'Fatture', row }))); faP = ''; faAnim = true; render(); toast(`${out.length} fatture importate`);
+    } catch (e) { busy(); toast(e.message); }
+  }
+  async function exportFat() {
+    const rows = (faP ? faRows().filter(r => String(r.data).slice(0, 7) === faP) : faRows()).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)));
+    if (!rows.length) return toast('Nessuna fattura');
+    try {
+      busy('Preparo il file Excel…'); await loadXlsx();
+      const U = XLSX.utils, wb = U.book_new(), E = '#,##0.00 "€"';
+      const ws = U.aoa_to_sheet([['Fornitore', 'Numero', 'Data', 'Scadenza', 'Imponibile', 'IVA', 'Totale', 'Stato', 'Pagata il', 'Centro di costo', 'DDT', 'Acquisti collegati', 'Differenza', 'Note'], ...rows.map(r => { const l = faLink(r); return [r.fornitore, r.numero, validD(r.data) ? parseD(r.data) : '', validD(r.scadenza) ? parseD(r.scadenza) : '', num(r.imponibile), num(r.imposta), num(r.totale), faPaid(r) ? 'Pagata' : faLate(r) ? 'Scaduta' : 'Da pagare', validD(r.pagata) ? parseD(r.pagata) : '', r.centro || '', r.ddt || '', l.rows.length ? l.tot : '', l.rows.length ? l.diff : '', r.note || '']; })], { cellDates: true });
+      rows.forEach((r, i) => { const R = i + 2; ['C', 'D', 'I'].forEach(c => { if (ws[c + R] && ws[c + R].t === 'd') ws[c + R].z = 'dd/mm/yyyy'; }); ['E', 'F', 'G', 'L', 'M'].forEach(c => { if (ws[c + R] && ws[c + R].t === 'n') ws[c + R].z = E; }); });
+      ws['!cols'] = [24, 14, 11, 11, 13, 11, 13, 11, 11, 16, 18, 15, 12, 28].map(w => ({ wch: w })); ws['!autofilter'] = { ref: `A1:N${rows.length + 1}` };
+      U.book_append_sheet(wb, ws, 'Fatture');
+      const rr = rows.flatMap(r => faRighe(r).map(x => [r.fornitore, r.numero, x.codice || '', x.descrizione || '', num(x.quantita), num(x.prezzo), num(x.totale) || r2(num(x.quantita) * num(x.prezzo))]));
+      if (rr.length) { const w2 = U.aoa_to_sheet([['Fornitore', 'Numero', 'Codice', 'Descrizione', 'Quantità', 'Prezzo', 'Totale'], ...rr]); w2['!cols'] = [22, 14, 14, 50, 9, 11, 12].map(w => ({ wch: w })); U.book_append_sheet(wb, w2, 'Righe'); }
+      XLSX.writeFile(wb, `fatture-${faP || 'complete'}.xlsx`); busy(); toast('Excel scaricato');
+    } catch (e) { busy(); toast(e.message); }
+  }
+  function faArt() {
+    return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg fa-svg">
+      <defs><pattern id="fadots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern></defs>
+      <rect x="300" width="340" height="260" fill="url(#fadots)"/>
+      <g class="fa-p p3"><rect x="452" y="44" width="124" height="160" rx="12"/></g>
+      <g class="fa-p p2"><rect x="438" y="56" width="124" height="160" rx="12"/></g>
+      <g class="fa-p p1"><rect x="424" y="68" width="124" height="160" rx="12"/>
+        ${[96, 112, 128, 150, 166, 182].map((y, i) => `<line x1="442" x2="${i % 3 === 2 ? 498 : 528}" y1="${y}" y2="${y}" class="fa-l" style="--d:${600 + i * 120}ms" pathLength="1"/>`).join('')}
+        <line x1="442" x2="528" y1="204" y2="204" class="fa-l fa-tot" style="--d:1400ms" pathLength="1"/></g>
+      <g class="fa-ok" transform="translate(548 196)"><circle r="24"/><path d="M-10 0 l7 7 l13 -14" pathLength="1"/></g>
+    </svg>`;
+  }
+
+  /* ---------- Controlli di tutte le aree (dashboard) ---------- */
+  function attChecks(rows) {
+    const A = [];
+    const zero = rows.filter(r => !num(r.prezzo)); if (zero.length) A.push({ t: 'warn', h: 'Righe senza prezzo', d: `${fmtNum(zero.length, 0)} acquisti senza prezzo: il totale dell'attrezzatura è sottostimato.`, v: fmtNum(zero.length, 0) + ' righe', go: 'movzero' });
+    const nc = rows.filter(r => !r.centro || /assegnare/i.test(r.centro)); if (nc.length) A.push({ t: 'warn', h: 'Acquisti senza centro di costo', d: `${nc.length} righe non assegnate a nessun piazzale.`, v: eur(sumT(nc)), go: 'movimenti' });
+    const arts = articoli(rows).filter(x => x.var > .2 && x.n > 1).sort((a, b) => b.var * b.tot - a.var * a.tot);
+    if (arts.length) A.push({ t: 'info', h: 'Stesso prodotto pagato a prezzi diversi', d: arts.slice(0, 3).map(x => `${esc(String(x.desc).slice(0, 48))}: da ${eurP(x.min)} a ${eurP(x.max)}`).join(' · ') + (arts.length > 3 ? ` e altri ${arts.length - 3}` : ''), v: arts.length + ' prodotti', go: 'articoli' });
+    const dup = [...groupBy(rows.filter(r => validD(r.data) && num(r.prezzo)), r => [prodKey(r), num(r.quantita), num(r.prezzo), r.data, r.centro].join('|'))].filter(([, v]) => v.length > 1);
+    if (dup.length) A.push({ t: 'warn', h: 'Possibili acquisti doppi', d: `${dup.length} righe identiche (stesso prodotto, quantità, prezzo, data e centro): ${dup.slice(0, 2).map(([, v]) => esc(String(v[0].descrizione).slice(0, 48)) + (String(v[0].descrizione).length > 48 ? '…' : '')).join(', ')}${dup.length > 2 ? '…' : ''}.`, v: eur(dup.reduce((a, [, v]) => a + sumT(v.slice(1)), 0)), go: 'movimenti' });
+    const nd = rows.filter(r => !validD(r.data)); if (nd.length) A.push({ t: 'info', h: 'Acquisti senza data', d: `${fmtNum(nd.length, 0)} righe senza data non compaiono nei confronti mese per mese.`, v: eur(sumT(nd)), go: 'movimenti' });
+    return A;
+  }
+  function allChecks(P, per) {
+    const tag = (a, go) => x => ({ ...x, a, go: x.go || go });
+    const gV = gasVehicles(gasRows());
+    const out = [...attChecks(P.att).map(tag('att', 'movimenti')), ...glsChecks(P.gls).map(tag('gls', 'gls')), ...gasChecks(P.gas, gV).map(tag('gas', 'gasolio')), ...faChecks(P.fat).map(tag('fat', 'fatture'))];
+    if (P.gas.length && !P.gas.some(r => gPrezzo(r) > 0)) out.push({ a: 'gas', t: 'info', h: 'Prezzo del gasolio non impostato', d: `${fmtNum(gSum(P.gas, 'litri'), 0)} litri senza costo: il totale comprende solo i noleggi.`, v: '—', go: 'gasprice' });
+    const merged = [...groupBy(out, x => x.a + '|' + x.h)].map(([, v]) => v.length === 1 ? v[0] : { ...v[0], h: `${v[0].h} · ${v.length} casi`, d: `${v[0].d} E altri ${v.length - 1} casi simili.`, v: v.length + ' casi' });
+    return merged.sort((a, b) => (a.t === 'warn' ? 0 : 1) - (b.t === 'warn' ? 0 : 1));
+  }
+
+  /* ---------- IA su tutto ---------- */
+  function ovSummary(P, V, byM, checks) {
+    return netMode(() => {
+      const gV = gasVehicles(gasRows()), R = gasRent();
+      return {
+        periodo: ovP ? mLabel(ovP) : 'tutto il periodo', importi: 'IVA esclusa',
+        totali: { attrezzatura: r2(V.att), gls: r2(V.gls), gasolioENoleggi: r2(V.gas), fattureFornitori: r2(P.fat.reduce((a, r) => a + num(r.imponibile), 0)) },
+        meseperMese: byM.map(x => ({ mese: x.m, attrezzatura: r2(x.att), gls: r2(x.gls), gasolio: r2(x.gas) })),
+        attrezzatura: { ...summary0(P.att), articoliPiuCostosi: undefined },
+        gls: { spedizioni: P.gls.length, costo: r2(gTot(P.gls)), kgTassabili: r2(gSum(P.gls, 'kgTass')), perContratto: ['C1', 'C2'].map(c => { const v = P.gls.filter(r => r.contratto === c); return { contratto: c, spedizioni: v.length, costo: r2(gTot(v)) }; }), destinazioniTop: [...groupBy(P.gls, r => r.citta + ' (' + r.prov + ')')].map(([k, v]) => ({ k, costo: r2(gTot(v)), n: v.length })).sort((a, b) => b.costo - a.costo).slice(0, 8) },
+        gasolio: { litri: r2(gSum(P.gas, 'litri')), rifornimenti: P.gas.length, prezzoLitro: gasPrice() || null, noleggiMensili: R, mezzi: [...groupBy(P.gas, r => plate(r.targa))].map(([p, v]) => { const x = gV.get(p); let k = 0, kl = 0; if (x) x.seg.forEach((d, id) => { const z = v.find(r => r.id === id); if (z) { k += d; kl += num(z.litri); } }); return { targa: p, nome: gasName(p) || undefined, litri: r2(gSum(v, 'litri')), km: k, kmPerLitro: kl ? r2(k / kl) : null }; }).sort((a, b) => b.litri - a.litri).slice(0, 10) },
+        fatture: { numero: P.fat.length, perFornitore: [...groupBy(P.fat, r => String(r.fornitore || '').toUpperCase())].map(([k, v]) => ({ fornitore: k, imponibile: r2(v.reduce((a, r) => a + num(r.imponibile), 0)), fatture: v.length })), daPagare: r2(P.fat.filter(r => !faPaid(r)).reduce((a, r) => a + num(r.totale), 0)), scadute: P.fat.filter(faLate).length },
+        controlli: checks.map(x => ({ area: x.a, livello: x.t === 'warn' ? 'attenzione' : 'info', titolo: x.h, dettaglio: String(x.d).replace(/<[^>]+>/g, ''), impatto: String(x.v).replace(/<[^>]+>/g, '') }))
+      };
+    });
+  }
+  const mdLite = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').split(/\n+/).map(l => /^\s*[-•]\s+/.test(l) ? `<li>${l.replace(/^\s*[-•]\s+/, '')}</li>` : `<p>${l}</p>`).join('').replace(/(<li>.*?<\/li>)+/g, m => `<ul>${m}</ul>`);
+  let ovChat = [];
+  function renderOvAI(ctx) {
+    const el = $('#ov-ai'); if (!el) return;
+    if (isLocal()) { el.hidden = true; return; }
+    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', generale: 'Generale' };
+    if (!db.ai) {
+      el.innerHTML = `<div class="card-h"><h3 class="ai-title">${IC.spark}Intelligenza artificiale</h3></div>
+        <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, fatture), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
+        <div class="ov-key"><input id="ov-key" type="password" placeholder="Incolla la chiave API di Gemini" autocomplete="off"><button class="btn primary sm" id="ov-key-go" type="button">Collega</button></div>`;
+      return;
+    }
+    const ins = cfg('insightsAll');
+    el.innerHTML = `<div class="card-h"><h3 class="ai-title">${IC.spark}Analisi IA</h3><button class="btn sm primary" id="ov-ai-go" type="button">${ins ? 'Aggiorna analisi' : 'Analizza tutto'}</button></div>
+      ${ins ? `<p class="ins-sum">${esc(ins.sintesi || '')}</p><ul class="ins ov-ins">${(ins.punti || []).map(p => `<li class="${esc(p.tipo || '')}"><i></i><span>${p.area && AREA[p.area] ? `<em class="ov-tag t-${esc(p.area)}">${AREA[p.area]}</em>` : ''}${esc(p.testo)}</span></li>`).join('')}</ul><div class="ins-date">Analisi del ${esc(shortDate(ins.data))} · ${esc(ins.per || '')}</div>` : '<p class="muted small" style="margin:0">L\'IA legge i totali, l\'andamento dei mesi e tutti i controlli e ti dice dove intervenire.</p>'}
+      <div class="ov-chat">${ovChat.map(m => `<div class="ov-msg ${m.role}">${m.role === 'user' ? esc(m.text) : mdLite(m.text)}</div>`).join('')}</div>
+      <form class="ov-ask" id="ov-ask"><input id="ov-q" placeholder="Chiedi all'IA… es. dove posso risparmiare questo mese?" autocomplete="off"><button class="btn sm" type="submit">Chiedi</button></form>`;
+    el._ctx = ctx;
+  }
+  async function ovAnalyze() {
+    const el = $('#ov-ai'); if (!el || !el._ctx) return;
+    try { busy('L\'IA sta analizzando tutte le aree…'); const r = await aiCall('insights_all', { summary: el._ctx() }); setConfig('insightsAll', { data: today(), per: ovP ? mLabel(ovP) : 'tutto il periodo', sintesi: r.sintesi || '', punti: (r.punti || []).slice(0, 8) }); toast('Analisi aggiornata'); }
+    catch (e) { if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); }
+  }
+  async function ovAsk(q) {
+    const el = $('#ov-ai'); if (!el || !el._ctx || !q.trim()) return;
+    ovChat.push({ role: 'user', text: q.trim() }); renderOvAI(el._ctx);
+    try {
+      busy('L\'IA sta rispondendo…');
+      const ans = await aiCall('chat', { question: q.trim(), history: ovChat.slice(0, -1).slice(-6), context: JSON.stringify(el._ctx()).slice(0, 30000) });
+      ovChat.push({ role: 'ai', text: String(ans || '') });
+    } catch (e) { ovChat.pop(); if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); renderOvAI(el._ctx); }
+  }
+
   /* ================= Eventi ================= */
   function bind() {
     window.addEventListener('hashchange', go);
     $('#sheet-form').addEventListener('submit', e => {
       e.preventDefault();
-      if (onSubmit && onSubmit(new FormData(e.target)) === true) closeSheet();
+      const res = onSubmit && onSubmit(new FormData(e.target));
+      if (res === true) closeSheet(); else if (res && res.then) res.then(v => { if (v === true) closeSheet(); });
     });
     $('#sheet-del').onclick = () => { if (onDelete && onDelete() === true) closeSheet(); };
     $$('[data-close]').forEach(b => (b.onclick = closeSheet));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
-    $('#fab').onclick = () => view === 'gasolio' ? formGas() : formMov(); $('#add-top').onclick = () => formMov();
+    $('#fab').onclick = () => view === 'gasolio' ? formGas() : view === 'fatture' ? (aiReady() ? readFatAI() : formFat()) : formMov(); $('#add-top').onclick = () => formMov();
 
     document.addEventListener('click', e => {
       const t = e.target;
@@ -2241,7 +2601,20 @@
       if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'attrezzatura') ccAnim = true; if (view === 'home') ovAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
       const ovm = t.closest('[data-ovm]'); if (ovm) { ovP = ovP === ovm.dataset.ovm ? '' : ovm.dataset.ovm; ovAnim = true; renderOverview(); return; }
       if (t.closest('#ov-prev') || t.closest('#ov-next')) { const o = [...$('#ov-per').options].map(x => x.value), i = o.indexOf(ovP) + (t.closest('#ov-prev') ? 1 : -1); if (i >= 0 && i < o.length) { ovP = o[i]; ovAnim = true; renderOverview(); } return; }
-      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
+      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'gls') { gMonth = ovP || 'tutto'; } if (g === 'gasolio') gasP = ovP; if (g === 'fatture') faP = ovP; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
+      const ckf = t.closest('[data-ckf]'); if (ckf) { const k = ckf.dataset.ckf; $$('.ov-cf').forEach(b => b.classList.toggle('on', b === ckf)); $$('.ov-ci').forEach(b => { b.hidden = !!k && b.dataset.cka !== k; }); return; }
+      if (t.closest('#ov-ai-go')) { ovAnalyze(); return; }
+      if (t.closest('#ov-key-go')) { const k = $('#ov-key').value.trim(); if (!k) return; (async () => { try { busy('Collego Gemini…'); await api('setKey', { key: k }); db.ai = true; save(); toast('Gemini collegato'); render(); } catch (er) { if (!(er instanceof AuthError)) toast(er.message); } finally { busy(); } })(); return; }
+      if (t.closest('#fa-ai')) { readFatAI(); return; }
+      if (t.closest('#fa-add')) { formFat(); return; }
+      if (t.closest('#fa-imp')) { importFat(); return; }
+      if (t.closest('#fa-xls')) { exportFat(); return; }
+      if (t.closest('#fa-more')) { faLimit = 9999; renderFatList(); return; }
+      if (t.closest('#fa-prev') || t.closest('#fa-next')) { const o = [...$('#fa-per').options].map(x => x.value), i = o.indexOf(faP) + (t.closest('#fa-prev') ? 1 : -1); if (i >= 0 && i < o.length) { faP = o[i]; faAnim = true; renderFat(); } return; }
+      const fap = t.closest('[data-faper]'); if (fap) { faP = fap.dataset.faper; faAnim = true; renderFat(); return; }
+      const faq = t.closest('[data-faq]'); if (faq) { const ids = faq.dataset.faq.split(' '); faF.q = ''; faF.forn = ''; faF.stato = ''; renderFatList(null, faRows().filter(r => ids.includes(r.id))); $('#fa-cnt').textContent += ' · filtro controllo'; $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      const faf = t.closest('[data-faforn]'); if (faf) { faF.forn = faf.dataset.faforn; $('#fa-ff').value = faF.forn; renderFatList(); $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      const fat = t.closest('[data-fat]'); if (fat) { faDetail(fat.dataset.fat); return; }
       if (t.closest('#ga-imp')) { importGas(); return; }
       if (t.closest('#ga-xls')) { exportGas(); return; }
       if (t.closest('#ga-add')) { formGas(); return; }
@@ -2291,6 +2664,9 @@
     $('#gl-mese').onchange = e => { gMonth = e.target.value; glsAnim = true; renderGls(); };
     $('#ga-per').onchange = e => { gasP = e.target.value; gasAnim = true; renderGas(); };
     $('#ov-per').onchange = e => { ovP = e.target.value; ovAnim = true; renderOverview(); };
+    $('#fa-per').onchange = e => { faP = e.target.value; faAnim = true; renderFat(); };
+    document.addEventListener('input', e => { if (e.target.id === 'fa-q') { clearTimeout(qt); qt = setTimeout(() => { faF.q = e.target.value; renderFatList(); }, 180); } });
+    document.addEventListener('change', e => { if (e.target.id === 'fa-ff') { faF.forn = e.target.value; renderFatList(); } if (e.target.id === 'fa-fs') { faF.stato = e.target.value; renderFatList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'ga-q') { clearTimeout(qt); qt = setTimeout(() => { gasF.q = e.target.value; renderGasList(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'ga-ft') { gasF.targa = e.target.value; $$('.gv-c').forEach(x => x.classList.toggle('on', x.dataset.gtarga === gasF.targa)); renderGasList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'gl-q') { clearTimeout(qt); qt = setTimeout(() => { gF.q = e.target.value; renderGlsList(); }, 180); } });
@@ -2319,6 +2695,7 @@
     $('#s-cat-add').onclick = () => addChip('#s-cat-in', 'categorie', categorie);
 
     $('#login-form').addEventListener('submit', doLogin);
+    document.addEventListener('submit', e => { if (e.target.id === 'ov-ask') { e.preventDefault(); const q = $('#ov-q').value; $('#ov-q').value = ''; ovAsk(q); } });
     $('#s-logout').onclick = async () => { if (!confirm('Uscire da questo dispositivo? I dati salvati qui vengono cancellati (restano nel Foglio Google).')) return; if (queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate: uscendo andranno perse. Continuare?`)) return; try { await api('logout'); } catch {} queue = []; LS.set('cdc_queue', []); lockApp(); toast('Uscito'); };
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });

@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=25">
-  <link rel="stylesheet" href="cdc.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="cdc.css?v=26">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -78,6 +78,7 @@
       <a href="#attrezzatura" data-view="attrezzatura"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>Attrezzatura</span></a>
       <a href="#gls" data-view="gls"><svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg><span>GLS</span></a>
       <a href="#gasolio" data-view="gasolio"><svg viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg><span>Gasolio</span></a>
+      <a href="#fatture" data-view="fatture"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg><span>Fatture</span></a>
       <a href="#impostazioni" data-view="impostazioni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Impostazioni</span></a>
       <div class="nav-foot"><span id="sync-side" class="sync"></span></div>
     </nav>
@@ -211,6 +212,25 @@
         <div id="ga-body"></div>
       </section>
 
+      <!-- FATTURE -->
+      <section id="v-fatture" class="view" data-v="fatture" hidden>
+        <div class="gl-bar">
+          <div class="gl-month">
+            <button class="icon-btn" id="fa-prev" aria-label="Periodo precedente">‹</button>
+            <select id="fa-per" aria-label="Periodo"></select>
+            <button class="icon-btn" id="fa-next" aria-label="Periodo successivo">›</button>
+          </div>
+          <div class="gl-act">
+            <a class="btn sm" href="modello-fatture.xlsx" download><span class="lb-d">Scarica modello</span><span class="lb-m">Modello</span></a>
+            <button class="btn sm" id="fa-imp"><span class="lb-d">Importa Excel</span><span class="lb-m">Importa</span></button>
+            <button class="btn sm" id="fa-xls"><span class="lb-d">Esporta Excel</span><span class="lb-m">Esporta</span></button>
+            <button class="btn sm only-desk" id="fa-add">+ Fattura</button>
+            <button class="btn sm primary" id="fa-ai" hidden><span class="lb-d">✦ Leggi fattura con IA</span><span class="lb-m">✦ Leggi</span></button>
+          </div>
+        </div>
+        <div id="fa-body"></div>
+      </section>
+
       <!-- IMPOSTAZIONI -->
       <section id="v-impostazioni" class="view" data-v="impostazioni" hidden>
         <div class="grid-2 settings-grid">
@@ -283,6 +303,6 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>
