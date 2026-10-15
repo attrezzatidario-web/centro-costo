@@ -1546,7 +1546,7 @@
     const r = by[0].a[0];
     return { nm: (String(r.destinatario || '').trim() || r.citta).toUpperCase().replace(/\s+/g, ' '), more: by.length - 1 };
   };
-  const gMap = { mode: LS.get('cdc_glsmap', '2d'), rot: -22, tilt: 56, s: 1, cx: null, cy: null, vb3: null };
+  const gMap = { mode: LS.get('cdc_glsmap', '2d'), rot: -14, tilt: 52, s: 1, cx: null, cy: null, vb3: null };
   const VB2 = [26, 4, 346, 388], MC = { x: 199, y: 198 };
   let itPts = null;
   const itParse = () => itPts || (itPts = IT_PATH.split(/(?=[MLZ])/).map(t => t[0] === 'Z' ? null : [t[0], ...t.slice(1).trim().split(/[\s,]+/).map(Number)]));
@@ -1578,106 +1578,127 @@
         <g transform="translate(-9 3)"><text text-anchor="end" class="gl-on">ROMA</text><text text-anchor="end" dy="8" class="gl-os">partenza</text></g></g>`;
     };
 
-    /* ---------- disegno 3D (proiezione inclinata + colonne) ---------- */
+    /* ---------- disegno 3D (plastico inclinato, colonne a prisma) ---------- */
     const pr = (x, y, z, rot, tilt) => {
       const th = rot * Math.PI / 180, tl = tilt * Math.PI / 180, dx = x - MC.x, dy = y - MC.y;
       const rx = dx * Math.cos(th) - dy * Math.sin(th), ry = dx * Math.sin(th) + dy * Math.cos(th);
       return [MC.x + rx, MC.y + ry * Math.cos(tl) - z * Math.sin(tl), ry];
     };
+    const HMAX = 78, colH = x => 3 + HMAX * x.f;
     const landPath = (rot, tilt, z) => itParse().map(t => t ? t[0] + pr(t[1], t[2], z, rot, tilt).slice(0, 2).map(v => v.toFixed(1)).join(' ') : 'Z').join('');
     const bounds3 = (rot, tilt) => {
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
       itParse().forEach(t => { if (!t) return; const [X, Y] = pr(t[1], t[2], 0, rot, tilt); x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); });
-      gm.forEach(x => { const [, Y] = pr(x.x, x.y, 8 + 95 * x.f, rot, tilt); y0 = Math.min(y0, Y - 10); });
-      const pad = 14; return [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2 + 10];
+      gm.forEach(x => { const [, Y] = pr(x.x, x.y, colH(x), rot, tilt); y0 = Math.min(y0, Y - 14); });
+      const pad = 12; return [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2 + 8];
     };
     const draw3D = (an, k, rot, tilt) => {
-      const st = Math.sin(tilt * Math.PI / 180), ct = Math.cos(tilt * Math.PI / 180);
-      const grid = []; for (let v = 40; v <= 360; v += 40) { const a = pr(v, 0, 0, rot, tilt), b = pr(v, 400, 0, rot, tilt), c = pr(20, v, 0, rot, tilt), d = pr(380, v, 0, rot, tilt); grid.push(`M${a[0].toFixed(1)} ${a[1].toFixed(1)}L${b[0].toFixed(1)} ${b[1].toFixed(1)}M${c[0].toFixed(1)} ${c[1].toFixed(1)}L${d[0].toFixed(1)} ${d[1].toFixed(1)}`); }
+      const ct = Math.cos(tilt * Math.PI / 180);
       const [OX, OY] = pr(ox, oy, 0, rot, tilt);
-      const arcs = far.map((x, j) => {
-        const [X, Y] = pr(x.x, x.y, 0, rot, tilt), L = Math.hypot(x.x - ox, x.y - oy), lift = 18 + L * .42;
-        const [CX, CY] = pr((ox + x.x) / 2, (oy + x.y) / 2, lift * 2, rot, tilt);
-        const d = `M${OX.toFixed(1)} ${OY.toFixed(1)} Q${CX.toFixed(1)} ${CY.toFixed(1)} ${X.toFixed(1)} ${Y.toFixed(1)}`, w = (.5 + 1.6 * x.f) * k;
-        return `<path class="cm-arc gl-arc g3-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${300 + j * 30}ms;stroke-width:${w.toFixed(2)}" d="${d}"/>` + (x.i <= 10 ? `<path class="gl-flow g3-flow" pathLength="1" style="--d:${(1 + j * .2).toFixed(2)}s;--t:${(1.8 + L / 150).toFixed(2)}s;stroke-width:${(w + .7 * k).toFixed(2)}" d="${d}"/>` : '');
+      // archi solo per le prime 12 destinazioni, sottili
+      const arcs = far.filter(x => x.i <= 12).map((x, j) => {
+        const [X, Y] = pr(x.x, x.y, 0, rot, tilt), L = Math.hypot(x.x - ox, x.y - oy);
+        const [CX, CY] = pr((ox + x.x) / 2, (oy + x.y) / 2, 10 + L * .5, rot, tilt);
+        return `<path class="g3-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${500 + j * 50}ms;stroke-width:${(.6 * k).toFixed(2)}" d="M${OX.toFixed(1)} ${OY.toFixed(1)} Q${CX.toFixed(1)} ${CY.toFixed(1)} ${X.toFixed(1)} ${Y.toFixed(1)}"/>`;
       }).join('');
-      const cols = gm.map(x => { const [X, Y, depth] = pr(x.x, x.y, 0, rot, tilt); return { x, X, Y, depth }; }).sort((a, b) => a.depth - b.depth).map(({ x, X, Y }, j) => {
-        const H = (6 + 95 * x.f) * st, rr = (x.i <= 12 ? 3.6 : 2.4) * k, ry = rr * Math.max(.18, ct), top = Y - H;
-        return `<g class="gl-pin g3-col${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${450 + x.i * 40}ms">
-          <ellipse class="g3-sh" cx="${(X + 1.5).toFixed(1)}" cy="${(Y + .6).toFixed(1)}" rx="${(rr * 2).toFixed(2)}" ry="${(ry * 1.6).toFixed(2)}"/>
-          <g class="g3-grow" style="transform-origin:${X.toFixed(1)}px ${Y.toFixed(1)}px"><path class="g3-body" d="M${(X - rr).toFixed(2)} ${Y.toFixed(2)} L${(X - rr).toFixed(2)} ${top.toFixed(2)} A${rr.toFixed(2)} ${ry.toFixed(2)} 0 0 0 ${(X + rr).toFixed(2)} ${top.toFixed(2)} L${(X + rr).toFixed(2)} ${Y.toFixed(2)} A${rr.toFixed(2)} ${ry.toFixed(2)} 0 0 1 ${(X - rr).toFixed(2)} ${Y.toFixed(2)}Z"/>
-          <ellipse class="g3-top" cx="${X.toFixed(2)}" cy="${top.toFixed(2)}" rx="${rr.toFixed(2)}" ry="${ry.toFixed(2)}"/>
-          ${x.i <= 12 ? `<g transform="translate(${X.toFixed(1)} ${(top - 7 * k).toFixed(1)}) scale(${k.toFixed(3)})"><circle class="g3-nb" r="5.4"/><text class="gl-pn" dy=".35em">${x.i}</text></g>` : ''}</g>
-          <rect class="cm-hit" x="${(X - rr - 3).toFixed(1)}" y="${(top - 12 * k).toFixed(1)}" width="${(rr * 2 + 6).toFixed(1)}" height="${(H + 14 * k).toFixed(1)}"/></g>`;
+      // colonne a base quadrata: faccia sinistra, destra e tetto
+      const cs = gm.map(x => { const [X, Y, depth] = pr(x.x, x.y, 0, rot, tilt); return { x, X, Y, depth }; }).sort((a, b) => a.depth - b.depth);
+      const labs = [];
+      const cols = cs.map(({ x }) => {
+        const w = (x.i <= 12 ? 2.1 : 1.4), H = colH(x), c = [[-w, -w], [w, -w], [w, w], [-w, w]].map(([a, b]) => [x.x + a, x.y + b]);
+        const B = c.map(p => pr(p[0], p[1], 0, rot, tilt)), T = c.map(p => pr(p[0], p[1], H, rot, tilt));
+        const P = a => a.map(p => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L');
+        // facce visibili: quelle con normale verso chi guarda (profondità maggiore = più vicine)
+        const faces = [[0, 1], [1, 2], [2, 3], [3, 0]].map(([a, b]) => ({ a, b, z: (B[a][2] + B[b][2]) / 2, sx: B[b][0] - B[a][0] })).sort((p, q) => q.z - p.z).slice(0, 2)
+          .map(f => `<path class="g3-f ${f.sx > 0 ? 'fl' : 'fr'}" d="M${P([B[f.a], B[f.b], T[f.b], T[f.a]])}Z"/>`).join('');
+        const [tx, ty] = pr(x.x, x.y, H, rot, tilt);
+        if (x.i <= 12) labs.push({ x, tx, ty });
+        return `<g class="gl-pin g3-col${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${350 + Math.min(x.i, 30) * 28}ms">
+          <g class="g3-grow" style="transform-origin:${tx.toFixed(1)}px ${pr(x.x, x.y, 0, rot, tilt)[1].toFixed(1)}px">${faces}<path class="g3-t" d="M${P(T)}Z"/></g>
+          <rect class="cm-hit" x="${(tx - 6 * k).toFixed(1)}" y="${(ty - 12 * k).toFixed(1)}" width="${(12 * k).toFixed(1)}" height="${(pr(x.x, x.y, 0, rot, tilt)[1] - ty + 14 * k).toFixed(1)}"/></g>`;
       }).join('');
-      const beam = 150 * st;
-      return `<defs>
-          <linearGradient id="g3body" x1="0" x2="1"><stop offset="0" stop-color="#6d97e0"/><stop offset=".45" stop-color="var(--accent)"/><stop offset="1" stop-color="#1d3d78"/></linearGradient>
-          <linearGradient id="g3land" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="g3-l1"/><stop offset="1" class="g3-l2"/></linearGradient>
-          <linearGradient id="g3beam" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e22726" stop-opacity="0"/><stop offset="1" stop-color="#e22726" stop-opacity=".75"/></linearGradient>
-          <radialGradient id="g3glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="var(--accent)" stop-opacity=".18"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient></defs>
-        <ellipse cx="${MC.x}" cy="${(MC.y + 10).toFixed(1)}" rx="260" ry="${(260 * ct + 40).toFixed(1)}" fill="url(#g3glow)"/>
-        <path class="g3-grid" d="${grid.join('')}"/>
-        <path class="g3-side" d="${landPath(rot, tilt, -7)}"/>
-        <path class="g3-land" d="${landPath(rot, tilt, 0)}" style="stroke-width:${(.6 * k).toFixed(2)}"/>
-        <ellipse class="g3-ring" cx="${OX.toFixed(1)}" cy="${OY.toFixed(1)}" rx="${(9 * k).toFixed(1)}" ry="${(9 * k * ct).toFixed(1)}"/><ellipse class="g3-ring r2" cx="${OX.toFixed(1)}" cy="${OY.toFixed(1)}" rx="${(9 * k).toFixed(1)}" ry="${(9 * k * ct).toFixed(1)}"/>
-        <rect class="g3-beam" x="${(OX - 1.6 * k).toFixed(1)}" y="${(OY - beam).toFixed(1)}" width="${(3.2 * k).toFixed(1)}" height="${beam.toFixed(1)}"/>
-        ${arcs}${cols}
-        <g class="gl-orig g3-orig" transform="translate(${OX.toFixed(1)} ${OY.toFixed(1)}) scale(${k.toFixed(3)})"><ellipse rx="5" ry="${(5 * ct).toFixed(2)}" class="gl-oc"/><g transform="translate(-9 3)"><text text-anchor="end" class="gl-on">ROMA</text><text text-anchor="end" dy="8" class="gl-os">partenza</text></g></g>`;
+      // etichette sopra tutto, posizionate in ordine di classifica senza sovrapporsi
+      const placed = [], lab = labs.sort((a, b) => a.x.i - b.x.i).map(({ x, tx, ty }) => {
+        const ly = ty - 8 * k; if (placed.some(p => Math.abs(p[0] - tx) < 11 * k && Math.abs(p[1] - ly) < 9.5 * k)) return '';
+        placed.push([tx, ly]);
+        return `<g class="g3-lab" data-glab="${esc(x.k)}" transform="translate(${tx.toFixed(1)} ${ly.toFixed(1)}) scale(${k.toFixed(3)})"><rect x="-5.5" y="-4.6" width="11" height="9.2" rx="4.6"/><text dy=".34em">${x.i}</text></g>`;
+      }).join('');
+      return `<defs><linearGradient id="g3land" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="g3-l1"/><stop offset="1" class="g3-l2"/></linearGradient></defs>
+        <path class="g3-shadow" d="${landPath(rot, tilt, -10)}"/>
+        <path class="g3-side" d="${landPath(rot, tilt, -4)}"/>
+        <path class="g3-land" d="${landPath(rot, tilt, 0)}" style="stroke-width:${(.5 * k).toFixed(2)}"/>
+        ${arcs}
+        <ellipse class="g3-ring" cx="${OX.toFixed(1)}" cy="${OY.toFixed(1)}" rx="${(7 * k).toFixed(1)}" ry="${(7 * k * ct).toFixed(1)}"/>
+        ${cols}<g class="g3-labs">${lab}</g>
+        <g class="gl-orig g3-orig" transform="translate(${OX.toFixed(1)} ${OY.toFixed(1)}) scale(${k.toFixed(3)})"><ellipse rx="3.6" ry="${(3.6 * ct).toFixed(2)}" class="gl-oc"/><g transform="translate(-8 3)"><text text-anchor="end" class="gl-on">ROMA</text></g></g>`;
     };
 
-    /* ---------- struttura, zoom e rotazione ---------- */
+    /* ---------- struttura: zoom solo con + / −, trascinamento per spostarsi ---------- */
+    const HINT = 'Usa + e − per lo zoom · trascina per spostarti';
     el.innerHTML = `<div class="gm-tools"><div class="gm-seg" role="group" aria-label="Vista mappa"><button type="button" data-gmode="2d" class="${gMap.mode === '2d' ? 'on' : ''}">2D</button><button type="button" data-gmode="3d" class="${gMap.mode === '3d' ? 'on' : ''}">3D</button></div>
-      <div class="gm-zoom"><button type="button" data-gz="in" aria-label="Ingrandisci">+</button><button type="button" data-gz="out" aria-label="Riduci">−</button><button type="button" data-gz="reset" aria-label="Vista intera"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div></div>
-      <svg class="gl-svg${gMap.mode === '3d' ? ' is3d' : ''}" role="img" aria-label="Mappa delle spedizioni GLS"></svg>
-      <div class="gm-hint">${gMap.mode === '3d' ? 'Trascina per ruotare · rotellina o + / − per lo zoom' : 'Rotellina, doppio clic o + / − per lo zoom · trascina per spostarti'}</div>`;
-    const svg = $('svg.gl-svg', el);
+      <div class="gm-zoom"><button type="button" data-gz="in" aria-label="Ingrandisci">+</button><button type="button" data-gz="out" aria-label="Riduci">−</button><button type="button" data-gz="reset" aria-label="Vista intera"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
+      <div class="gm-zoom gm-rot"${gMap.mode === '3d' ? '' : ' hidden'}><button type="button" data-gr="-1" aria-label="Ruota a sinistra"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button><button type="button" data-gr="1" aria-label="Ruota a destra"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/></svg></button></div></div>
+      <div class="gm-stage"><svg class="gl-svg${gMap.mode === '3d' ? ' is3d' : ''}" role="img" aria-label="Mappa delle spedizioni GLS"></svg></div>
+      <div class="gm-hint">${HINT}</div>`;
+    const svg = $('svg.gl-svg', el), stage = $('.gm-stage', el);
     let anim0 = anim, raf = 0;
+    const R0 = -14, T0 = 52;
     const base = () => gMap.mode === '3d' ? (gMap.vb3 || (gMap.vb3 = bounds3(gMap.rot, gMap.tilt))) : VB2;
     const vb = () => { const b = base(), w = b[2] / gMap.s, h = b[3] / gMap.s; let cx = gMap.cx == null ? b[0] + b[2] / 2 : gMap.cx, cy = gMap.cy == null ? b[1] + b[3] / 2 : gMap.cy; cx = Math.min(b[0] + b[2] - w / 2, Math.max(b[0] + w / 2, cx)); cy = Math.min(b[1] + b[3] - h / 2, Math.max(b[1] + h / 2, cy)); gMap.cx = cx; gMap.cy = cy; return [cx - w / 2, cy - h / 2, w, h]; };
-    const paint = (rot = gMap.rot, tilt = gMap.tilt) => {
+    const paint = () => {
       const v = vb(), k = 1 / Math.pow(gMap.s, .75), b = base();
       svg.setAttribute('viewBox', v.map(n => n.toFixed(2)).join(' '));
       svg.style.aspectRatio = `${b[2]} / ${b[3]}`;
       svg.classList.toggle('cc-anim', !!anim0); svg.classList.toggle('is3d', gMap.mode === '3d'); svg.classList.toggle('zoomed', gMap.s > 1.01);
-      svg.innerHTML = gMap.mode === '3d' ? draw3D(anim0, k, rot, tilt) : draw2D(anim0, k);
+      svg.innerHTML = gMap.mode === '3d' ? draw3D(anim0, k, gMap.rot, gMap.tilt) : draw2D(anim0, k);
       anim0 = false;
     };
-    const req = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => paint()); };
+    const req = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(paint); };
+    if (gMap.mode === '3d') { gMap.rot = R0; gMap.tilt = T0; gMap.vb3 = null; }
     paint();
-    const zoomAt = (f, px = .5, py = .5) => { const v = vb(), ns = Math.min(8, Math.max(1, gMap.s * f)); if (ns === gMap.s) return; const ax = v[0] + px * v[2], ay = v[1] + py * v[3], b = base(), nw = b[2] / ns, nh = b[3] / ns; gMap.s = ns; gMap.cx = ax - px * nw + nw / 2; gMap.cy = ay - py * nh + nh / 2; req(); };
-    const rel = e => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
-    svg.addEventListener('wheel', e => { if (gMap.s <= 1 && e.deltaY > 0) return; e.preventDefault(); const [px, py] = rel(e); zoomAt(e.deltaY < 0 ? 1.25 : 1 / 1.25, px, py); }, { passive: false });
-    svg.addEventListener('dblclick', e => { e.preventDefault(); const [px, py] = rel(e); zoomAt(1.8, px, py); });
-    const ptr = new Map(); let drag = null, pinch = null, moved = false;
-    svg.addEventListener('pointerdown', e => { ptr.set(e.pointerId, [e.clientX, e.clientY]); moved = false; if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: gMap.s }; drag = null; } else drag = { x: e.clientX, y: e.clientY, rot: gMap.rot, tilt: gMap.tilt, cx: gMap.cx, cy: gMap.cy }; });
+    // zoom morbido verso il centro della vista
+    let zr = 0;
+    const zoomTo = ns => {
+      ns = Math.min(6, Math.max(1, ns)); if (Math.abs(ns - gMap.s) < .001) return;
+      const s0 = gMap.s, t0 = performance.now(), dur = reduced() ? 1 : 320; cancelAnimationFrame(zr);
+      const st = now => { const q = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - q, 3); gMap.s = s0 + (ns - s0) * e; paint(); if (q < 1) zr = requestAnimationFrame(st); else if (ns === 1) { gMap.cx = gMap.cy = null; paint(); } };
+      zr = requestAnimationFrame(st);
+    };
+    // trascinamento (mouse o dito) per spostarsi quando la mappa è ingrandita
+    let drag = null, moved = false;
+    svg.addEventListener('pointerdown', e => { moved = false; if (gMap.s <= 1.01 || !e.isPrimary) return; drag = { x: e.clientX, y: e.clientY, cx: gMap.cx, cy: gMap.cy }; moved = false; });
     svg.addEventListener('pointermove', e => {
-      if (!ptr.has(e.pointerId)) return; ptr.set(e.pointerId, [e.clientX, e.clientY]);
-      if (pinch && ptr.size === 2) { const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); const f = pinch.s * d / pinch.d / gMap.s; zoomAt(f); moved = true; return; }
-      if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) moved = true; if (!moved) return;
-      if (gMap.mode === '3d' && !e.shiftKey) { gMap.rot = drag.rot + dx * .35; gMap.tilt = Math.min(72, Math.max(22, drag.tilt - dy * .25)); if (gMap.s <= 1.01) { gMap.vb3 = bounds3(gMap.rot, gMap.tilt); gMap.cx = gMap.cy = null; } svg.setPointerCapture(e.pointerId); req(); }
-      else if (gMap.s > 1.01) { const r = svg.getBoundingClientRect(), v = vb(); gMap.cx = drag.cx - dx * v[2] / r.width; gMap.cy = drag.cy - dy * v[3] / r.height; svg.setPointerCapture(e.pointerId); req(); }
+      if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      if (!moved) { moved = true; svg.setPointerCapture(e.pointerId); svg.classList.add('dragging'); }
+      const r = svg.getBoundingClientRect(), v = vb(); gMap.cx = drag.cx - dx * v[2] / r.width; gMap.cy = drag.cy - dy * v[3] / r.height; req();
     });
-    const up = e => { ptr.delete(e.pointerId); if (ptr.size < 2) pinch = null; if (!ptr.size) drag = null; };
+    const up = () => { drag = null; svg.classList.remove('dragging'); };
     svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
-    el.querySelector('.gm-zoom').onclick = e => { const b = e.target.closest('[data-gz]'); if (!b) return; e.stopPropagation(); const z = b.dataset.gz; if (z === 'in') zoomAt(1.5); else if (z === 'out') zoomAt(1 / 1.5); else { gMap.s = 1; gMap.cx = gMap.cy = null; if (gMap.mode === '3d') { gMap.rot = -22; gMap.tilt = 56; gMap.vb3 = null; } req(); } };
+    el.querySelector('.gm-zoom').onclick = e => { const b = e.target.closest('[data-gz]'); if (!b) return; e.stopPropagation(); const z = b.dataset.gz; zoomTo(z === 'in' ? gMap.s * 1.6 : z === 'out' ? gMap.s / 1.6 : 1); };
+    // rotazione del plastico solo con i pulsanti
+    el.querySelector('.gm-rot').onclick = e => {
+      const b = e.target.closest('[data-gr]'); if (!b) return; e.stopPropagation();
+      const r0 = gMap.rot, r1 = r0 + 30 * Number(b.dataset.gr), t0 = performance.now(), dur = reduced() ? 1 : 520;
+      gMap.vb3 = bounds3(r0, gMap.tilt); const vA = gMap.vb3.slice(), vB = bounds3(r1, gMap.tilt);
+      const st = now => { const q = Math.min(1, (now - t0) / dur), e2 = q < .5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2; gMap.rot = r0 + (r1 - r0) * e2; gMap.vb3 = vA.map((v, i) => v + (vB[i] - v) * e2); paint(); if (q < 1) requestAnimationFrame(st); };
+      requestAnimationFrame(st);
+    };
     el.querySelector('.gm-seg').onclick = e => {
       const b = e.target.closest('[data-gmode]'); if (!b || b.dataset.gmode === gMap.mode) return; e.stopPropagation();
       const to = b.dataset.gmode; LS.set('cdc_glsmap', to); $$('.gm-seg button', el).forEach(x => x.classList.toggle('on', x === b));
-      $('.gm-hint', el).textContent = to === '3d' ? 'Trascina per ruotare · rotellina o + / − per lo zoom' : 'Rotellina, doppio clic o + / − per lo zoom · trascina per spostarti';
-      gMap.s = 1; gMap.cx = gMap.cy = null;
-      const R = -22, T = 56, t0 = performance.now(), dur = reduced() ? 1 : 900, ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      gMap.mode = '3d';
-      if (to === '3d') { gMap.vb3 = VB2.slice(); const vbA = VB2, vbB = bounds3(R, T); const step3 = now => { const q = ease(Math.min(1, (now - t0) / dur)); gMap.vb3 = vbA.map((v, i) => v + (vbB[i] - v) * q); paint(R * q, T * q); if (q < 1) requestAnimationFrame(step3); else { gMap.vb3 = vbB; gMap.rot = R; gMap.tilt = T; anim0 = true; paint(); } }; requestAnimationFrame(step3); }
-      else { const vbA = gMap.vb3 || bounds3(gMap.rot, gMap.tilt), r0 = gMap.rot, t1 = gMap.tilt; const step2 = now => { const q = ease(Math.min(1, (now - t0) / dur)); gMap.vb3 = vbA.map((v, i) => v + (VB2[i] - v) * q); paint(r0 * (1 - q), t1 * (1 - q)); if (q < 1) requestAnimationFrame(step2); else { gMap.mode = '2d'; gMap.vb3 = null; gMap.rot = R; gMap.tilt = T; paint(); } }; requestAnimationFrame(step2); }
+      $('.gm-rot', el).hidden = to !== '3d';
+      const swap = () => { gMap.mode = to; gMap.s = 1; gMap.cx = gMap.cy = null; gMap.rot = R0; gMap.tilt = T0; gMap.vb3 = null; anim0 = !reduced(); paint(); stage.classList.remove('out'); };
+      if (reduced()) return swap();
+      stage.classList.add('out'); setTimeout(swap, 220);
     };
 
     // elenco aziende / destinazioni
     list.innerHTML = `<div class="gd-h"><span>${g.length} destinazioni</span><span>costo</span></div><div class="gd-l">${g.map(x => `<div class="gd-r${x.home ? ' home' : ''}" data-gdest="${esc(x.k)}" style="--d:${300 + Math.min(x.i, 14) * 45}ms"><span class="gd-n${x.i <= 12 ? ' nb' : ''}">${x.i}</span><span class="gd-m"><b title="${esc(x.nm)}">${esc(x.nm)}${x.more ? ` <em>+${x.more}</em>` : ''}</b><small>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped. · ${fmtNum(x.kt, 0)} kg</small><span class="gd-b"><i style="width:${(x.t / mx * 100).toFixed(1)}%"></i></span></span><b class="gd-v">${gE0(x.t)}</b></div>`).join('')}</div>`;
-    const hl = k => { $$('.gl-pin.hl,.gd-r.hl,.gl-arc.hl', el.parentNode).forEach(e => e.classList.remove('hl')); if (!k) return; $$(`[data-gpin="${CSS.escape(k)}"],[data-gdest="${CSS.escape(k)}"],[data-ga="${CSS.escape(k)}"]`, el.parentNode).forEach(e => e.classList.add('hl')); };
+    const hl = k => { $$('.gl-pin.hl,.gd-r.hl,.gl-arc.hl,.g3-arc.hl,.g3-lab.hl', el.parentNode).forEach(e => e.classList.remove('hl')); if (!k) return; $$(`[data-gpin="${CSS.escape(k)}"],[data-gdest="${CSS.escape(k)}"],[data-ga="${CSS.escape(k)}"],[data-glab="${CSS.escape(k)}"]`, el.parentNode).forEach(e => e.classList.add('hl')); };
     const pick = k => { const x = g.find(z => z.k === k); if (!x) return; gF.q = x.c; $('#gl-q').value = x.c; renderGlsList(); $('#gl-ship').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     const tipH = e => {
-      if (drag && moved) return;
+      if (moved && drag) return;
       const pin = e.target.closest('.gl-pin'); let tip = $('.cm-tip', el);
       if (!pin) { if (tip) tip.remove(); hl(''); return; }
       const x = g.find(z => z.k === pin.dataset.gpin); if (!x) return;

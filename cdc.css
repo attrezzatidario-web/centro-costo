@@ -550,7 +550,7 @@ body.has-sel .fab { display: none; }
 @media (min-width: 980px) { .gl-mapgrid { grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 24px; align-items: stretch; } }
 .gl-map { position: relative; border-radius: 16px; background: var(--bg); padding: 6px; }
 .gl-svg { width: 100%; height: auto; display: block; max-height: 680px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; border-radius: 12px; }
-.gl-svg.zoomed, .gl-svg.is3d { touch-action: none; cursor: grab; } .gl-svg.zoomed:active, .gl-svg.is3d:active { cursor: grabbing; }
+.gl-svg.zoomed { touch-action: none; cursor: grab; }
 .gl-land { fill: var(--surface); stroke: color-mix(in srgb, var(--accent) 35%, var(--line)); stroke-width: .7; }
 .gl-arc { opacity: .38; stroke: var(--accent); transition: opacity .2s, stroke .2s; }
 .gl-arc.hl { opacity: 1; stroke: var(--danger); }
@@ -998,30 +998,31 @@ body.has-sel .fab { display: none; }
 .gm-hint { position: absolute; left: 14px; bottom: 12px; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); pointer-events: none; }
 @media (max-width: 640px) { .gm-hint { display: none; } .gm-tools { top: 8px; right: 8px; } .gm-seg button, .gm-zoom button { min-width: 34px; height: 30px; } }
 
-/* ---- 3D ---- */
-.gl-svg.is3d { background: radial-gradient(120% 90% at 50% 20%, color-mix(in srgb, var(--accent) 9%, var(--bg)), var(--bg)); }
-.g3-grid { fill: none; stroke: color-mix(in srgb, var(--accent) 14%, transparent); stroke-width: .4; }
-.g3-side { fill: color-mix(in srgb, var(--accent) 45%, #0b1730); opacity: .55; }
-.g3-land { fill: url(#g3land); stroke: color-mix(in srgb, var(--accent) 45%, var(--line)); stroke-linejoin: round; filter: drop-shadow(0 10px 14px rgba(15, 35, 80, .22)); }
-.g3-l1 { stop-color: color-mix(in srgb, var(--accent) 4%, var(--surface)); } .g3-l2 { stop-color: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
-.g3-arc { opacity: .55; }
-.g3-flow { stroke: #fff; filter: drop-shadow(0 0 2px var(--accent)); }
-.g3-sh { fill: rgba(10, 25, 60, .22); }
-.g3-body { fill: url(#g3body); stroke: color-mix(in srgb, var(--accent) 60%, #000); stroke-width: .25; transition: filter .2s; }
-.g3-top { fill: #a9c4f2; stroke: #fff; stroke-width: .3; }
-.g3-nb { fill: var(--surface); stroke: var(--accent); stroke-width: 1.2; }
+/* ---- 3D (pulito) ---- */
+.gm-stage { transition: opacity .22s ease, transform .22s ease; }
+.gm-stage.out { opacity: 0; transform: scale(.985); }
+.gm-rot button svg { width: 16px; height: 16px; }
+.gl-svg.is3d { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--bg)), var(--bg)); }
+.g3-shadow { fill: rgba(15, 30, 60, .07); filter: blur(4px); }
+.g3-side { fill: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+.g3-land { fill: url(#g3land); stroke: color-mix(in srgb, var(--accent) 30%, var(--line)); stroke-linejoin: round; }
+.g3-l1 { stop-color: var(--surface); } .g3-l2 { stop-color: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.g3-arc { fill: none; stroke: var(--accent); opacity: .28; stroke-linecap: round; transition: opacity .2s, stroke .2s; }
+.g3-arc.hl { opacity: .9; stroke: var(--danger); }
+.cc-anim .g3-arc { stroke-dasharray: 1; animation: cmdash .9s var(--d) var(--out) both; } @keyframes cmdash { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.g3-f.fl { fill: color-mix(in srgb, var(--accent) 88%, #fff); } .g3-f.fr { fill: color-mix(in srgb, var(--accent) 72%, #000); }
+.g3-t { fill: color-mix(in srgb, var(--accent) 45%, #fff); }
+.g3-col:not(.nb) .g3-f.fl { fill: color-mix(in srgb, var(--accent) 45%, var(--surface)); } .g3-col:not(.nb) .g3-f.fr { fill: color-mix(in srgb, var(--accent) 60%, var(--line)); } .g3-col:not(.nb) .g3-t { fill: color-mix(in srgb, var(--accent) 25%, var(--surface)); }
+.g3-col .g3-f, .g3-col .g3-t { transition: fill .18s; }
+.g3-col.hl .g3-f.fl, .g3-col:hover .g3-f.fl { fill: var(--danger); } .g3-col.hl .g3-f.fr, .g3-col:hover .g3-f.fr { fill: color-mix(in srgb, var(--danger) 75%, #000); } .g3-col.hl .g3-t, .g3-col:hover .g3-t { fill: color-mix(in srgb, var(--danger) 45%, #fff); }
 .g3-col .cm-hit { fill: transparent; }
-.g3-col.hl .g3-body, .g3-col:hover .g3-body { fill: var(--danger); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--danger) 60%, transparent)); }
-.g3-col.hl .g3-top, .g3-col:hover .g3-top { fill: #ffb3b2; }
-.g3-col.hl .g3-nb, .g3-col:hover .g3-nb { stroke: var(--danger); }
-.g3-beam { fill: url(#g3beam); }
-.g3-ring { fill: none; stroke: var(--danger); stroke-width: .8; transform-box: fill-box; transform-origin: center; animation: g3ring 2.4s ease-out infinite; }
-.g3-ring.r2 { animation-delay: 1.2s; }
-@keyframes g3ring { from { transform: scale(.4); opacity: .9; } to { transform: scale(2.6); opacity: 0; } }
-.g3-orig .gl-oc { fill: var(--danger); stroke: var(--surface); stroke-width: 1.4; }
-.cc-anim .g3-grow { animation: g3grow .9s var(--d) cubic-bezier(.2, .9, .25, 1.15) both; }
-@keyframes g3grow { from { transform: scaleY(0); opacity: 0; } 30% { opacity: 1; } }
-.cc-anim .g3-sh { animation: rise0 .5s var(--d) both; }
-@media (prefers-reduced-motion: reduce) { .g3-ring, .cc-anim .g3-grow { animation: none; } }
-.g3-col .gl-pn { fill: var(--accent); font-weight: 800; }
-.g3-col.hl .gl-pn, .g3-col:hover .gl-pn { fill: var(--danger); }
+.g3-lab rect { fill: var(--surface); stroke: color-mix(in srgb, var(--accent) 40%, var(--line)); stroke-width: .6; }
+.g3-lab text { fill: var(--text); font-size: 6.2px; font-weight: 700; text-anchor: middle; }
+.g3-labs { pointer-events: none; } .g3-lab.hl rect { fill: var(--danger); stroke: var(--danger); } .g3-lab.hl text { fill: #fff; }
+.g3-ring { fill: none; stroke: var(--danger); stroke-width: .7; opacity: .5; }
+.g3-orig .gl-oc { fill: var(--danger); stroke: var(--surface); stroke-width: 1.2; }
+.cc-anim .g3-grow { animation: g3grow .8s var(--d) cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes g3grow { from { transform: scaleY(0); } }
+.cc-anim .g3-lab { animation: rise0 .4s 1.1s both; }
+.gl-svg.dragging { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) { .cc-anim .g3-grow, .cc-anim .g3-arc, .cc-anim .g3-lab { animation: none; } }
