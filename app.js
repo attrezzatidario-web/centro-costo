@@ -272,12 +272,14 @@
 
   /* ================= Router ================= */
   const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', impostazioni: 'Impostazioni' };
+  let prevView = '', gKeep = false;
   function go() {
+    prevView = view;
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
     if (view === 'attrezzatura') ccAnim = true;
     if (view === 'home') ovAnim = true;
-    if (view === 'gls') glsAnim = true;
+    if (view === 'gls') { glsAnim = true; if (prevView !== 'gls' && !gKeep) gMonth = ALLM; gKeep = false; }
     if (view === 'gasolio') gasAnim = true;
     if (view === 'fatture') faAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
@@ -1376,6 +1378,7 @@
   function renderGls() {
     const months = glsMonths();
     const cur = ymOf(new Date());
+    if (!gMonth && months.length) gMonth = ALLM;
     if (gMonth !== ALLM && !months.includes(gMonth)) gMonth = months.includes(cur) ? cur : months[months.length - 1] || cur;
     const sel = $('#gl-mese');
     const opts = [...new Set([...months, cur])].sort().reverse();
@@ -1537,55 +1540,155 @@
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span><small>${x.ids.slice(0, 6).map(esc).join(' · ')}${x.ids.length > 6 ? ' …' : ''}</small></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
   }
 
-  // mappa: archi da Roma alle destinazioni, numerati come l'elenco a lato
+  // mappa: archi da Roma alle destinazioni, numerati come l'elenco a lato (2D con zoom, oppure 3D con colonne)
   const glsName = v => {
     const by = [...groupBy(v, r => String(r.destinatario || '').trim().toUpperCase())].map(([, a]) => ({ a, t: gTot(a) })).sort((a, b) => b.t - a.t);
     const r = by[0].a[0];
     return { nm: (String(r.destinatario || '').trim() || r.citta).toUpperCase().replace(/\s+/g, ' '), more: by.length - 1 };
   };
+  const gMap = { mode: LS.get('cdc_glsmap', '2d'), rot: -22, tilt: 56, s: 1, cx: null, cy: null, vb3: null };
+  const VB2 = [26, 4, 346, 388], MC = { x: 199, y: 198 };
+  let itPts = null;
+  const itParse = () => itPts || (itPts = IT_PATH.split(/(?=[MLZ])/).map(t => t[0] === 'Z' ? null : [t[0], ...t.slice(1).trim().split(/[\s,]+/).map(Number)]));
   function glsMapRender(el, list, rows, anim) {
     const P = (lat, lon) => proj([lon, lat]);
     const [ox, oy] = P(GLS_ORIG.lat, GLS_ORIG.lon);
     const g = [...groupBy(rows, r => r.citta + '|' + r.prov)].map(([k, v]) => ({ k, c: v[0].citta, p: v[0].prov, v, t: gTot(v), n: v.length, kt: gSum(v, 'kgTass'), geo: geoOf(v[0]), ...glsName(v) })).sort((a, b) => b.t - a.t);
     g.forEach((x, i) => { x.i = i + 1; });
     const gm = g.filter(x => x.geo), mx = Math.max(...g.map(x => x.t), 1);
-    gm.forEach(x => { [x.x, x.y] = P(x.geo.lat, x.geo.lon); x.r = 2.2 + 7.5 * Math.sqrt(x.t / mx); x.home = Math.hypot(x.x - ox, x.y - oy) < 2.5; if (x.i <= 12) x.r = Math.max(x.r, 5.6); });
+    gm.forEach(x => { [x.x, x.y] = P(x.geo.lat, x.geo.lon); x.f = Math.sqrt(x.t / mx); x.r = 2.2 + 7.5 * x.f; x.home = Math.hypot(x.x - ox, x.y - oy) < 2.5; if (x.i <= 12) x.r = Math.max(x.r, 5.6); });
     const far = gm.filter(x => !x.home);
-    const arcs = far.map((x, j) => {
-      const dx = x.x - ox, dy = x.y - oy, L = Math.hypot(dx, dy) || 1, b = Math.min(46, L * .22) * (dx < 0 ? 1 : -1);
-      const cx = (ox + x.x) / 2 - dy / L * b, cy = (oy + x.y) / 2 + dx / L * b;
-      const d = `M${ox.toFixed(1)} ${oy.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}`;
-      const w = .5 + 1.9 * Math.sqrt(x.t / mx);
-      return `<path class="cm-arc gl-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${500 + j * 40}ms;stroke-width:${w.toFixed(2)}" d="${d}"/>` +
-        (x.i <= 10 ? `<path class="gl-flow" pathLength="1" style="--d:${(1.4 + j * .23).toFixed(2)}s;--t:${(1.6 + L / 160).toFixed(2)}s;stroke-width:${(w + .6).toFixed(2)}" d="${d}"/>` : '');
-    }).join('');
-    const pins = gm.slice().reverse().map(x => `<g class="gl-pin${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${800 + x.i * 35}ms" transform="translate(${x.x.toFixed(1)} ${x.y.toFixed(1)})"><circle class="cm-hit" r="${(x.r + 4).toFixed(1)}"/><circle class="gl-halo" r="${(x.r + 2.4).toFixed(1)}"/><circle class="cm-c" r="${x.r.toFixed(1)}"/>${x.i <= 12 ? `<text class="gl-pn" dy=".35em">${x.i}</text>` : ''}</g>`).join('');
-    const right = false;
-    el.innerHTML = `<svg viewBox="26 4 346 388" class="gl-svg" role="img" aria-label="Mappa delle spedizioni GLS">
-      <defs><radialGradient id="glsea" cx="50%" cy="45%" r="65%"><stop offset="0" stop-color="var(--accent)" stop-opacity=".07"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient></defs>
-      <rect x="26" y="4" width="346" height="388" fill="url(#glsea)"/>
-      <path class="cm-land gl-land" pathLength="1" d="${IT_PATH}"/>
-      ${arcs}
-      ${pins}
-      <g class="gl-orig" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)})"><circle class="gl-op" r="6"/><circle class="gl-op gl-op2" r="6"/><circle r="5.2" class="gl-oc"/><circle r="1.9" class="gl-oi"/></g>
-      <g class="gl-olab" transform="translate(${(ox + (right ? 9 : -9)).toFixed(1)} ${(oy + 3).toFixed(1)})"><text text-anchor="${right ? 'start' : 'end'}" class="gl-on">ROMA</text><text text-anchor="${right ? 'start' : 'end'}" dy="8" class="gl-os">partenza</text></g>
-    </svg>`;
+
+    /* ---------- disegno 2D ---------- */
+    const draw2D = (an, k) => {
+      const arcs = far.map((x, j) => {
+        const dx = x.x - ox, dy = x.y - oy, L = Math.hypot(dx, dy) || 1, b = Math.min(46, L * .22) * (dx < 0 ? 1 : -1);
+        const cx = (ox + x.x) / 2 - dy / L * b, cy = (oy + x.y) / 2 + dx / L * b;
+        const d = `M${ox.toFixed(1)} ${oy.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}`;
+        const w = (.5 + 1.9 * x.f) * k;
+        return `<path class="cm-arc gl-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${500 + j * 40}ms;stroke-width:${w.toFixed(2)}" d="${d}"/>` +
+          (x.i <= 10 ? `<path class="gl-flow" pathLength="1" style="--d:${(1.4 + j * .23).toFixed(2)}s;--t:${(1.6 + L / 160).toFixed(2)}s;stroke-width:${(w + .6 * k).toFixed(2)}" d="${d}"/>` : '');
+      }).join('');
+      const pins = gm.slice().reverse().map(x => `<g class="gl-pin${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${800 + x.i * 35}ms" transform="translate(${x.x.toFixed(1)} ${x.y.toFixed(1)}) scale(${k.toFixed(3)})"><circle class="cm-hit" r="${(x.r + 4).toFixed(1)}"/><circle class="gl-halo" r="${(x.r + 2.4).toFixed(1)}"/><circle class="cm-c" r="${x.r.toFixed(1)}"/>${x.i <= 12 ? `<text class="gl-pn" dy=".35em">${x.i}</text>` : ''}</g>`).join('');
+      return `<defs><radialGradient id="glsea" cx="50%" cy="45%" r="65%"><stop offset="0" stop-color="var(--accent)" stop-opacity=".07"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient></defs>
+        <rect x="-200" y="-200" width="800" height="800" fill="url(#glsea)"/>
+        <path class="cm-land gl-land" pathLength="1" d="${IT_PATH}" style="stroke-width:${(.7 * k).toFixed(2)}"/>
+        ${arcs}${pins}
+        <g class="gl-orig" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)}) scale(${k.toFixed(3)})"><circle class="gl-op" r="6"/><circle class="gl-op gl-op2" r="6"/><circle r="5.2" class="gl-oc"/><circle r="1.9" class="gl-oi"/>
+        <g transform="translate(-9 3)"><text text-anchor="end" class="gl-on">ROMA</text><text text-anchor="end" dy="8" class="gl-os">partenza</text></g></g>`;
+    };
+
+    /* ---------- disegno 3D (proiezione inclinata + colonne) ---------- */
+    const pr = (x, y, z, rot, tilt) => {
+      const th = rot * Math.PI / 180, tl = tilt * Math.PI / 180, dx = x - MC.x, dy = y - MC.y;
+      const rx = dx * Math.cos(th) - dy * Math.sin(th), ry = dx * Math.sin(th) + dy * Math.cos(th);
+      return [MC.x + rx, MC.y + ry * Math.cos(tl) - z * Math.sin(tl), ry];
+    };
+    const landPath = (rot, tilt, z) => itParse().map(t => t ? t[0] + pr(t[1], t[2], z, rot, tilt).slice(0, 2).map(v => v.toFixed(1)).join(' ') : 'Z').join('');
+    const bounds3 = (rot, tilt) => {
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      itParse().forEach(t => { if (!t) return; const [X, Y] = pr(t[1], t[2], 0, rot, tilt); x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); });
+      gm.forEach(x => { const [, Y] = pr(x.x, x.y, 8 + 95 * x.f, rot, tilt); y0 = Math.min(y0, Y - 10); });
+      const pad = 14; return [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2 + 10];
+    };
+    const draw3D = (an, k, rot, tilt) => {
+      const st = Math.sin(tilt * Math.PI / 180), ct = Math.cos(tilt * Math.PI / 180);
+      const grid = []; for (let v = 40; v <= 360; v += 40) { const a = pr(v, 0, 0, rot, tilt), b = pr(v, 400, 0, rot, tilt), c = pr(20, v, 0, rot, tilt), d = pr(380, v, 0, rot, tilt); grid.push(`M${a[0].toFixed(1)} ${a[1].toFixed(1)}L${b[0].toFixed(1)} ${b[1].toFixed(1)}M${c[0].toFixed(1)} ${c[1].toFixed(1)}L${d[0].toFixed(1)} ${d[1].toFixed(1)}`); }
+      const [OX, OY] = pr(ox, oy, 0, rot, tilt);
+      const arcs = far.map((x, j) => {
+        const [X, Y] = pr(x.x, x.y, 0, rot, tilt), L = Math.hypot(x.x - ox, x.y - oy), lift = 18 + L * .42;
+        const [CX, CY] = pr((ox + x.x) / 2, (oy + x.y) / 2, lift * 2, rot, tilt);
+        const d = `M${OX.toFixed(1)} ${OY.toFixed(1)} Q${CX.toFixed(1)} ${CY.toFixed(1)} ${X.toFixed(1)} ${Y.toFixed(1)}`, w = (.5 + 1.6 * x.f) * k;
+        return `<path class="cm-arc gl-arc g3-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${300 + j * 30}ms;stroke-width:${w.toFixed(2)}" d="${d}"/>` + (x.i <= 10 ? `<path class="gl-flow g3-flow" pathLength="1" style="--d:${(1 + j * .2).toFixed(2)}s;--t:${(1.8 + L / 150).toFixed(2)}s;stroke-width:${(w + .7 * k).toFixed(2)}" d="${d}"/>` : '');
+      }).join('');
+      const cols = gm.map(x => { const [X, Y, depth] = pr(x.x, x.y, 0, rot, tilt); return { x, X, Y, depth }; }).sort((a, b) => a.depth - b.depth).map(({ x, X, Y }, j) => {
+        const H = (6 + 95 * x.f) * st, rr = (x.i <= 12 ? 3.6 : 2.4) * k, ry = rr * Math.max(.18, ct), top = Y - H;
+        return `<g class="gl-pin g3-col${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${450 + x.i * 40}ms">
+          <ellipse class="g3-sh" cx="${(X + 1.5).toFixed(1)}" cy="${(Y + .6).toFixed(1)}" rx="${(rr * 2).toFixed(2)}" ry="${(ry * 1.6).toFixed(2)}"/>
+          <g class="g3-grow" style="transform-origin:${X.toFixed(1)}px ${Y.toFixed(1)}px"><path class="g3-body" d="M${(X - rr).toFixed(2)} ${Y.toFixed(2)} L${(X - rr).toFixed(2)} ${top.toFixed(2)} A${rr.toFixed(2)} ${ry.toFixed(2)} 0 0 0 ${(X + rr).toFixed(2)} ${top.toFixed(2)} L${(X + rr).toFixed(2)} ${Y.toFixed(2)} A${rr.toFixed(2)} ${ry.toFixed(2)} 0 0 1 ${(X - rr).toFixed(2)} ${Y.toFixed(2)}Z"/>
+          <ellipse class="g3-top" cx="${X.toFixed(2)}" cy="${top.toFixed(2)}" rx="${rr.toFixed(2)}" ry="${ry.toFixed(2)}"/>
+          ${x.i <= 12 ? `<g transform="translate(${X.toFixed(1)} ${(top - 7 * k).toFixed(1)}) scale(${k.toFixed(3)})"><circle class="g3-nb" r="5.4"/><text class="gl-pn" dy=".35em">${x.i}</text></g>` : ''}</g>
+          <rect class="cm-hit" x="${(X - rr - 3).toFixed(1)}" y="${(top - 12 * k).toFixed(1)}" width="${(rr * 2 + 6).toFixed(1)}" height="${(H + 14 * k).toFixed(1)}"/></g>`;
+      }).join('');
+      const beam = 150 * st;
+      return `<defs>
+          <linearGradient id="g3body" x1="0" x2="1"><stop offset="0" stop-color="#6d97e0"/><stop offset=".45" stop-color="var(--accent)"/><stop offset="1" stop-color="#1d3d78"/></linearGradient>
+          <linearGradient id="g3land" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="g3-l1"/><stop offset="1" class="g3-l2"/></linearGradient>
+          <linearGradient id="g3beam" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e22726" stop-opacity="0"/><stop offset="1" stop-color="#e22726" stop-opacity=".75"/></linearGradient>
+          <radialGradient id="g3glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="var(--accent)" stop-opacity=".18"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient></defs>
+        <ellipse cx="${MC.x}" cy="${(MC.y + 10).toFixed(1)}" rx="260" ry="${(260 * ct + 40).toFixed(1)}" fill="url(#g3glow)"/>
+        <path class="g3-grid" d="${grid.join('')}"/>
+        <path class="g3-side" d="${landPath(rot, tilt, -7)}"/>
+        <path class="g3-land" d="${landPath(rot, tilt, 0)}" style="stroke-width:${(.6 * k).toFixed(2)}"/>
+        <ellipse class="g3-ring" cx="${OX.toFixed(1)}" cy="${OY.toFixed(1)}" rx="${(9 * k).toFixed(1)}" ry="${(9 * k * ct).toFixed(1)}"/><ellipse class="g3-ring r2" cx="${OX.toFixed(1)}" cy="${OY.toFixed(1)}" rx="${(9 * k).toFixed(1)}" ry="${(9 * k * ct).toFixed(1)}"/>
+        <rect class="g3-beam" x="${(OX - 1.6 * k).toFixed(1)}" y="${(OY - beam).toFixed(1)}" width="${(3.2 * k).toFixed(1)}" height="${beam.toFixed(1)}"/>
+        ${arcs}${cols}
+        <g class="gl-orig g3-orig" transform="translate(${OX.toFixed(1)} ${OY.toFixed(1)}) scale(${k.toFixed(3)})"><ellipse rx="5" ry="${(5 * ct).toFixed(2)}" class="gl-oc"/><g transform="translate(-9 3)"><text text-anchor="end" class="gl-on">ROMA</text><text text-anchor="end" dy="8" class="gl-os">partenza</text></g></g>`;
+    };
+
+    /* ---------- struttura, zoom e rotazione ---------- */
+    el.innerHTML = `<div class="gm-tools"><div class="gm-seg" role="group" aria-label="Vista mappa"><button type="button" data-gmode="2d" class="${gMap.mode === '2d' ? 'on' : ''}">2D</button><button type="button" data-gmode="3d" class="${gMap.mode === '3d' ? 'on' : ''}">3D</button></div>
+      <div class="gm-zoom"><button type="button" data-gz="in" aria-label="Ingrandisci">+</button><button type="button" data-gz="out" aria-label="Riduci">−</button><button type="button" data-gz="reset" aria-label="Vista intera"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div></div>
+      <svg class="gl-svg${gMap.mode === '3d' ? ' is3d' : ''}" role="img" aria-label="Mappa delle spedizioni GLS"></svg>
+      <div class="gm-hint">${gMap.mode === '3d' ? 'Trascina per ruotare · rotellina o + / − per lo zoom' : 'Rotellina, doppio clic o + / − per lo zoom · trascina per spostarti'}</div>`;
+    const svg = $('svg.gl-svg', el);
+    let anim0 = anim, raf = 0;
+    const base = () => gMap.mode === '3d' ? (gMap.vb3 || (gMap.vb3 = bounds3(gMap.rot, gMap.tilt))) : VB2;
+    const vb = () => { const b = base(), w = b[2] / gMap.s, h = b[3] / gMap.s; let cx = gMap.cx == null ? b[0] + b[2] / 2 : gMap.cx, cy = gMap.cy == null ? b[1] + b[3] / 2 : gMap.cy; cx = Math.min(b[0] + b[2] - w / 2, Math.max(b[0] + w / 2, cx)); cy = Math.min(b[1] + b[3] - h / 2, Math.max(b[1] + h / 2, cy)); gMap.cx = cx; gMap.cy = cy; return [cx - w / 2, cy - h / 2, w, h]; };
+    const paint = (rot = gMap.rot, tilt = gMap.tilt) => {
+      const v = vb(), k = 1 / Math.pow(gMap.s, .75), b = base();
+      svg.setAttribute('viewBox', v.map(n => n.toFixed(2)).join(' '));
+      svg.style.aspectRatio = `${b[2]} / ${b[3]}`;
+      svg.classList.toggle('cc-anim', !!anim0); svg.classList.toggle('is3d', gMap.mode === '3d'); svg.classList.toggle('zoomed', gMap.s > 1.01);
+      svg.innerHTML = gMap.mode === '3d' ? draw3D(anim0, k, rot, tilt) : draw2D(anim0, k);
+      anim0 = false;
+    };
+    const req = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => paint()); };
+    paint();
+    const zoomAt = (f, px = .5, py = .5) => { const v = vb(), ns = Math.min(8, Math.max(1, gMap.s * f)); if (ns === gMap.s) return; const ax = v[0] + px * v[2], ay = v[1] + py * v[3], b = base(), nw = b[2] / ns, nh = b[3] / ns; gMap.s = ns; gMap.cx = ax - px * nw + nw / 2; gMap.cy = ay - py * nh + nh / 2; req(); };
+    const rel = e => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+    svg.addEventListener('wheel', e => { if (gMap.s <= 1 && e.deltaY > 0) return; e.preventDefault(); const [px, py] = rel(e); zoomAt(e.deltaY < 0 ? 1.25 : 1 / 1.25, px, py); }, { passive: false });
+    svg.addEventListener('dblclick', e => { e.preventDefault(); const [px, py] = rel(e); zoomAt(1.8, px, py); });
+    const ptr = new Map(); let drag = null, pinch = null, moved = false;
+    svg.addEventListener('pointerdown', e => { ptr.set(e.pointerId, [e.clientX, e.clientY]); moved = false; if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: gMap.s }; drag = null; } else drag = { x: e.clientX, y: e.clientY, rot: gMap.rot, tilt: gMap.tilt, cx: gMap.cx, cy: gMap.cy }; });
+    svg.addEventListener('pointermove', e => {
+      if (!ptr.has(e.pointerId)) return; ptr.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pinch && ptr.size === 2) { const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); const f = pinch.s * d / pinch.d / gMap.s; zoomAt(f); moved = true; return; }
+      if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) moved = true; if (!moved) return;
+      if (gMap.mode === '3d' && !e.shiftKey) { gMap.rot = drag.rot + dx * .35; gMap.tilt = Math.min(72, Math.max(22, drag.tilt - dy * .25)); if (gMap.s <= 1.01) { gMap.vb3 = bounds3(gMap.rot, gMap.tilt); gMap.cx = gMap.cy = null; } svg.setPointerCapture(e.pointerId); req(); }
+      else if (gMap.s > 1.01) { const r = svg.getBoundingClientRect(), v = vb(); gMap.cx = drag.cx - dx * v[2] / r.width; gMap.cy = drag.cy - dy * v[3] / r.height; svg.setPointerCapture(e.pointerId); req(); }
+    });
+    const up = e => { ptr.delete(e.pointerId); if (ptr.size < 2) pinch = null; if (!ptr.size) drag = null; };
+    svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+    el.querySelector('.gm-zoom').onclick = e => { const b = e.target.closest('[data-gz]'); if (!b) return; e.stopPropagation(); const z = b.dataset.gz; if (z === 'in') zoomAt(1.5); else if (z === 'out') zoomAt(1 / 1.5); else { gMap.s = 1; gMap.cx = gMap.cy = null; if (gMap.mode === '3d') { gMap.rot = -22; gMap.tilt = 56; gMap.vb3 = null; } req(); } };
+    el.querySelector('.gm-seg').onclick = e => {
+      const b = e.target.closest('[data-gmode]'); if (!b || b.dataset.gmode === gMap.mode) return; e.stopPropagation();
+      const to = b.dataset.gmode; LS.set('cdc_glsmap', to); $$('.gm-seg button', el).forEach(x => x.classList.toggle('on', x === b));
+      $('.gm-hint', el).textContent = to === '3d' ? 'Trascina per ruotare · rotellina o + / − per lo zoom' : 'Rotellina, doppio clic o + / − per lo zoom · trascina per spostarti';
+      gMap.s = 1; gMap.cx = gMap.cy = null;
+      const R = -22, T = 56, t0 = performance.now(), dur = reduced() ? 1 : 900, ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      gMap.mode = '3d';
+      if (to === '3d') { gMap.vb3 = VB2.slice(); const vbA = VB2, vbB = bounds3(R, T); const step3 = now => { const q = ease(Math.min(1, (now - t0) / dur)); gMap.vb3 = vbA.map((v, i) => v + (vbB[i] - v) * q); paint(R * q, T * q); if (q < 1) requestAnimationFrame(step3); else { gMap.vb3 = vbB; gMap.rot = R; gMap.tilt = T; anim0 = true; paint(); } }; requestAnimationFrame(step3); }
+      else { const vbA = gMap.vb3 || bounds3(gMap.rot, gMap.tilt), r0 = gMap.rot, t1 = gMap.tilt; const step2 = now => { const q = ease(Math.min(1, (now - t0) / dur)); gMap.vb3 = vbA.map((v, i) => v + (VB2[i] - v) * q); paint(r0 * (1 - q), t1 * (1 - q)); if (q < 1) requestAnimationFrame(step2); else { gMap.mode = '2d'; gMap.vb3 = null; gMap.rot = R; gMap.tilt = T; paint(); } }; requestAnimationFrame(step2); }
+    };
+
     // elenco aziende / destinazioni
     list.innerHTML = `<div class="gd-h"><span>${g.length} destinazioni</span><span>costo</span></div><div class="gd-l">${g.map(x => `<div class="gd-r${x.home ? ' home' : ''}" data-gdest="${esc(x.k)}" style="--d:${300 + Math.min(x.i, 14) * 45}ms"><span class="gd-n${x.i <= 12 ? ' nb' : ''}">${x.i}</span><span class="gd-m"><b title="${esc(x.nm)}">${esc(x.nm)}${x.more ? ` <em>+${x.more}</em>` : ''}</b><small>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped. · ${fmtNum(x.kt, 0)} kg</small><span class="gd-b"><i style="width:${(x.t / mx * 100).toFixed(1)}%"></i></span></span><b class="gd-v">${gE0(x.t)}</b></div>`).join('')}</div>`;
     const hl = k => { $$('.gl-pin.hl,.gd-r.hl,.gl-arc.hl', el.parentNode).forEach(e => e.classList.remove('hl')); if (!k) return; $$(`[data-gpin="${CSS.escape(k)}"],[data-gdest="${CSS.escape(k)}"],[data-ga="${CSS.escape(k)}"]`, el.parentNode).forEach(e => e.classList.add('hl')); };
     const pick = k => { const x = g.find(z => z.k === k); if (!x) return; gF.q = x.c; $('#gl-q').value = x.c; renderGlsList(); $('#gl-ship').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     const tipH = e => {
+      if (drag && moved) return;
       const pin = e.target.closest('.gl-pin'); let tip = $('.cm-tip', el);
       if (!pin) { if (tip) tip.remove(); hl(''); return; }
       const x = g.find(z => z.k === pin.dataset.gpin); if (!x) return;
       hl(x.k);
       if (!tip) { tip = document.createElement('div'); tip.className = 'tip cm-tip'; el.appendChild(tip); }
       tip.innerHTML = `<b>${x.i}. ${esc(x.nm)}</b><br>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped.<br><b>${gE(x.t)}</b> · ${fmtNum(x.kt, 0)} kg tass.`;
-      const r = pin.getBoundingClientRect(), w = el.getBoundingClientRect();
+      const r = (pin.querySelector('.g3-top') || pin).getBoundingClientRect(), w = el.getBoundingClientRect();
       tip.style.left = (r.left + r.width / 2 - w.left) + 'px'; tip.style.top = (r.top - w.top - 4) + 'px';
     };
     el.onmousemove = tipH; el.onmouseleave = () => { const t = $('.cm-tip', el); if (t) t.remove(); hl(''); };
-    el.onclick = e => { const pin = e.target.closest('.gl-pin'); if (pin) pick(pin.dataset.gpin); };
+    el.onclick = e => { if (moved) { moved = false; return; } const pin = e.target.closest('.gl-pin'); if (pin) pick(pin.dataset.gpin); };
     list.onmouseover = e => { const r = e.target.closest('.gd-r'); hl(r ? r.dataset.gdest : ''); };
     list.onmouseleave = () => hl('');
     list.onclick = e => { const r = e.target.closest('.gd-r'); if (r) pick(r.dataset.gdest); };
@@ -2601,7 +2704,7 @@
       if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'attrezzatura') ccAnim = true; if (view === 'home') ovAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
       const ovm = t.closest('[data-ovm]'); if (ovm) { ovP = ovP === ovm.dataset.ovm ? '' : ovm.dataset.ovm; ovAnim = true; renderOverview(); return; }
       if (t.closest('#ov-prev') || t.closest('#ov-next')) { const o = [...$('#ov-per').options].map(x => x.value), i = o.indexOf(ovP) + (t.closest('#ov-prev') ? 1 : -1); if (i >= 0 && i < o.length) { ovP = o[i]; ovAnim = true; renderOverview(); } return; }
-      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'gls') { gMonth = ovP || 'tutto'; } if (g === 'gasolio') gasP = ovP; if (g === 'fatture') faP = ovP; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
+      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'gls') { gMonth = ovP || 'tutto'; gKeep = true; } if (g === 'gasolio') gasP = ovP; if (g === 'fatture') faP = ovP; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
       const ckf = t.closest('[data-ckf]'); if (ckf) { const k = ckf.dataset.ckf; $$('.ov-cf').forEach(b => b.classList.toggle('on', b === ckf)); $$('.ov-ci').forEach(b => { b.hidden = !!k && b.dataset.cka !== k; }); return; }
       if (t.closest('#ov-ai-go')) { ovAnalyze(); return; }
       if (t.closest('#ov-key-go')) { const k = $('#ov-key').value.trim(); if (!k) return; (async () => { try { busy('Collego Gemini…'); await api('setKey', { key: k }); db.ai = true; save(); toast('Gemini collegato'); render(); } catch (er) { if (!(er instanceof AuthError)) toast(er.message); } finally { busy(); } })(); return; }

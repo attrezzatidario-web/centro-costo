@@ -549,7 +549,8 @@ body.has-sel .fab { display: none; }
 .gl-mapgrid { display: grid; gap: 14px; }
 @media (min-width: 980px) { .gl-mapgrid { grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 24px; align-items: stretch; } }
 .gl-map { position: relative; border-radius: 16px; background: var(--bg); padding: 6px; }
-.gl-svg { width: 100%; height: auto; display: block; max-height: 680px; overflow: visible; }
+.gl-svg { width: 100%; height: auto; display: block; max-height: 680px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; border-radius: 12px; }
+.gl-svg.zoomed, .gl-svg.is3d { touch-action: none; cursor: grab; } .gl-svg.zoomed:active, .gl-svg.is3d:active { cursor: grabbing; }
 .gl-land { fill: var(--surface); stroke: color-mix(in srgb, var(--accent) 35%, var(--line)); stroke-width: .7; }
 .gl-arc { opacity: .38; stroke: var(--accent); transition: opacity .2s, stroke .2s; }
 .gl-arc.hl { opacity: 1; stroke: var(--danger); }
@@ -983,3 +984,44 @@ body.has-sel .fab { display: none; }
 .ov-msg.user { justify-self: end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
 .ov-msg.ai { background: var(--bg); border-bottom-left-radius: 4px; } .ov-msg p { margin: 0 0 6px; } .ov-msg p:last-child { margin: 0; } .ov-msg ul { margin: 4px 0; padding-left: 18px; }
 .ov-ask { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 12px; }
+
+/* ---- GLS mappa: strumenti zoom / 2D-3D ---- */
+.gm-tools { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.gm-seg, .gm-zoom { display: flex; background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 3px; box-shadow: 0 6px 20px -10px rgba(15, 30, 60, .35); }
+.gm-zoom { flex-direction: column; }
+.gm-seg button, .gm-zoom button { appearance: none; border: 0; background: none; color: var(--text); font: 700 12.5px/1 inherit; font-family: inherit; min-width: 36px; height: 32px; border-radius: 9px; cursor: pointer; display: grid; place-items: center; transition: background .2s, color .2s, transform .15s; }
+.gm-zoom button { font-size: 18px; font-weight: 600; }
+.gm-zoom button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.gm-seg button:hover, .gm-zoom button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.gm-seg button:active, .gm-zoom button:active { transform: scale(.92); }
+.gm-seg button.on { background: var(--accent); color: #fff; box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent); }
+.gm-hint { position: absolute; left: 14px; bottom: 12px; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); pointer-events: none; }
+@media (max-width: 640px) { .gm-hint { display: none; } .gm-tools { top: 8px; right: 8px; } .gm-seg button, .gm-zoom button { min-width: 34px; height: 30px; } }
+
+/* ---- 3D ---- */
+.gl-svg.is3d { background: radial-gradient(120% 90% at 50% 20%, color-mix(in srgb, var(--accent) 9%, var(--bg)), var(--bg)); }
+.g3-grid { fill: none; stroke: color-mix(in srgb, var(--accent) 14%, transparent); stroke-width: .4; }
+.g3-side { fill: color-mix(in srgb, var(--accent) 45%, #0b1730); opacity: .55; }
+.g3-land { fill: url(#g3land); stroke: color-mix(in srgb, var(--accent) 45%, var(--line)); stroke-linejoin: round; filter: drop-shadow(0 10px 14px rgba(15, 35, 80, .22)); }
+.g3-l1 { stop-color: color-mix(in srgb, var(--accent) 4%, var(--surface)); } .g3-l2 { stop-color: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.g3-arc { opacity: .55; }
+.g3-flow { stroke: #fff; filter: drop-shadow(0 0 2px var(--accent)); }
+.g3-sh { fill: rgba(10, 25, 60, .22); }
+.g3-body { fill: url(#g3body); stroke: color-mix(in srgb, var(--accent) 60%, #000); stroke-width: .25; transition: filter .2s; }
+.g3-top { fill: #a9c4f2; stroke: #fff; stroke-width: .3; }
+.g3-nb { fill: var(--surface); stroke: var(--accent); stroke-width: 1.2; }
+.g3-col .cm-hit { fill: transparent; }
+.g3-col.hl .g3-body, .g3-col:hover .g3-body { fill: var(--danger); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--danger) 60%, transparent)); }
+.g3-col.hl .g3-top, .g3-col:hover .g3-top { fill: #ffb3b2; }
+.g3-col.hl .g3-nb, .g3-col:hover .g3-nb { stroke: var(--danger); }
+.g3-beam { fill: url(#g3beam); }
+.g3-ring { fill: none; stroke: var(--danger); stroke-width: .8; transform-box: fill-box; transform-origin: center; animation: g3ring 2.4s ease-out infinite; }
+.g3-ring.r2 { animation-delay: 1.2s; }
+@keyframes g3ring { from { transform: scale(.4); opacity: .9; } to { transform: scale(2.6); opacity: 0; } }
+.g3-orig .gl-oc { fill: var(--danger); stroke: var(--surface); stroke-width: 1.4; }
+.cc-anim .g3-grow { animation: g3grow .9s var(--d) cubic-bezier(.2, .9, .25, 1.15) both; }
+@keyframes g3grow { from { transform: scaleY(0); opacity: 0; } 30% { opacity: 1; } }
+.cc-anim .g3-sh { animation: rise0 .5s var(--d) both; }
+@media (prefers-reduced-motion: reduce) { .g3-ring, .cc-anim .g3-grow { animation: none; } }
+.g3-col .gl-pn { fill: var(--accent); font-weight: 800; }
+.g3-col.hl .gl-pn, .g3-col:hover .gl-pn { fill: var(--danger); }
