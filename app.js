@@ -1422,6 +1422,7 @@
         <div class="card-h"><h3>Destinazioni</h3><span class="gl-leg2"><i class="o"></i>Roma · partenza <i class="p"></i>destinazione, grandezza = costo</span></div>
         <div class="gl-mapgrid"><div class="gl-map" id="gl-map"></div><div class="gl-dest" id="gl-dest"></div></div>
       </div>
+      <div class="card gf-card" id="gl-fatt"></div>
       <div class="gl-3">
         <div class="card"><div class="card-h"><h3>Contratti</h3></div><div id="gl-contr"></div></div>
         <div class="card"><div class="card-h"><h3>Composizione del costo</h3></div><div id="gl-comp"></div></div>
@@ -1443,6 +1444,7 @@
     $$('[data-gk]', body).forEach(el => { const i = +el.dataset.gk; el._v = 0; countTo(el, K[i][1], K[i][2]); });
 
     glsMapRender($('#gl-map'), $('#gl-dest'), rows, anim);
+    renderGlsFatt(anim);
     // regioni
     const byR = [...groupBy(rows, regOf)].map(([k, v]) => ({ k, v: gTot(v), n: v.length })).sort((a, b) => b.v - a.v);
     if (byR.length > 10) { const o = byR.splice(9); byR.push({ k: `Altre ${o.length} regioni`, v: o.reduce((s, x) => s + x.v, 0), n: o.reduce((s, x) => s + x.n, 0) }); }
@@ -1540,16 +1542,201 @@
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span><small>${x.ids.slice(0, 6).map(esc).join(' · ')}${x.ids.length > 6 ? ' …' : ''}</small></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
   }
 
-  // mappa: archi da Roma alle destinazioni, numerati come l'elenco a lato (2D con zoom, oppure 3D con colonne)
+  // fatture GLS: un riquadro per mese da spuntare quando la fattura è stata emessa
+  const glsFatt = () => { const c = cfg('glsFatt'); return c && typeof c === 'object' && !Array.isArray(c) ? c : {}; };
+  let gfYear = '';
+  function renderGlsFatt(anim) {
+    const box = $('#gl-fatt'); if (!box) return;
+    const F = glsFatt(), now = new Date(), cy = String(now.getFullYear()), ms = glsMonths();
+    const yrs = [...new Set([...ms.map(m => m.slice(0, 4)), ...Object.keys(F).map(m => m.slice(0, 4)), cy])].sort();
+    if (!yrs.includes(gfYear)) gfYear = ms.length ? ms[ms.length - 1].slice(0, 4) : cy;
+    const by = groupBy(glsRows().filter(r => String(r.mese || '').startsWith(gfYear)), r => r.mese);
+    const cur = ymOf(now);
+    const M = MESI.map((nm, i) => { const k = `${gfYear}-${String(i + 1).padStart(2, '0')}`, v = by.get(k) || []; return { k, nm, v, t: gTot(v), on: !!F[k], fut: k > cur }; });
+    const withData = M.filter(x => x.v.length), done = withData.filter(x => x.on), todo = withData.filter(x => !x.on), tTodo = todo.reduce((a, x) => a + x.t, 0);
+    const yi = yrs.indexOf(gfYear);
+    box.innerHTML = `<div class="card-h"><h3>Fatture GLS emesse</h3><span class="gf-yr">${yrs.length > 1 ? `<button type="button" data-gfy="-1"${yi ? '' : ' disabled'} aria-label="Anno precedente">‹</button>` : ''}<b>${gfYear}</b>${yrs.length > 1 ? `<button type="button" data-gfy="1"${yi < yrs.length - 1 ? '' : ' disabled'} aria-label="Anno successivo">›</button>` : ''}</span></div>
+      <div class="gf-sum"><span><b>${done.length}</b> di ${withData.length} mesi fatturati</span>${todo.length ? `<span class="gf-todo">Da fatturare: <b>${gE0(tTodo)}</b> · ${todo.map(x => x.nm.slice(0, 3)).join(', ')}</span>` : withData.length ? '<span class="gf-ok">Tutto fatturato</span>' : ''}</div>
+      <div class="gf-grid${anim ? ' cc-anim' : ''}">${M.map((x, i) => `<label class="gf-m${x.on ? ' on' : ''}${x.v.length ? '' : ' empty'}${!x.on && x.v.length ? ' due' : ''}" style="--d:${i * 30}ms"><input type="checkbox" data-gf="${x.k}"${x.on ? ' checked' : ''}><span class="gf-box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></svg></span><span class="gf-t"><b>${x.nm[0].toUpperCase() + x.nm.slice(1)}</b><small>${x.on ? 'emessa il ' + esc(shortDate(F[x.k])) : x.v.length ? `${gE0(x.t)} · ${x.v.length} sped.` : x.fut ? '—' : 'nessuna spedizione'}</small></span></label>`).join('')}</div>`;
+    box.onchange = e => {
+      const c = e.target.closest('[data-gf]'); if (!c) return;
+      const o = { ...glsFatt() }; if (c.checked) { const d = new Date(); o[c.dataset.gf] = `${ymOf(d)}-${pad(d.getDate())}`; } else delete o[c.dataset.gf];
+      const ops = [{ action: 'upsert', sheet: 'Config', row: { chiave: 'glsFatt', valore: JSON.stringify(o) } }];
+      applyMany(ops); if (!isLocal()) queue.push(...ops); save(); flush();
+      renderGlsFatt(false);
+    };
+    box.onclick = e => { const b = e.target.closest('[data-gfy]'); if (!b) return; gfYear = yrs[yi + Number(b.dataset.gfy)] || gfYear; renderGlsFatt(false); };
+  }
+
+  // mappa: archi da Roma alle destinazioni, numerati come l'elenco a lato (2D vettoriale oppure 3D WebGL)
   const glsName = v => {
     const by = [...groupBy(v, r => String(r.destinatario || '').trim().toUpperCase())].map(([, a]) => ({ a, t: gTot(a) })).sort((a, b) => b.t - a.t);
     const r = by[0].a[0];
     return { nm: (String(r.destinatario || '').trim() || r.citta).toUpperCase().replace(/\s+/g, ' '), more: by.length - 1 };
   };
-  const gMap = { mode: LS.get('cdc_glsmap', '2d'), rot: -14, tilt: 52, s: 1, cx: null, cy: null, vb3: null };
+  const gMap = { mode: LS.get('cdc_glsmap', '2d'), s: 1, cx: null, cy: null };
   const VB2 = [26, 4, 346, 388], MC = { x: 199, y: 198 };
-  let itPts = null;
+  let itPts = null, threeP = null, gl3 = null;
   const itParse = () => itPts || (itPts = IT_PATH.split(/(?=[MLZ])/).map(t => t[0] === 'Z' ? null : [t[0], ...t.slice(1).trim().split(/[\s,]+/).map(Number)]));
+  const loadThree = () => threeP || (threeP = new Promise((ok, ko) => {
+    if (window.THREE) return ok(window.THREE);
+    const s = document.createElement('script'); s.src = 'lib-three.min.js?v=160';
+    s.onload = () => window.THREE ? ok(window.THREE) : ko(new Error('3D'));
+    s.onerror = () => { threeP = null; ko(new Error('3D')); };
+    document.head.appendChild(s);
+  }));
+
+  /* ---------- scena 3D: Italia in rilievo, colonne, rotte e luci ---------- */
+  function gls3D(T, host, d) {
+    const css = getComputedStyle(document.documentElement), cv = n => css.getPropertyValue(n).trim();
+    const col = (n, f) => { try { return new T.Color(cv(n) || f); } catch { return new T.Color(f); } };
+    const acc = col('--accent', '#3362ab'), dang = col('--danger', '#e22726'), surf = col('--surface', '#ffffff');
+    const dark = surf.r * .3 + surf.g * .59 + surf.b * .11 < .4;
+    let renderer;
+    try { renderer = new T.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); } catch { return null; }
+    const W = () => Math.max(1, host.clientWidth), H = () => Math.max(1, host.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(W(), H());
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.toneMapping = T.NoToneMapping; renderer.outputColorSpace = T.SRGBColorSpace;
+    renderer.domElement.className = 'gm-canvas'; host.prepend(renderer.domElement);
+    const scene = new T.Scene(), cam = new T.PerspectiveCamera(26, W() / H(), 5, 5000);
+    const disp = [];
+    const keep = o => (disp.push(o), o);
+    // luci morbide da studio
+    scene.add(new T.HemisphereLight(0xffffff, dark ? 0x1a2236 : 0xb8c4dc, dark ? .8 : 1.05));
+    const sun = new T.DirectionalLight(0xffffff, dark ? 1.3 : 1.55); sun.position.set(-120, 520, 160); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -280, right: 280, top: 280, bottom: -280, near: 20, far: 1000 }); sun.shadow.radius = 6; sun.shadow.bias = -.0004;
+    scene.add(sun);
+    const fill = new T.DirectionalLight(acc.clone().lerp(new T.Color(0xffffff), .6), .35); fill.position.set(220, 120, -160); scene.add(fill);
+    const ground = new T.Mesh(keep(new T.PlaneGeometry(3000, 3000)), keep(new T.ShadowMaterial({ opacity: dark ? .4 : .1 })));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -.01; ground.receiveShadow = true; scene.add(ground);
+    // Italia estrusa
+    const X = x => x - MC.x, Z = y => y - MC.y, polys = []; let cur = null;
+    itParse().forEach(t => { if (!t) { if (cur && cur.length > 2) polys.push(cur); cur = null; return; } if (t[0] === 'M') { if (cur && cur.length > 2) polys.push(cur); cur = [[t[1], t[2]]]; } else if (cur) cur.push([t[1], t[2]]); });
+    if (cur && cur.length > 2) polys.push(cur);
+    const LH = 7, shapes = polys.map(p => new T.Shape(p.map(([x, y]) => new T.Vector2(X(x), -Z(y)))));
+    const lg = keep(new T.ExtrudeGeometry(shapes, { depth: LH, bevelEnabled: true, bevelThickness: 1, bevelSize: .7, bevelSegments: 3, curveSegments: 1 }));
+    lg.rotateX(-Math.PI / 2); lg.translate(0, 1, 0);
+    const mTopL = keep(new T.MeshStandardMaterial({ color: dark ? 0x222b3f : 0xffffff, emissive: dark ? 0x0b1020 : 0xdfe6f2, emissiveIntensity: dark ? .6 : .22, roughness: .9, metalness: 0 }));
+    const mSide = keep(new T.MeshStandardMaterial({ color: dark ? acc.clone().multiplyScalar(.35) : acc.clone().lerp(new T.Color(0xffffff), .35), emissive: acc, emissiveIntensity: .18, roughness: .6, metalness: .05 }));
+    const land = new T.Mesh(lg, [mTopL, mSide]); land.castShadow = true; land.receiveShadow = true; scene.add(land);
+    const TOP = LH + 2;
+    const coastM = keep(new T.LineBasicMaterial({ color: acc, transparent: true, opacity: dark ? .55 : .38 }));
+    polys.forEach(p => { const g = keep(new T.BufferGeometry().setFromPoints(p.map(([x, y]) => new T.Vector3(X(x), TOP + .05, Z(y))))); scene.add(new T.LineLoop(g, coastM)); });
+    // colonne
+    const HMAX = 92, bg = keep(new T.CylinderGeometry(1, 1, 1, 40)); bg.translate(0, .5, 0);
+    const mA = keep(new T.MeshStandardMaterial({ color: acc.clone().lerp(new T.Color(0xffffff), .12), emissive: acc, emissiveIntensity: .22, roughness: .28, metalness: .2 }));
+    const mB = keep(new T.MeshStandardMaterial({ color: acc.clone().lerp(new T.Color(dark ? 0x334466 : 0xffffff), .45), emissive: acc, emissiveIntensity: .12, roughness: .45, metalness: .05 }));
+    const mH = keep(new T.MeshStandardMaterial({ color: dang, roughness: .3, metalness: .15, emissive: dang, emissiveIntensity: .18 }));
+    const capG = keep(new T.CircleGeometry(1, 40)); capG.rotateX(-Math.PI / 2);
+    const capM = keep(new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .32 }));
+    const bars = d.gm.map((x, j) => {
+      const r = x.i <= 12 ? 3 : 1.6, h = 3 + HMAX * x.f, m = new T.Mesh(bg, x.i <= 12 ? mA : mB);
+      m.position.set(X(x.x), TOP, Z(x.y)); m.scale.set(r, d.anim ? .001 : h, r); m.castShadow = true; m.receiveShadow = true;
+      const cap = new T.Mesh(capG, capM); cap.scale.set(r * .72, 1, r * .72); cap.position.set(X(x.x), TOP + (d.anim ? 0 : h) + .02, Z(x.y)); scene.add(cap);
+      m.userData = { x, h, r, cap, base: m.material, delay: 250 + Math.min(x.i, 40) * 35 }; scene.add(m); return m;
+    });
+    // rotte da Roma: archi sottili + scie luminose
+    const O = new T.Vector3(X(d.ox), TOP + .3, Z(d.oy));
+    const arcs = d.far.map(x => {
+      const D = new T.Vector3(X(x.x), TOP + .3, Z(x.y)), L = O.distanceTo(D);
+      const c = new T.QuadraticBezierCurve3(O, new T.Vector3((O.x + D.x) / 2, TOP + 12 + L * .38, (O.z + D.z) / 2), D);
+      const top = x.i <= 12, g = keep(new T.TubeGeometry(c, 72, top ? .32 : .16, 6, false));
+      const m = keep(new T.MeshBasicMaterial({ color: acc, transparent: true, opacity: top ? .75 : .22, depthWrite: false }));
+      const me = new T.Mesh(g, m); if (d.anim) g.setDrawRange(0, 0); scene.add(me);
+      return { x, c, me, g, m, n: g.index.count, top, delay: 500 + x.i * 25, o: m.opacity };
+    });
+    const cometG = keep(new T.SphereGeometry(.85, 16, 12)), cometM = keep(new T.MeshBasicMaterial({ color: 0xffffff }));
+    const glowG = keep(new T.SphereGeometry(2.1, 16, 12)), glowM = keep(new T.MeshBasicMaterial({ color: acc, transparent: true, opacity: .28, depthWrite: false }));
+    const comets = arcs.filter(a => a.x.i <= 10).map((a, j) => { const s = new T.Mesh(cometG, cometM), gl = new T.Mesh(glowG, glowM); s.add(gl); s.visible = false; scene.add(s); return { a, s, off: j * .37, dur: 2600 + a.c.getLength() * 6 }; });
+    // Roma
+    const rm = new T.Mesh(keep(new T.CylinderGeometry(2, 2, 3.2, 40)), keep(new T.MeshStandardMaterial({ color: dang, roughness: .35, emissive: dang, emissiveIntensity: .25 })));
+    rm.position.set(O.x, TOP + 1.6, O.z); rm.castShadow = true; scene.add(rm);
+    const ringG = keep(new T.RingGeometry(2.6, 3.1, 48)); ringG.rotateX(-Math.PI / 2);
+    const rings = [0, 1].map(i => { const m = keep(new T.MeshBasicMaterial({ color: dang, transparent: true, opacity: .5, depthWrite: false })); const r = new T.Mesh(ringG, m); r.position.set(O.x, TOP + .1, O.z); scene.add(r); return r; });
+    // etichette HTML nitide
+    const labs = document.createElement('div'); labs.className = 'gm-labs'; host.appendChild(labs);
+    const L = d.gm.filter(x => x.i <= 12).map(x => { const e = document.createElement('span'); e.className = 'g3l'; e.dataset.glab = x.k; e.textContent = x.i; labs.appendChild(e); return { x, e, m: bars[d.gm.indexOf(x)] }; });
+    const romaL = document.createElement('span'); romaL.className = 'g3l roma'; romaL.textContent = 'ROMA'; labs.appendChild(romaL);
+    // camera
+    const st = { az: 0, pol: 46 * Math.PI / 180, s: 1, tx: 0, tz: 4 }, tgt = { ...st };
+    const fit = () => { const v = cam.fov * Math.PI / 360, hf = Math.atan(Math.tan(v) * cam.aspect); return 158 / Math.sin(Math.min(v, hf)); };
+    const place = () => {
+      const D = fit() / st.s, t = new T.Vector3(st.tx, 0, st.tz);
+      cam.position.set(t.x + D * Math.sin(st.pol) * Math.sin(st.az), D * Math.cos(st.pol), t.z + D * Math.sin(st.pol) * Math.cos(st.az)); cam.lookAt(t);
+    };
+    const v3 = new T.Vector3(), proj = (x, y, z) => { v3.set(x, y, z).project(cam); return [(v3.x + 1) / 2 * W(), (1 - v3.y) / 2 * H(), v3.z]; };
+    const putLabels = () => {
+      const placed = [];
+      L.forEach(({ x, e, m }) => {
+        const [sx, sy, sz] = proj(m.position.x, TOP + m.scale.y + 4.5, m.position.z);
+        const ok = sz < 1 && sx > -20 && sx < W() + 20 && sy > -20 && sy < H() + 20 && m.scale.y > 1 && !placed.some(p => Math.abs(p[0] - sx) < 22 && Math.abs(p[1] - sy) < 18);
+        if (ok) placed.push([sx, sy]);
+        e.style.transform = `translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px) translate(-50%,-100%)`; e.classList.toggle('off', !ok);
+      });
+      const [rx, ry] = proj(O.x, TOP + 4, O.z); romaL.style.transform = `translate(${rx.toFixed(1)}px,${ry.toFixed(1)}px) translate(-115%,-50%)`;
+    };
+    let hov = null;
+    const setHl = k => { bars.forEach(b => { b.material = b.userData.x.k === k ? mH : b.userData.base; }); arcs.forEach(a => { a.m.color.copy(a.x.k === k ? dang : acc); a.m.opacity = a.x.k === k ? .95 : (k ? a.o * .5 : a.o); }); hov = k; dirty = true; };
+    // ciclo di disegno
+    let raf = 0, dirty = true, alive = true; const t0 = performance.now(), red = reduced();
+    const ease = q => 1 - Math.pow(1 - q, 3);
+    const frame = now => {
+      if (!alive) return;
+      if (!host.isConnected) return api.dispose();
+      raf = requestAnimationFrame(frame);
+      if (document.hidden) return;
+      const t = now - t0; let moving = false;
+      for (const k of ['az', 'pol', 's', 'tx', 'tz']) { const dv = tgt[k] - st[k]; if (Math.abs(dv) > 1e-4) { st[k] += dv * .16; moving = true; } else st[k] = tgt[k]; }
+      if (d.anim && t < 3200) {
+        bars.forEach(b => { const u = b.userData, q = red ? 1 : ease(Math.min(1, Math.max(0, (t - u.delay) / 1000))); b.scale.y = Math.max(.001, u.h * q); u.cap.position.y = TOP + b.scale.y + .02; });
+        arcs.forEach(a => { const q = red ? 1 : ease(Math.min(1, Math.max(0, (t - a.delay) / 900))); a.g.setDrawRange(0, Math.floor(a.n * q / 36) * 36); });
+        moving = true;
+      }
+      if (!red) {
+        comets.forEach(c => { const q = ((t - 1400) / c.dur + c.off) % 1; c.s.visible = t > 1400 && q > 0; if (c.s.visible) c.s.position.copy(c.a.c.getPoint(q)); });
+        rings.forEach((r, i) => { const q = ((t / 2400) + i * .5) % 1; r.scale.setScalar(1 + q * 2.6); r.material.opacity = .55 * (1 - q); });
+        moving = true;
+      }
+      if (moving || dirty) { place(); renderer.render(scene, cam); putLabels(); dirty = false; }
+    };
+    raf = requestAnimationFrame(frame);
+    const ro = new ResizeObserver(() => { renderer.setSize(W(), H()); cam.aspect = W() / H(); cam.updateProjectionMatrix(); dirty = true; });
+    ro.observe(host);
+    // interazione: passa sopra / clic sulle colonne, trascina per spostarti quando è ingrandita
+    const ray = new T.Raycaster(), pt = new T.Vector2();
+    const hit = e => { const r = renderer.domElement.getBoundingClientRect(); pt.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(pt, cam); const h = ray.intersectObjects(bars, false)[0]; return h ? h.object.userData.x : null; };
+    let drag = null, moved = false;
+    const cvs = renderer.domElement;
+    cvs.addEventListener('pointerdown', e => { moved = false; if (tgt.s <= 1.01 || !e.isPrimary) return; drag = { x: e.clientX, y: e.clientY, tx: tgt.tx, tz: tgt.tz }; });
+    cvs.addEventListener('pointermove', e => {
+      if (drag) {
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+        if (!moved) { moved = true; cvs.setPointerCapture(e.pointerId); host.classList.add('dragging'); d.tip(null); }
+        const k = 2 * (fit() / st.s) * Math.tan(cam.fov * Math.PI / 360) / H(), ca = Math.cos(st.az), sa = Math.sin(st.az);
+        tgt.tx = Math.max(-200, Math.min(200, drag.tx - (dx * ca + dy * sa / Math.cos(st.pol) * .9) * k));
+        tgt.tz = Math.max(-200, Math.min(200, drag.tz - (-dx * sa + dy * ca / Math.cos(st.pol) * .9) * k));
+        st.tx = tgt.tx; st.tz = tgt.tz; dirty = true; return;
+      }
+      const x = hit(e); cvs.style.cursor = x ? 'pointer' : (tgt.s > 1.01 ? 'grab' : '');
+      if ((x && x.k) !== hov) { setHl(x ? x.k : null); d.hl(x ? x.k : ''); }
+      d.tip(x, e.clientX, e.clientY);
+    });
+    const up = () => { drag = null; host.classList.remove('dragging'); };
+    cvs.addEventListener('pointerup', up); cvs.addEventListener('pointercancel', up);
+    cvs.addEventListener('pointerleave', () => { if (!drag) { setHl(null); d.hl(''); d.tip(null); } });
+    cvs.addEventListener('click', e => { if (moved) return; const x = hit(e); if (x) d.pick(x.k); });
+    const api = {
+      zoom: f => { tgt.s = Math.min(6, Math.max(1, tgt.s * f)); if (tgt.s <= 1.001) { tgt.tx = 0; tgt.tz = 4; } host.classList.toggle('zoomed', tgt.s > 1.01); },
+      reset: () => { Object.assign(tgt, { az: 0, s: 1, tx: 0, tz: 4 }); host.classList.remove('zoomed'); },
+      rotate: dir => { tgt.az += dir * Math.PI / 6; },
+      hl: k => { if (k !== hov) setHl(k || null); },
+      dispose: () => { if (!alive) return; alive = false; cancelAnimationFrame(raf); ro.disconnect(); disp.forEach(o => o.dispose && o.dispose()); renderer.dispose(); renderer.forceContextLoss && renderer.forceContextLoss(); cvs.remove(); labs.remove(); }
+    };
+    return api;
+  }
+
   function glsMapRender(el, list, rows, anim) {
     const P = (lat, lon) => proj([lon, lat]);
     const [ox, oy] = P(GLS_ORIG.lat, GLS_ORIG.lon);
@@ -1558,161 +1745,113 @@
     const gm = g.filter(x => x.geo), mx = Math.max(...g.map(x => x.t), 1);
     gm.forEach(x => { [x.x, x.y] = P(x.geo.lat, x.geo.lon); x.f = Math.sqrt(x.t / mx); x.r = 2.2 + 7.5 * x.f; x.home = Math.hypot(x.x - ox, x.y - oy) < 2.5; if (x.i <= 12) x.r = Math.max(x.r, 5.6); });
     const far = gm.filter(x => !x.home);
+    if (gl3) { gl3.dispose(); gl3 = null; }
 
-    /* ---------- disegno 2D ---------- */
-    const draw2D = (an, k) => {
+    /* ---------- 2D: disegnata una volta sola, lo zoom cambia solo l'inquadratura ---------- */
+    const draw2D = () => {
       const arcs = far.map((x, j) => {
         const dx = x.x - ox, dy = x.y - oy, L = Math.hypot(dx, dy) || 1, b = Math.min(46, L * .22) * (dx < 0 ? 1 : -1);
         const cx = (ox + x.x) / 2 - dy / L * b, cy = (oy + x.y) / 2 + dx / L * b;
-        const d = `M${ox.toFixed(1)} ${oy.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}`;
-        const w = (.5 + 1.9 * x.f) * k;
-        return `<path class="cm-arc gl-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${500 + j * 40}ms;stroke-width:${w.toFixed(2)}" d="${d}"/>` +
-          (x.i <= 10 ? `<path class="gl-flow" pathLength="1" style="--d:${(1.4 + j * .23).toFixed(2)}s;--t:${(1.6 + L / 160).toFixed(2)}s;stroke-width:${(w + .6 * k).toFixed(2)}" d="${d}"/>` : '');
+        const d = `M${ox.toFixed(1)} ${oy.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}`, w = .5 + 1.9 * x.f;
+        return `<path class="cm-arc gl-arc" data-ga="${esc(x.k)}" data-w="${w.toFixed(2)}" pathLength="1" style="--d:${500 + j * 40}ms" d="${d}"/>` +
+          (x.i <= 10 ? `<path class="gl-flow" data-w="${(w + .6).toFixed(2)}" pathLength="1" style="--d:${(1.4 + j * .23).toFixed(2)}s;--t:${(1.6 + L / 160).toFixed(2)}s" d="${d}"/>` : '');
       }).join('');
-      const pins = gm.slice().reverse().map(x => `<g class="gl-pin${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${800 + x.i * 35}ms" transform="translate(${x.x.toFixed(1)} ${x.y.toFixed(1)}) scale(${k.toFixed(3)})"><circle class="cm-hit" r="${(x.r + 4).toFixed(1)}"/><circle class="gl-halo" r="${(x.r + 2.4).toFixed(1)}"/><circle class="cm-c" r="${x.r.toFixed(1)}"/>${x.i <= 12 ? `<text class="gl-pn" dy=".35em">${x.i}</text>` : ''}</g>`).join('');
+      const pins = gm.slice().reverse().map(x => `<g class="gl-pin${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" data-t="${x.x.toFixed(1)} ${x.y.toFixed(1)}" style="--d:${800 + x.i * 35}ms" transform="translate(${x.x.toFixed(1)} ${x.y.toFixed(1)})"><circle class="cm-hit" r="${(x.r + 4).toFixed(1)}"/><circle class="gl-halo" r="${(x.r + 2.4).toFixed(1)}"/><circle class="cm-c" r="${x.r.toFixed(1)}"/>${x.i <= 12 ? `<text class="gl-pn" dy=".35em">${x.i}</text>` : ''}</g>`).join('');
       return `<defs><radialGradient id="glsea" cx="50%" cy="45%" r="65%"><stop offset="0" stop-color="var(--accent)" stop-opacity=".07"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient></defs>
         <rect x="-200" y="-200" width="800" height="800" fill="url(#glsea)"/>
-        <path class="cm-land gl-land" pathLength="1" d="${IT_PATH}" style="stroke-width:${(.7 * k).toFixed(2)}"/>
+        <path class="cm-land gl-land" data-w=".7" pathLength="1" d="${IT_PATH}"/>
         ${arcs}${pins}
-        <g class="gl-orig" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)}) scale(${k.toFixed(3)})"><circle class="gl-op" r="6"/><circle class="gl-op gl-op2" r="6"/><circle r="5.2" class="gl-oc"/><circle r="1.9" class="gl-oi"/>
+        <g class="gl-orig" data-t="${ox.toFixed(1)} ${oy.toFixed(1)}" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)})"><circle class="gl-op" r="6"/><circle class="gl-op gl-op2" r="6"/><circle r="5.2" class="gl-oc"/><circle r="1.9" class="gl-oi"/>
         <g transform="translate(-9 3)"><text text-anchor="end" class="gl-on">ROMA</text><text text-anchor="end" dy="8" class="gl-os">partenza</text></g></g>`;
     };
 
-    /* ---------- disegno 3D (plastico inclinato, colonne a prisma) ---------- */
-    const pr = (x, y, z, rot, tilt) => {
-      const th = rot * Math.PI / 180, tl = tilt * Math.PI / 180, dx = x - MC.x, dy = y - MC.y;
-      const rx = dx * Math.cos(th) - dy * Math.sin(th), ry = dx * Math.sin(th) + dy * Math.cos(th);
-      return [MC.x + rx, MC.y + ry * Math.cos(tl) - z * Math.sin(tl), ry];
-    };
-    const HMAX = 78, colH = x => 3 + HMAX * x.f;
-    const landPath = (rot, tilt, z) => itParse().map(t => t ? t[0] + pr(t[1], t[2], z, rot, tilt).slice(0, 2).map(v => v.toFixed(1)).join(' ') : 'Z').join('');
-    const bounds3 = (rot, tilt) => {
-      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-      itParse().forEach(t => { if (!t) return; const [X, Y] = pr(t[1], t[2], 0, rot, tilt); x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); });
-      gm.forEach(x => { const [, Y] = pr(x.x, x.y, colH(x), rot, tilt); y0 = Math.min(y0, Y - 14); });
-      const pad = 12; return [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2 + 8];
-    };
-    const draw3D = (an, k, rot, tilt) => {
-      const ct = Math.cos(tilt * Math.PI / 180);
-      const [OX, OY] = pr(ox, oy, 0, rot, tilt);
-      // archi solo per le prime 12 destinazioni, sottili
-      const arcs = far.filter(x => x.i <= 12).map((x, j) => {
-        const [X, Y] = pr(x.x, x.y, 0, rot, tilt), L = Math.hypot(x.x - ox, x.y - oy);
-        const [CX, CY] = pr((ox + x.x) / 2, (oy + x.y) / 2, 10 + L * .5, rot, tilt);
-        return `<path class="g3-arc" data-ga="${esc(x.k)}" pathLength="1" style="--d:${500 + j * 50}ms;stroke-width:${(.6 * k).toFixed(2)}" d="M${OX.toFixed(1)} ${OY.toFixed(1)} Q${CX.toFixed(1)} ${CY.toFixed(1)} ${X.toFixed(1)} ${Y.toFixed(1)}"/>`;
-      }).join('');
-      // colonne a base quadrata: faccia sinistra, destra e tetto
-      const cs = gm.map(x => { const [X, Y, depth] = pr(x.x, x.y, 0, rot, tilt); return { x, X, Y, depth }; }).sort((a, b) => a.depth - b.depth);
-      const labs = [];
-      const cols = cs.map(({ x }) => {
-        const w = (x.i <= 12 ? 2.1 : 1.4), H = colH(x), c = [[-w, -w], [w, -w], [w, w], [-w, w]].map(([a, b]) => [x.x + a, x.y + b]);
-        const B = c.map(p => pr(p[0], p[1], 0, rot, tilt)), T = c.map(p => pr(p[0], p[1], H, rot, tilt));
-        const P = a => a.map(p => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L');
-        // facce visibili: quelle con normale verso chi guarda (profondità maggiore = più vicine)
-        const faces = [[0, 1], [1, 2], [2, 3], [3, 0]].map(([a, b]) => ({ a, b, z: (B[a][2] + B[b][2]) / 2, sx: B[b][0] - B[a][0] })).sort((p, q) => q.z - p.z).slice(0, 2)
-          .map(f => `<path class="g3-f ${f.sx > 0 ? 'fl' : 'fr'}" d="M${P([B[f.a], B[f.b], T[f.b], T[f.a]])}Z"/>`).join('');
-        const [tx, ty] = pr(x.x, x.y, H, rot, tilt);
-        if (x.i <= 12) labs.push({ x, tx, ty });
-        return `<g class="gl-pin g3-col${x.i <= 12 ? ' nb' : ''}" data-gpin="${esc(x.k)}" style="--d:${350 + Math.min(x.i, 30) * 28}ms">
-          <g class="g3-grow" style="transform-origin:${tx.toFixed(1)}px ${pr(x.x, x.y, 0, rot, tilt)[1].toFixed(1)}px">${faces}<path class="g3-t" d="M${P(T)}Z"/></g>
-          <rect class="cm-hit" x="${(tx - 6 * k).toFixed(1)}" y="${(ty - 12 * k).toFixed(1)}" width="${(12 * k).toFixed(1)}" height="${(pr(x.x, x.y, 0, rot, tilt)[1] - ty + 14 * k).toFixed(1)}"/></g>`;
-      }).join('');
-      // etichette sopra tutto, posizionate in ordine di classifica senza sovrapporsi
-      const placed = [], lab = labs.sort((a, b) => a.x.i - b.x.i).map(({ x, tx, ty }) => {
-        const ly = ty - 8 * k; if (placed.some(p => Math.abs(p[0] - tx) < 11 * k && Math.abs(p[1] - ly) < 9.5 * k)) return '';
-        placed.push([tx, ly]);
-        return `<g class="g3-lab" data-glab="${esc(x.k)}" transform="translate(${tx.toFixed(1)} ${ly.toFixed(1)}) scale(${k.toFixed(3)})"><rect x="-5.5" y="-4.6" width="11" height="9.2" rx="4.6"/><text dy=".34em">${x.i}</text></g>`;
-      }).join('');
-      return `<defs><linearGradient id="g3land" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="g3-l1"/><stop offset="1" class="g3-l2"/></linearGradient></defs>
-        <path class="g3-shadow" d="${landPath(rot, tilt, -10)}"/>
-        <path class="g3-side" d="${landPath(rot, tilt, -4)}"/>
-        <path class="g3-land" d="${landPath(rot, tilt, 0)}" style="stroke-width:${(.5 * k).toFixed(2)}"/>
-        ${arcs}
-        <ellipse class="g3-ring" cx="${OX.toFixed(1)}" cy="${OY.toFixed(1)}" rx="${(7 * k).toFixed(1)}" ry="${(7 * k * ct).toFixed(1)}"/>
-        ${cols}<g class="g3-labs">${lab}</g>
-        <g class="gl-orig g3-orig" transform="translate(${OX.toFixed(1)} ${OY.toFixed(1)}) scale(${k.toFixed(3)})"><ellipse rx="3.6" ry="${(3.6 * ct).toFixed(2)}" class="gl-oc"/><g transform="translate(-8 3)"><text text-anchor="end" class="gl-on">ROMA</text></g></g>`;
-    };
-
-    /* ---------- struttura: zoom solo con + / −, trascinamento per spostarsi ---------- */
     const HINT = 'Usa + e − per lo zoom · trascina per spostarti';
     el.innerHTML = `<div class="gm-tools"><div class="gm-seg" role="group" aria-label="Vista mappa"><button type="button" data-gmode="2d" class="${gMap.mode === '2d' ? 'on' : ''}">2D</button><button type="button" data-gmode="3d" class="${gMap.mode === '3d' ? 'on' : ''}">3D</button></div>
       <div class="gm-zoom"><button type="button" data-gz="in" aria-label="Ingrandisci">+</button><button type="button" data-gz="out" aria-label="Riduci">−</button><button type="button" data-gz="reset" aria-label="Vista intera"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
       <div class="gm-zoom gm-rot"${gMap.mode === '3d' ? '' : ' hidden'}><button type="button" data-gr="-1" aria-label="Ruota a sinistra"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button><button type="button" data-gr="1" aria-label="Ruota a destra"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/></svg></button></div></div>
-      <div class="gm-stage"><svg class="gl-svg${gMap.mode === '3d' ? ' is3d' : ''}" role="img" aria-label="Mappa delle spedizioni GLS"></svg></div>
+      <div class="gm-stage"><svg class="gl-svg${anim ? ' cc-anim' : ''}" viewBox="${VB2.join(' ')}" role="img" aria-label="Mappa delle spedizioni GLS">${draw2D()}</svg><div class="gm-3d" hidden><div class="gm-load">Caricamento 3D…</div></div></div>
       <div class="gm-hint">${HINT}</div>`;
-    const svg = $('svg.gl-svg', el), stage = $('.gm-stage', el);
-    let anim0 = anim, raf = 0;
-    const R0 = -14, T0 = 52;
-    const base = () => gMap.mode === '3d' ? (gMap.vb3 || (gMap.vb3 = bounds3(gMap.rot, gMap.tilt))) : VB2;
-    const vb = () => { const b = base(), w = b[2] / gMap.s, h = b[3] / gMap.s; let cx = gMap.cx == null ? b[0] + b[2] / 2 : gMap.cx, cy = gMap.cy == null ? b[1] + b[3] / 2 : gMap.cy; cx = Math.min(b[0] + b[2] - w / 2, Math.max(b[0] + w / 2, cx)); cy = Math.min(b[1] + b[3] - h / 2, Math.max(b[1] + h / 2, cy)); gMap.cx = cx; gMap.cy = cy; return [cx - w / 2, cy - h / 2, w, h]; };
-    const paint = () => {
-      const v = vb(), k = 1 / Math.pow(gMap.s, .75), b = base();
-      svg.setAttribute('viewBox', v.map(n => n.toFixed(2)).join(' '));
-      svg.style.aspectRatio = `${b[2]} / ${b[3]}`;
-      svg.classList.toggle('cc-anim', !!anim0); svg.classList.toggle('is3d', gMap.mode === '3d'); svg.classList.toggle('zoomed', gMap.s > 1.01);
-      svg.innerHTML = gMap.mode === '3d' ? draw3D(anim0, k, gMap.rot, gMap.tilt) : draw2D(anim0, k);
-      anim0 = false;
+    const svg = $('svg.gl-svg', el), host = $('.gm-3d', el), stage = $('.gm-stage', el);
+    const wEls = $$('[data-w]', svg), tEls = $$('[data-t]', svg);
+    const setVB = () => {
+      const b = VB2, w = b[2] / gMap.s, h = b[3] / gMap.s;
+      let cx = gMap.cx == null ? b[0] + b[2] / 2 : gMap.cx, cy = gMap.cy == null ? b[1] + b[3] / 2 : gMap.cy;
+      cx = Math.min(b[0] + b[2] - w / 2, Math.max(b[0] + w / 2, cx)); cy = Math.min(b[1] + b[3] - h / 2, Math.max(b[1] + h / 2, cy)); gMap.cx = cx; gMap.cy = cy;
+      svg.setAttribute('viewBox', `${(cx - w / 2).toFixed(2)} ${(cy - h / 2).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
+      const k = 1 / Math.pow(gMap.s, .75);
+      wEls.forEach(e => { e.style.strokeWidth = (e.dataset.w * k).toFixed(3); });
+      tEls.forEach(e => e.setAttribute('transform', `translate(${e.dataset.t}) scale(${k.toFixed(3)})`));
+      svg.classList.toggle('zoomed', gMap.s > 1.01);
     };
-    const req = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(paint); };
-    if (gMap.mode === '3d') { gMap.rot = R0; gMap.tilt = T0; gMap.vb3 = null; }
-    paint();
-    // zoom morbido verso il centro della vista
+    gMap.s = 1; gMap.cx = gMap.cy = null; setVB();
     let zr = 0;
-    const zoomTo = ns => {
+    const zoom2 = ns => {
       ns = Math.min(6, Math.max(1, ns)); if (Math.abs(ns - gMap.s) < .001) return;
       const s0 = gMap.s, t0 = performance.now(), dur = reduced() ? 1 : 320; cancelAnimationFrame(zr);
-      const st = now => { const q = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - q, 3); gMap.s = s0 + (ns - s0) * e; paint(); if (q < 1) zr = requestAnimationFrame(st); else if (ns === 1) { gMap.cx = gMap.cy = null; paint(); } };
-      zr = requestAnimationFrame(st);
+      const stp = now => { const q = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - q, 3); gMap.s = s0 + (ns - s0) * e; setVB(); if (q < 1) zr = requestAnimationFrame(stp); else if (ns === 1) { gMap.cx = gMap.cy = null; setVB(); } };
+      zr = requestAnimationFrame(stp);
     };
-    // trascinamento (mouse o dito) per spostarsi quando la mappa è ingrandita
     let drag = null, moved = false;
-    svg.addEventListener('pointerdown', e => { moved = false; if (gMap.s <= 1.01 || !e.isPrimary) return; drag = { x: e.clientX, y: e.clientY, cx: gMap.cx, cy: gMap.cy }; moved = false; });
+    svg.addEventListener('pointerdown', e => { moved = false; if (gMap.s <= 1.01 || !e.isPrimary) return; drag = { x: e.clientX, y: e.clientY, cx: gMap.cx, cy: gMap.cy }; });
     svg.addEventListener('pointermove', e => {
       if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       if (!moved) { moved = true; svg.setPointerCapture(e.pointerId); svg.classList.add('dragging'); }
-      const r = svg.getBoundingClientRect(), v = vb(); gMap.cx = drag.cx - dx * v[2] / r.width; gMap.cy = drag.cy - dy * v[3] / r.height; req();
+      const r = svg.getBoundingClientRect(), w = VB2[2] / gMap.s, h = VB2[3] / gMap.s; gMap.cx = drag.cx - dx * w / r.width; gMap.cy = drag.cy - dy * h / r.height; setVB();
     });
     const up = () => { drag = null; svg.classList.remove('dragging'); };
     svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
-    el.querySelector('.gm-zoom').onclick = e => { const b = e.target.closest('[data-gz]'); if (!b) return; e.stopPropagation(); const z = b.dataset.gz; zoomTo(z === 'in' ? gMap.s * 1.6 : z === 'out' ? gMap.s / 1.6 : 1); };
-    // rotazione del plastico solo con i pulsanti
-    el.querySelector('.gm-rot').onclick = e => {
-      const b = e.target.closest('[data-gr]'); if (!b) return; e.stopPropagation();
-      const r0 = gMap.rot, r1 = r0 + 30 * Number(b.dataset.gr), t0 = performance.now(), dur = reduced() ? 1 : 520;
-      gMap.vb3 = bounds3(r0, gMap.tilt); const vA = gMap.vb3.slice(), vB = bounds3(r1, gMap.tilt);
-      const st = now => { const q = Math.min(1, (now - t0) / dur), e2 = q < .5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2; gMap.rot = r0 + (r1 - r0) * e2; gMap.vb3 = vA.map((v, i) => v + (vB[i] - v) * e2); paint(); if (q < 1) requestAnimationFrame(st); };
-      requestAnimationFrame(st);
+
+    // passaggio 2D / 3D
+    const show = (mode, an) => {
+      const is3 = mode === '3d';
+      svg.style.display = is3 ? 'none' : ''; host.hidden = !is3; $('.gm-rot', el).hidden = !is3;
+      if (!is3) { if (gl3) { gl3.dispose(); gl3 = null; } return; }
+      if (gl3) return;
+      loadThree().then(T => {
+        if (!host.isConnected || gMap.mode !== '3d' || gl3) return;
+        gl3 = gls3D(T, host, { gm, far, ox, oy, anim: an, hl, pick, tip: tip3 });
+        $('.gm-load', host)?.remove();
+        if (!gl3) throw new Error('webgl');
+      }).catch(() => { if (!host.isConnected) return; const l = $('.gm-load', host); if (l) l.textContent = 'La vista 3D non è disponibile su questo dispositivo.'; });
     };
+    el.querySelector('.gm-zoom').onclick = e => { const b = e.target.closest('[data-gz]'); if (!b) return; e.stopPropagation(); const z = b.dataset.gz;
+      if (gMap.mode === '3d') { if (!gl3) return; z === 'reset' ? gl3.reset() : gl3.zoom(z === 'in' ? 1.6 : 1 / 1.6); return; }
+      zoom2(z === 'in' ? gMap.s * 1.6 : z === 'out' ? gMap.s / 1.6 : 1); };
+    el.querySelector('.gm-rot').onclick = e => { const b = e.target.closest('[data-gr]'); if (b && gl3) { e.stopPropagation(); gl3.rotate(Number(b.dataset.gr)); } };
     el.querySelector('.gm-seg').onclick = e => {
       const b = e.target.closest('[data-gmode]'); if (!b || b.dataset.gmode === gMap.mode) return; e.stopPropagation();
-      const to = b.dataset.gmode; LS.set('cdc_glsmap', to); $$('.gm-seg button', el).forEach(x => x.classList.toggle('on', x === b));
-      $('.gm-rot', el).hidden = to !== '3d';
-      const swap = () => { gMap.mode = to; gMap.s = 1; gMap.cx = gMap.cy = null; gMap.rot = R0; gMap.tilt = T0; gMap.vb3 = null; anim0 = !reduced(); paint(); stage.classList.remove('out'); };
-      if (reduced()) return swap();
-      stage.classList.add('out'); setTimeout(swap, 220);
+      const to = b.dataset.gmode; gMap.mode = to; LS.set('cdc_glsmap', to); $$('.gm-seg button', el).forEach(x => x.classList.toggle('on', x === b));
+      gMap.s = 1; gMap.cx = gMap.cy = null; setVB();
+      if (reduced()) return show(to, false);
+      stage.classList.add('out'); setTimeout(() => { show(to, true); stage.classList.remove('out'); }, 200);
     };
 
     // elenco aziende / destinazioni
     list.innerHTML = `<div class="gd-h"><span>${g.length} destinazioni</span><span>costo</span></div><div class="gd-l">${g.map(x => `<div class="gd-r${x.home ? ' home' : ''}" data-gdest="${esc(x.k)}" style="--d:${300 + Math.min(x.i, 14) * 45}ms"><span class="gd-n${x.i <= 12 ? ' nb' : ''}">${x.i}</span><span class="gd-m"><b title="${esc(x.nm)}">${esc(x.nm)}${x.more ? ` <em>+${x.more}</em>` : ''}</b><small>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped. · ${fmtNum(x.kt, 0)} kg</small><span class="gd-b"><i style="width:${(x.t / mx * 100).toFixed(1)}%"></i></span></span><b class="gd-v">${gE0(x.t)}</b></div>`).join('')}</div>`;
-    const hl = k => { $$('.gl-pin.hl,.gd-r.hl,.gl-arc.hl,.g3-arc.hl,.g3-lab.hl', el.parentNode).forEach(e => e.classList.remove('hl')); if (!k) return; $$(`[data-gpin="${CSS.escape(k)}"],[data-gdest="${CSS.escape(k)}"],[data-ga="${CSS.escape(k)}"],[data-glab="${CSS.escape(k)}"]`, el.parentNode).forEach(e => e.classList.add('hl')); };
-    const pick = k => { const x = g.find(z => z.k === k); if (!x) return; gF.q = x.c; $('#gl-q').value = x.c; renderGlsList(); $('#gl-ship').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    const tipH = e => {
-      if (moved && drag) return;
-      const pin = e.target.closest('.gl-pin'); let tip = $('.cm-tip', el);
-      if (!pin) { if (tip) tip.remove(); hl(''); return; }
-      const x = g.find(z => z.k === pin.dataset.gpin); if (!x) return;
-      hl(x.k);
+    function hl(k) { $$('.gl-pin.hl,.gd-r.hl,.gl-arc.hl,.g3l.hl', el.parentNode).forEach(e => e.classList.remove('hl')); if (!k) return; $$(`[data-gpin="${CSS.escape(k)}"],[data-gdest="${CSS.escape(k)}"],[data-ga="${CSS.escape(k)}"],[data-glab="${CSS.escape(k)}"]`, el.parentNode).forEach(e => e.classList.add('hl')); }
+    function pick(k) { const x = g.find(z => z.k === k); if (!x) return; gF.q = x.c; $('#gl-q').value = x.c; renderGlsList(); $('#gl-ship').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    const tipAt = (x, left, top) => {
+      let tip = $('.cm-tip', el);
+      if (!x) { if (tip) tip.remove(); return; }
       if (!tip) { tip = document.createElement('div'); tip.className = 'tip cm-tip'; el.appendChild(tip); }
       tip.innerHTML = `<b>${x.i}. ${esc(x.nm)}</b><br>${esc(x.c)} (${esc(x.p)}) · ${x.n} sped.<br><b>${gE(x.t)}</b> · ${fmtNum(x.kt, 0)} kg tass.`;
-      const r = (pin.querySelector('.g3-top') || pin).getBoundingClientRect(), w = el.getBoundingClientRect();
-      tip.style.left = (r.left + r.width / 2 - w.left) + 'px'; tip.style.top = (r.top - w.top - 4) + 'px';
+      tip.style.left = left + 'px'; tip.style.top = top + 'px';
     };
-    el.onmousemove = tipH; el.onmouseleave = () => { const t = $('.cm-tip', el); if (t) t.remove(); hl(''); };
-    el.onclick = e => { if (moved) { moved = false; return; } const pin = e.target.closest('.gl-pin'); if (pin) pick(pin.dataset.gpin); };
-    list.onmouseover = e => { const r = e.target.closest('.gd-r'); hl(r ? r.dataset.gdest : ''); };
-    list.onmouseleave = () => hl('');
+    function tip3(x, cx, cy) { const w = el.getBoundingClientRect(); tipAt(x, cx - w.left, cy - w.top - 14); }
+    svg.onmousemove = e => {
+      if (moved && drag) return;
+      const pin = e.target.closest('.gl-pin');
+      if (!pin) { tipAt(null); hl(''); return; }
+      const x = g.find(z => z.k === pin.dataset.gpin); if (!x) return;
+      hl(x.k); const r = pin.getBoundingClientRect(), w = el.getBoundingClientRect(); tipAt(x, r.left + r.width / 2 - w.left, r.top - w.top - 4);
+    };
+    svg.onmouseleave = () => { tipAt(null); hl(''); };
+    svg.onclick = e => { if (moved) { moved = false; return; } const pin = e.target.closest('.gl-pin'); if (pin) pick(pin.dataset.gpin); };
+    list.onmouseover = e => { const r = e.target.closest('.gd-r'), k = r ? r.dataset.gdest : ''; hl(k); if (gl3) gl3.hl(k); };
+    list.onmouseleave = () => { hl(''); if (gl3) gl3.hl(''); };
     list.onclick = e => { const r = e.target.closest('.gd-r'); if (r) pick(r.dataset.gdest); };
+    show(gMap.mode, anim);
   }
 
   // grafica in movimento: rotte che partono da Roma (linee e impulsi di luce)
