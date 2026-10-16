@@ -2784,7 +2784,7 @@
   const trE = v => eur(trV(v)), trE0 = v => eur0(trV(v));
   const trShort = n => String(n || '').replace(/^\s*kit\s+(torental\s+)?/i, '').replace(/^./, c => c.toUpperCase()) || String(n || '');
   const trNice = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase().split(' ').map((w, i) => i && /^(e|di|a|da|con|per|il|la)$/.test(w) ? w : w.length <= 3 && /^[a-z]+$/.test(w) && i ? w : w.replace(/^./, c => c.toUpperCase())).join(' ');
-  const trFmtQ = v => fmtNum(v, Number.isInteger(v) ? 0 : (Math.round(v * 10) === v * 10 ? 1 : 2));
+  const trFmtQ = v => { v = Math.round((Number(v) || 0) * 100) / 100; return fmtNum(v, Number.isInteger(v) ? 0 : Math.abs(v * 10 - Math.round(v * 10)) < 1e-6 ? 1 : 2); };
   function trCalc(k, D) {
     D = D || trData();
     const comp = D.mat.map(m => { const q = num((k.q || {})[m.cod]); return { ...m, q, cost: q * num(m.c), prezzo: q * num(m.c) * num(D.ricarico) }; }).filter(x => x.q);
@@ -3024,6 +3024,167 @@
       fd => { const n = String(fd.get('n') || '').trim(); if (!n) return toast('Scrivi il nome dell\'articolo'); const o = { cod: String(fd.get('cod') || '').trim(), n, p: num(fd.get('p')) }; if (isNew) D.sing.push(o); else D.sing[i] = o; trSave(D, isNew ? 'Articolo aggiunto' : 'Articolo aggiornato'); return true; },
       isNew ? null : () => { if (!confirm(`Togliere «${s.n}»?`)) return; D.sing.splice(i, 1); trSave(D, 'Articolo tolto'); return true; });
   }
+  /* ---------- PDF del listino ---------- */
+  const loadLib = src => new Promise((res, rej) => { if (document.querySelector(`script[data-lib="${src}"]`)) return res(); const s = document.createElement('script'); s.src = src; s.dataset.lib = src; s.onload = res; s.onerror = () => rej(new Error('Libreria PDF non caricata')); document.head.appendChild(s); });
+  const b64 = buf => { const u8 = new Uint8Array(buf); let s = ''; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
+  let pdfFonts = null;
+  const loadFonts = () => pdfFonts || (pdfFonts = Promise.all(['regular', 'semibold', 'bold'].map(w => fetch(`font-inter-${w}.ttf`).then(r => { if (!r.ok) throw new Error('font'); return r.arrayBuffer(); }).then(b => [w, b64(b)]))).catch(() => { pdfFonts = null; return null; }));
+  async function loadPdf() { if (!(window.jspdf && window.jspdf.jsPDF)) await loadLib('lib-jspdf.min.js'); if (!window.jspdf.jsPDF.API.autoTable) await loadLib('lib-jspdf-autotable.min.js'); return window.jspdf.jsPDF; }
+  const logoPng = () => new Promise(res => { const img = new Image(); img.onload = () => { try { const c = document.createElement('canvas'); c.width = c.height = 256; c.getContext('2d').drawImage(img, 0, 0, 256, 256); res(c.toDataURL('image/png')); } catch { res(null); } }; img.onerror = () => res(null); img.src = 'logo.svg'; });
+  function trPdfAsk() {
+    openSheet('Esporta il listino in PDF', `<p class="muted small" style="margin:0 0 14px">Scegli che versione ti serve. Tutti i prezzi sono IVA esclusa.</p>
+      <div class="tr-pdfo">
+        <button type="button" class="tr-pdfb" data-trpdf="cliente"><span class="tr-pdfi"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><b>Per il cliente</b><small>Solo i prezzi di vendita: kit, servizi, articoli singoli e composizione. Pronto da mandare a Torental.</small></button>
+        <button type="button" class="tr-pdfb" data-trpdf="interno"><span class="tr-pdfi int"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Interno</b><small>Con costo fornitore, ricarico, preparazione e guadagno su ogni kit. Da non inviare al cliente.</small></button>
+      </div>`, null, null, 'Chiudi');
+    $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
+  }
+  async function trPdf(mode) {
+    const INT = mode === 'interno', D = trData(), K = D.kit.map(k => ({ k, c: trCalc(k, D) }));
+    try {
+      busy('Preparo il PDF…');
+      const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      let FF = 'helvetica';
+      if (fonts) { fonts.forEach(([w, data]) => { doc.addFileToVFS(`Inter-${w}.ttf`, data); doc.addFont(`Inter-${w}.ttf`, 'Inter', w === 'regular' ? 'normal' : w); }); FF = 'Inter'; }
+      const W = 210, H = 297, M = 16, CW = W - 2 * M;
+      const C = { navy: [23, 54, 109], blue: [51, 98, 171], orange: [235, 104, 52], ink: [31, 36, 48], ink2: [74, 81, 96], muted: [120, 128, 142], line: [227, 231, 238], soft: [245, 247, 251], white: [255, 255, 255], green: [22, 138, 96], amber: [165, 111, 0] };
+      const fill = c => doc.setFillColor(...c), stroke = c => doc.setDrawColor(...c), color = c => doc.setTextColor(...c);
+      const font = (st, sz) => { doc.setFont(FF, FF === 'helvetica' && st === 'semibold' ? 'bold' : st); doc.setFontSize(sz); };
+      const fit = (txt, st, sz, maxW, min = 8) => { font(st, sz); while (sz > min && doc.getTextWidth(txt) > maxW) { sz -= .5; font(st, sz); } return sz; };
+      const e0 = v => eur0(v).replace(' €', ''), range0 = arr => arr.length ? (Math.min(...arr) === Math.max(...arr) ? eur0(Math.min(...arr)) : `${e0(Math.min(...arr))} – ${eur0(Math.max(...arr))}`) : '—';
+      const e2 = v => eur(v), mq = v => trFmtQ(v) + ' m²';
+      const oggi = new Date(), dataIt = oggi.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }), meseIt = oggi.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      const alpha = a => doc.setGState(new doc.GState({ opacity: a }));
+      const F = K.map(x => x.c.fattura).filter(Boolean), A = K.map(x => x.c.app).filter(Boolean), R = K.map(x => x.c.rim).filter(Boolean);
+      const range = arr => arr.length ? (Math.min(...arr) === Math.max(...arr) ? e2(Math.min(...arr)) : `${e2(Math.min(...arr))} – ${e2(Math.max(...arr))}`) : '—';
+
+      // ---- intestazione pagina 1 ----
+      const HB = 64;
+      fill(C.navy); doc.rect(0, 0, W, HB, 'F');
+      fill(C.blue); alpha(.55); doc.triangle(W * .45, 0, W, 0, W, HB, 'F'); alpha(1);
+      const stripe = (x, y, w, h, c, a) => { fill(c); alpha(a); doc.lines([[w, -w * .25], [0, h], [-w, w * .25]], x, y + h, [1, 1], 'F', true); alpha(1); };
+      stripe(150, 30, 70, 7.5, C.orange, .95); stripe(160, 41, 60, 7.5, [217, 221, 228], .85); stripe(170, 52, 50, 7.5, C.white, .18);
+      if (logo) { fill(C.white); doc.roundedRect(M, 12, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 12.6, 10.8, 10.8); }
+      color(C.white); font('bold', 9.5); doc.text('SOLUZIONE VEICOLARE S.R.L.', M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text('San Cesareo (RM)', M + (logo ? 16 : 0), 21.5); alpha(1);
+      font('bold', 8); doc.text(INT ? 'LISTINO · USO INTERNO' : 'LISTINO PREZZI', W - M, 17, { align: 'right' });
+      font('normal', 8); alpha(.8); doc.text(`Aggiornato al ${dataIt}`, W - M, 21.5, { align: 'right' }); alpha(1);
+      font('bold', 25); doc.text('Listino kit adesivi Torental', M, 41);
+      font('normal', 10); alpha(.85); doc.text('Kit per tipo di mezzo, servizi di applicazione e articoli singoli', M, 48.5); doc.text('Tutti i prezzi sono IVA esclusa', M, 53.5); alpha(1);
+      if (INT) { font('bold', 7.2); const tw0 = doc.getTextWidth('RISERVATO · NON INVIARE AL CLIENTE') + 8; fill(C.orange); doc.roundedRect(W - M - tw0, 25.5, tw0, 6, 3, 3, 'F'); color(C.white); doc.text('RISERVATO · NON INVIARE AL CLIENTE', W - M - tw0 / 2, 29.6, { align: 'center' }); }
+
+      // ---- riquadri di sintesi ----
+      let y = HB + 8;
+      const tiles = [['Kit a listino', String(K.length), `${D.sing.length} articoli singoli`], ['Prezzo kit', range0(F), 'totale fattura per mezzo'], ['Applicazione', range0(A), 'posa per mezzo'], ['Transferta', eur0(num(D.transferta)), '1 giorno · fino a 100 km']];
+      const tw = (CW - 3 * 4) / 4;
+      tiles.forEach(([l, v, s], i) => {
+        const x = M + i * (tw + 4);
+        fill(C.white); stroke(C.line); doc.setLineWidth(.3); doc.roundedRect(x, y, tw, 22, 2.5, 2.5, 'FD');
+        fill(i === 1 ? C.orange : C.blue); doc.roundedRect(x, y, 1.6, 22, .8, .8, 'F');
+        color(C.muted); font('normal', 7.5); doc.text(l.toUpperCase(), x + 5, y + 6.5);
+        color(C.ink); fit(v, 'bold', 14, tw - 8); doc.text(v, x + 5, y + 14);
+        color(C.muted); font('normal', 7.2); doc.text(s, x + 5, y + 18.6);
+      });
+      y += 22 + 10;
+
+      const section = (title, sub, need = 40) => {
+        if (y + need > H - 20) { doc.addPage(); y = 26; }
+        fill(C.orange); doc.roundedRect(M, y - 3.6, 3.2, 3.2, .6, .6, 'F');
+        color(C.navy); font('bold', 13); doc.text(title, M + 5.5, y);
+        if (sub) { color(C.muted); font('normal', 8); doc.text(sub, W - M, y, { align: 'right' }); }
+        stroke(C.line); doc.setLineWidth(.3); doc.line(M, y + 2.6, W - M, y + 2.6);
+        y += 6;
+      };
+      const table = (head, body, opt = {}) => {
+        doc.autoTable({
+          startY: y, head: [head], body, margin: { left: M, right: M, top: 24, bottom: 18 }, theme: 'plain',
+          styles: { font: FF, fontSize: opt.fs || 9, textColor: C.ink, cellPadding: { top: 2.6, bottom: 2.6, left: 2.4, right: 2.4 }, lineColor: C.line, lineWidth: { bottom: .2 }, valign: 'middle' },
+          headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: (opt.fs || 9) - 1.2, cellPadding: { top: 3, bottom: 3, left: 2.4, right: 2.4 }, lineWidth: 0 },
+          alternateRowStyles: { fillColor: C.soft },
+          columnStyles: opt.cols || {}, didParseCell: opt.parse, didDrawCell: opt.draw,
+          ...opt.extra
+        });
+        y = doc.lastAutoTable.finalY + 4;
+      };
+
+      // ---- kit ----
+      section('Kit per tipo di mezzo', 'importi IVA esclusa');
+      const manual = K.some(x => x.c.hand);
+      if (!INT) {
+        table(['Kit', 'Codice', 'Pellicola', 'Prezzo kit', 'Applicazione', 'Rimozione', 'Kit + applicazione'],
+          K.map(x => [trShort(x.k.n), x.k.cod || '—', mq(x.c.film), e2(x.c.fattura), e2(x.c.app), e2(x.c.rim), e2(x.c.full)]),
+          { cols: { 0: { fontStyle: 'bold', cellWidth: 'auto' }, 1: { textColor: C.muted, cellWidth: 'wrap' }, 2: { halign: 'right', cellWidth: 'wrap' }, 3: { halign: 'right', fontStyle: 'bold', cellWidth: 'wrap' }, 4: { halign: 'right', cellWidth: 'wrap' }, 5: { halign: 'right', cellWidth: 'wrap' }, 6: { halign: 'right', fontStyle: 'bold', textColor: C.blue, cellWidth: 'wrap' } },
+            parse: d => { if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right'; } });
+        color(C.muted); font('normal', 7.5);
+        doc.text('Prezzo kit: pellicole e preparazione del kit. Kit + applicazione: prezzo del kit più la posa sul mezzo. La rimozione si aggiunge solo se c\'è un kit da togliere.', M, y + 1, { maxWidth: CW }); y += 14;
+      } else {
+        table(['Kit', 'Costo\nmateriale', `Prezzo mat.\n(× ${fmtNum(num(D.ricarico), 2).replace(/,00$/, '')})`, 'Prepara-\nzione', 'Prezzo\nkit', 'Applica-\nzione', 'Rimozione', 'Guadagno\nmateriale'],
+          K.map(x => [trShort(x.k.n) + (x.c.hand ? ' *' : '') + (x.k.cod ? '\n' + x.k.cod : ''), e2(x.c.mat), e2(x.c.prezzo), e2(x.c.prep), e2(x.c.fattura), e2(x.c.app), e2(x.c.rim), e2(x.c.ric)]),
+          { fs: 8.2, cols: { 0: { fontStyle: 'bold', cellWidth: 'auto' }, 1: { halign: 'right', cellWidth: 'wrap' }, 2: { halign: 'right', cellWidth: 'wrap' }, 3: { halign: 'right', cellWidth: 'wrap' }, 4: { halign: 'right', fontStyle: 'bold', cellWidth: 'wrap' }, 5: { halign: 'right', cellWidth: 'wrap' }, 6: { halign: 'right', cellWidth: 'wrap' }, 7: { halign: 'right', fontStyle: 'bold', textColor: C.green, cellWidth: 'wrap' } },
+            parse: d => { if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right'; } });
+        color(C.muted); font('normal', 7.5);
+        doc.text(`Prezzo materiale = m² × costo fornitore × ${fmtNum(num(D.ricarico), 2).replace(/,00$/, '')}. Prezzo kit = prezzo materiale + preparazione.${manual ? ' * Prezzo fissato a mano nel listino, diverso dal calcolo.' : ''}`, M, y + 1, { maxWidth: CW }); y += 14;
+      }
+
+      // ---- servizi ----
+      section('Servizi', '', 40);
+      const sv = [['Applicazione', range(A), 'Posa del kit sul mezzo. Il prezzo dipende dal tipo di kit (vedi tabella).'], ['Rimozione', range(R), 'Rimozione del kit esistente prima della nuova applicazione.'], ['Transferta', e2(num(D.transferta)) + ' / giorno', 'Intervento presso la vostra sede, fino a 100 km.']];
+      const sw = (CW - 2 * 4) / 3;
+      sv.forEach(([t, v, s], i) => {
+        const x = M + i * (sw + 4);
+        fill(C.soft); doc.roundedRect(x, y, sw, 27, 2.5, 2.5, 'F');
+        color(C.orange); font('bold', 7.5); doc.text(t.toUpperCase(), x + 5, y + 7);
+        color(C.ink); font('bold', 12); doc.text(v, x + 5, y + 14);
+        color(C.ink2); font('normal', 7.6); doc.text(doc.splitTextToSize(s, sw - 10), x + 5, y + 19.5);
+      });
+      y += 27 + 10;
+
+      // ---- articoli singoli ----
+      if (D.sing.length) {
+        section('Articoli singoli', 'prezzo cadauno, IVA esclusa', (D.sing.length + 1) * 8.6 + 12);
+        table(['Codice', 'Articolo', 'Prezzo'], D.sing.map(s => [s.cod || '—', trNice(s.n), e2(num(s.p))]),
+          { cols: { 0: { textColor: C.muted, cellWidth: 30, fontStyle: 'bold' }, 2: { halign: 'right', fontStyle: 'bold', cellWidth: 30 } }, parse: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; } });
+        y += 6;
+      }
+
+      // ---- composizione ----
+      section('Composizione dei kit', 'm² di materiale per kit', (K.length + 1) * 8.4 + 12);
+      const mats = D.mat;
+      table(['Kit', ...mats.map(m => `${m.n} (${m.cod})`), 'Totale pellicola', ...(INT ? ['Costo materiale'] : [])],
+        K.map(x => [trShort(x.k.n), ...mats.map(m => num(x.k.q[m.cod]) ? mq(num(x.k.q[m.cod])) : '—'), mq(x.c.film), ...(INT ? [e2(x.c.mat)] : [])]),
+        { fs: 8.5, cols: Object.fromEntries([[0, { fontStyle: 'bold', cellWidth: 46 }], ...[...mats.map((m, i) => i + 1), mats.length + 1, mats.length + 2].map(i => [i, { halign: 'right' }])]), parse: d => { if (d.section === 'head' && d.column.index >= 1) d.cell.styles.halign = 'right'; if (d.section === 'body' && d.column.index === mats.length + 1) d.cell.styles.fontStyle = 'bold'; } });
+      if (INT) {
+        y += 4;
+        section('Materiali', 'costo fornitore e prezzo al cliente', (mats.length + 1) * 8.6 + 12);
+        table(['Codice', 'Materiale', 'Tipo', 'Costo fornitore', 'Prezzo al cliente'], mats.map(m => [m.cod, m.n, m.tape ? 'Application tape' : 'Pellicola', e2(num(m.c)) + '/m²', e2(num(m.c) * num(D.ricarico)) + '/m²']),
+          { cols: { 0: { textColor: C.muted, fontStyle: 'bold', cellWidth: 24 }, 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }, parse: d => { if (d.section === 'head' && d.column.index >= 3) d.cell.styles.halign = 'right'; } });
+      }
+
+      // ---- note ----
+      const notes = [D.nota, 'Tutti i prezzi sono IVA esclusa: l\'IVA al 22% viene applicata in fattura.', 'La transferta si applica per ogni giorno di intervento presso la vostra sede.'].filter(Boolean);
+      const nl = notes.map(n => doc.splitTextToSize('•  ' + n, CW - 12));
+      const nh_ = 10 + nl.reduce((a, l) => a + l.length * 4, 0);
+      y += 4; if (y + nh_ > H - 22) { doc.addPage(); y = 26; }
+      fill(C.soft); stroke(C.line); doc.roundedRect(M, y, CW, nh_, 2.5, 2.5, 'FD');
+      color(C.navy); font('bold', 9); doc.text('Note', M + 6, y + 7);
+      color(C.ink2); font('normal', 8.2); let ny = y + 12.5; nl.forEach(l => { doc.text(l, M + 6, ny); ny += l.length * 4; });
+
+      // ---- intestazione pagine successive e piè di pagina ----
+      const N = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= N; p++) {
+        doc.setPage(p);
+        if (p > 1) { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.navy); font('bold', 9); doc.text('Listino kit adesivi Torental', M, 13); color(C.muted); font('normal', 8); doc.text(INT ? 'Uso interno · ' + dataIt : dataIt, W - M, 13, { align: 'right' }); stroke(C.line); doc.setLineWidth(.3); doc.line(M, 16, W - M, 16); }
+        stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12);
+        color(C.muted); font('normal', 7.5);
+        doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5);
+        doc.text(`Listino Torental · ${meseIt}`, W / 2, H - 7.5, { align: 'center' });
+        doc.text(`Pagina ${p} di ${N}`, W - M, H - 7.5, { align: 'right' });
+      }
+      doc.setProperties({ title: 'Listino kit adesivi Torental', subject: INT ? 'Listino interno' : 'Listino prezzi', author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      doc.save(`Listino_Torental_${INT ? 'interno' : 'cliente'}_${today()}.pdf`);
+      busy(); toast('PDF scaricato');
+    } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
+  }
   function trFix(i) {
     const D = JSON.parse(JSON.stringify(trData())), k = D.kit[i]; if (!k) return;
     const c = trCalc({ ...k, fx: null }, D);
@@ -3246,6 +3407,8 @@
       if (t.closest('#tr-imp')) { importTor(); return; }
       if (t.closest('#tr-xls')) { exportTor(); return; }
       if (t.closest('#tr-mod')) { trForm(); return; }
+      if (t.closest('#tr-pdf')) { trPdfAsk(); return; }
+      const trpd = t.closest('[data-trpdf]'); if (trpd) { const m = trpd.dataset.trpdf; closeSheet(); setTimeout(() => trPdf(m), 260); return; }
       if (t.closest('#tr-copy')) { trCopy(); return; }
       const trfx = t.closest('[data-trfix]'); if (trfx) { trFix(+trfx.dataset.trfix); return; }
       if (t.closest('[data-trnewkit]')) { trKitForm(-1); return; }
