@@ -148,7 +148,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Torental: 'torental' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -193,7 +193,7 @@
   async function api(action, extra) { return (await post(action, extra)).result; }
   function lockApp(msg) {
     tok = ''; LS.set('cdc_tok', '');
-    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], torental: [] };
+    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [] };
     try { localStorage.removeItem('cdc_data'); } catch {}
     showLogin(msg);
   }
@@ -236,7 +236,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), torental: j.data.torental || (j.v >= 'cdc-1.5' ? [] : db.torental || []) };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []) };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -288,7 +288,7 @@
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home';
+    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental';
     $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
@@ -2349,14 +2349,13 @@
      ========================================================= */
   let ovP = '', ovAnim = true;
   const AREAS = [
-    { k: 'att', t: 'Attrezzatura', s: 'Attrezzatura', go: 'attrezzatura', ic: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>' },
-    { k: 'gls', t: 'Spedizioni GLS', s: 'GLS', go: 'gls', ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' },
-    { k: 'gas', t: 'Gasolio e noleggi', s: 'Gasolio', go: 'gasolio', ic: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/>' },
-    { k: 'tor', t: 'Pubblicità Torental', s: 'Torental', go: 'torental', ic: '<path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>' }
+    { k: 'att', t: 'Attrezzatura', go: 'attrezzatura', ic: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>' },
+    { k: 'gls', t: 'Spedizioni GLS', go: 'gls', ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' },
+    { k: 'gas', t: 'Gasolio e noleggi', go: 'gasolio', ic: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/>' }
   ];
-  const ovMonthOf = { att: r => validD(r.data) ? String(r.data).slice(0, 7) : '', gls: r => r.mese || '', gas: r => String(r.data || '').slice(0, 7), tor: r => String(r.data || '').slice(0, 7) };
-  const ovRows = () => ({ att: db.movimenti || [], gls: glsRows(), gas: gasRows(), tor: trRows() });
-  const ovVal = { att: arr => sumT(arr), gls: arr => gTot(arr) * gMul(), gas: (arr, m) => (gCost(arr) + gasRentTot() * rentMonths(m).length) * gMul(), tor: arr => trSum(arr) };
+  const ovMonthOf = { att: r => validD(r.data) ? String(r.data).slice(0, 7) : '', gls: r => r.mese || '', gas: r => String(r.data || '').slice(0, 7) };
+  const ovRows = () => ({ att: db.movimenti || [], gls: glsRows(), gas: gasRows() });
+  const ovVal = { att: arr => sumT(arr), gls: arr => gTot(arr) * gMul(), gas: (arr, m) => (gCost(arr) + gasRentTot() * rentMonths(m).length) * gMul() };
   function renderOverview() {
     const D = ovRows();
     const months = [...new Set(AREAS.flatMap(a => D[a.k].map(ovMonthOf[a.k])).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
@@ -2364,21 +2363,20 @@
     $('#ov-per').innerHTML = `<option value=""${ovP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === ovP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
     const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(ovP);
     $('#ov-prev').disabled = ix >= opts.length - 1; $('#ov-next').disabled = ix <= 0;
-    sub(`${ivaLbl()} · attrezzatura, spedizioni, gasolio e pubblicità`);
+    sub(`${ivaLbl()} · attrezzatura, spedizioni e gasolio`);
     const pick = (k, m) => m ? D[k].filter(r => ovMonthOf[k](r) === m) : D[k];
     const P = {}; AREAS.forEach(a => { P[a.k] = pick(a.k, ovP); });
     const V = {}; AREAS.forEach(a => { V[a.k] = ovVal[a.k](P[a.k], ovP); });
-    const aSum = o => AREAS.reduce((s, a) => s + (o[a.k] || 0), 0);
-    const T = aSum(V);
+    const T = V.att + V.gls + V.gas;
     const prevK = ovP ? months[months.indexOf(ovP) - 1] : null;
     const PV = prevK ? AREAS.reduce((o, a) => (o[a.k] = ovVal[a.k](pick(a.k, prevK), prevK), o), {}) : null;
-    const PT = PV ? aSum(PV) : 0;
+    const PT = PV ? PV.att + PV.gls + PV.gas : 0;
     const lit = gSum(P.gas, 'litri'), noPrice = P.gas.length && !P.gas.some(r => gPrezzo(r) > 0);
     const per = ovP ? mLabel(ovP) : months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : 'nessun dato';
     const anim = ovAnim && !reduced(); ovAnim = false;
     const body = $('#ov-body');
     body.classList.toggle('cc-anim', anim);
-    const byM = months.map(m => { const o = { m }; AREAS.forEach(a => { o[a.k] = ovVal[a.k](pick(a.k, m), m); }); o.t = aSum(o); return o; });
+    const byM = months.map(m => { const o = { m }; AREAS.forEach(a => { o[a.k] = ovVal[a.k](pick(a.k, m), m); }); o.t = o.att + o.gls + o.gas; return o; });
     const undated = sumT(D.att.filter(r => !validD(r.data)));
     const top = byM.slice().sort((a, b) => b.t - a.t)[0];
     const avgM = byM.length ? byM.reduce((s, x) => s + x.t, 0) / byM.length : 0;
@@ -2389,7 +2387,7 @@
     const glsBad = P.gls.filter(r => r.contratto === 'C2' && num(r.kgTass) < 30).length, glsNoD = P.gls.filter(r => r.gg === '' || r.gg == null).length;
     const gasNoKm = P.gas.filter(r => !num(r.km)).length, gasNoOp = P.gas.filter(r => !String(r.operatore || '').trim() || String(r.operatore).trim() === '?').length;
     P.fat = ovP ? faRows().filter(r => String(r.data).slice(0, 7) === ovP) : faRows();
-    const CK = allChecks(P, ovP), AL = CK, OVA = { att: 'Attrezzatura', gls: 'GLS', gas: 'Gasolio', tor: 'Torental', fat: 'Fatture' };
+    const CK = allChecks(P, ovP), AL = CK, OVA = { att: 'Attrezzatura', gls: 'GLS', gas: 'Gasolio', fat: 'Fatture' };
     const ckW = CK.filter(x => x.t === 'warn').length;
     // sparkline per area
     const spark = (k, i) => {
@@ -2403,8 +2401,7 @@
     const stats = {
       att: () => { const cc = new Set(P.att.map(r => r.centro).filter(Boolean)).size; return [[fmtNum(P.att.length, 0), 'righe'], [cc, 'centri'], [fmtNum(new Set(P.att.map(prodKey)).size, 0), 'prodotti']]; },
       gls: () => [[P.gls.length, 'spedizioni'], [fmtNum(gSum(P.gls, 'kgTass'), 0) + ' kg', 'tassabili'], [gSum(P.gls, 'kgTass') ? fmtNum(gTot(P.gls) / gSum(P.gls, 'kgTass') * gMul(), 3) + ' €' : '—', 'al kg']],
-      gas: () => [[fmtNum(lit, 0) + ' L', 'litri'], [P.gas.length, 'pieni'], [eur0(gasRentTot() * rentMonths(ovP).length * gMul()), 'noleggi']],
-      tor: () => [[fmtNum(trQty(P.tor), 0), 'pezzi'], [trOrders(P.tor).length, 'ordini'], [new Set(P.tor.filter(r => r.piazzale && !trIsSc(r.piazzale)).map(r => trN(r.piazzale))).size, 'piazzali']]
+      gas: () => [[fmtNum(lit, 0) + ' L', 'litri'], [P.gas.length, 'pieni'], [eur0(gasRentTot() * rentMonths(ovP).length * gMul()), 'noleggi']]
     };
     body.innerHTML = `
       <div class="gl-hero ov-hero">
@@ -2412,14 +2409,14 @@
         <div class="gh-main">
           <span class="gh-lbl">Spesa totale · ${esc(per)}</span>
           <div class="gh-big k-ovt">0 €</div>
-          <div class="gh-sub">${AREAS.map(a => `<span class="ov-chip"><i class="a-${a.k}"></i>${a.s} ${T ? fmtNum(pct(V[a.k], T), 0) : 0}%</span>`).join('')}${PV ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs(dPct(T, PT) || 0), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div>
+          <div class="gh-sub">${AREAS.map(a => `<span class="ov-chip"><i class="a-${a.k}"></i>${a.t.replace('Spedizioni ', '')} ${T ? fmtNum(pct(V[a.k], T), 0) : 0}%</span>`).join('')}${PV ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs(dPct(T, PT) || 0), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div>
         </div></div>
         <div class="ov-stack">${AREAS.map(a => `<i class="a-${a.k}" style="flex:${Math.max(V[a.k], T * .004) || 1}" title="${esc(a.t)}: ${esc(eur(V[a.k]))}"></i>`).join('')}</div>
         <div class="gh-kpis">
           ${AREAS.map((a, i) => `<div class="gh-k"><span><i class="ov-dot a-${a.k}"></i>${a.t}</span><b data-ovk="${i}">0 €</b><small>${a.k === 'gas' && noPrice ? 'solo noleggi · prezzo €/L da impostare' : (T ? fmtNum(pct(V[a.k], T), 1) + '% del totale' : '—')}</small></div>`).join('')}
-          <div class="gh-k"><span>Media mensile</span><b data-ovk="avg">0 €</b><small>${byM.length} mesi con dati</small></div>
+          <div class="gh-k"><span>Media mensile</span><b data-ovk="3">0 €</b><small>${byM.length} mesi con dati</small></div>
           <div class="gh-k"><span>Mese più costoso</span><b>${top ? esc(MESI[Number(top.m.slice(5)) - 1].replace(/^./, c => c.toUpperCase())) : '—'}</b><small>${top ? esc(eur0(top.t)) : ''}</small></div>
-          <div class="gh-k"><span>Da controllare</span><b data-ovk="ck">0</b><small>${AL.length ? `${ckW} importanti` : 'tutto in ordine'}</small></div>
+          <div class="gh-k"><span>Da controllare</span><b data-ovk="4">0</b><small>${AL.length ? `${ckW} importanti` : 'tutto in ordine'}</small></div>
         </div>
       </div>
       <div class="ov-areas">${AREAS.map((a, i) => { const st = stats[a.k]();
@@ -2438,7 +2435,7 @@
         </a>`; })()}</div>
       <div class="card ov-trend"><div class="card-h"><h3>Spesa mese per mese</h3>${!ovP && undated ? `<span class="muted small">${esc(eur0(undated))} di attrezzatura senza data non sono nel grafico</span>` : ''}<span class="ov-leg">${AREAS.map(a => `<span><i class="a-${a.k}"></i>${a.t}</span>`).join('')}</span></div><div class="ov-bars" id="ov-bars"></div></div>
       <div class="card ov-ck" id="ov-ck"><div class="card-h"><h3>Cose da verificare</h3><span class="muted small">${CK.length ? `${CK.length} punti · ${ckW} importanti` : 'tutto coincide'}</span></div>
-        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'tor', 'fat'].map(k => [k, OVA[k], CK.filter(x => x.a === k).length])].map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}"${n || !k ? '' : ' disabled'}>${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
+        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'fat'].map(k => [k, OVA[k], CK.filter(x => x.a === k).length])].map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}"${n || !k ? '' : ' disabled'}>${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
         ${CK.length ? `<div class="ov-cl">${CK.map((x, i) => `<button type="button" class="ov-ci ${x.t}" data-ovgo="${x.go}" data-cka="${x.a}" style="--d:${150 + Math.min(i, 12) * 45}ms"><span class="ov-cl-l"></span><span class="ov-cm"><span class="ov-ct"><em class="ov-tag t-${x.a}">${OVA[x.a]}</em><b>${x.h}</b></span><small>${x.d}</small></span><b class="ov-cv">${x.v}</b><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>` : '<div class="empty">Tutto coincide: nessuna anomalia trovata</div>'}</div>
       <div class="ov-2">
         <div class="card ov-aic" id="ov-ai"></div>
@@ -2447,7 +2444,7 @@
       <div class="ov-3" id="ov-tops"></div>`;
 
     countTo($('.k-ovt', body), T, eur0);
-    $$('[data-ovk]', body).forEach(el => { const k = el.dataset.ovk; el._v = 0; const v = k === 'avg' ? avgM : k === 'ck' ? AL.length : V[AREAS[+k].k]; countTo(el, v, k === 'ck' ? x => fmtNum(Math.round(x), 0) : eur0); });
+    $$('[data-ovk]', body).forEach(el => { const i = +el.dataset.ovk; el._v = 0; const v = i < 3 ? V[AREAS[i].k] : i === 3 ? avgM : AL.length; countTo(el, v, i === 4 ? x => fmtNum(Math.round(x), 0) : eur0); });
     $$('[data-ova]', body).forEach(el => { const a = AREAS[+el.dataset.ova]; el._v = 0; countTo(el, V[a.k], eur0); });
 
     // barre impilate
@@ -2458,8 +2455,7 @@
     const feed = [
       ...P.att.filter(r => validD(r.data)).map(r => ({ a: 'att', d: r.data, t: r.descrizione, s: r.centro, v: tot(r), go: 'movimenti' })),
       ...P.gls.map(r => ({ a: 'gls', d: r.data, t: `${r.destinatario}`, s: `${r.citta} (${r.prov})`, v: num(r.totale) * gMul(), go: 'gls' })),
-      ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' })),
-      ...P.tor.filter(r => validD(r.data)).map(r => ({ a: 'tor', d: r.data, t: `${r.articolo} · ${qtyFmt(num(r.quantita))} pz`, s: trPz(r), v: trPrezzo(r) ? trTot(r) : null, go: 'torental' }))
+      ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' }))
     ].sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
     $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi a-${x.a}"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
 
@@ -2473,7 +2469,7 @@
 
   // grafica: anello della composizione con orbite e impulsi
   function ovArt(fr) {
-    const cx = 520, cy = 130, R = 78, C = ['#ffffff', '#7ee0b5', '#ffc15e', '#ff9cc4'];
+    const cx = 520, cy = 130, R = 78, C = ['#ffffff', '#7ee0b5', '#ffc15e'];
     let acc = 0;
     const segs = fr.map((f, i) => { const s = `<circle class="ov-rs" r="${R}" cx="${cx}" cy="${cy}" pathLength="1" stroke="${C[i]}" style="stroke-dasharray:${Math.max(0, f - .012).toFixed(4)} 1;stroke-dashoffset:${(-acc).toFixed(4)};--d:${300 + i * 220}ms"/>`; acc += f; return s; }).join('');
     return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg ov-svg">
@@ -2763,527 +2759,309 @@
   }
 
   /* =========================================================
-     TORENTAL · PUBBLICITÀ
-     gadget e materiale promozionale distribuiti ai piazzali
+     TORENTAL · LISTINO KIT ADESIVI PER I MEZZI
+     prezzi dei kit (pellicole + preparazione) e dei servizi
      ========================================================= */
-  const TR_PIAZ_DEF = [
-    { p: 'Torino', az: 'Veneta Logistic' }, { p: 'Gorgonzola', az: 'Veneta Logistic' }, { p: 'Verona', az: 'Veneta Logistic' }, { p: 'Venezia', az: 'Veneta Logistic' },
-    { p: 'Casilina', az: 'To Rental' }, { p: 'San Cesareo', az: 'Soluzione Veicolare' }, { p: 'Bologna', az: 'Soluzione Veicolare' }, { p: 'Piacenza', az: 'Soluzione Veicolare' },
-    { p: 'Ferentino', az: 'Soluzione Veicolare' }, { p: 'Pisa', az: 'RL2' }, { p: 'Pescara', az: 'RL2' }
-  ];
-  const TR_GEO = { TORINO: [7.687, 45.070], GORGONZOLA: [9.405, 45.532], VERONA: [10.992, 45.438], VENEZIA: [12.316, 45.441], CASILINA: [12.58, 41.87], 'SAN CESAREO': [12.80, 41.82], BOLOGNA: [11.343, 44.494], PIACENZA: [9.693, 45.052], FERENTINO: [13.256, 41.693], PISA: [10.402, 43.716], PESCARA: [14.214, 42.464], ROMA: [12.496, 41.902] };
-  // etichette sulla mappa [dx, dy, ancoraggio]
-  const TR_LBL = { TORINO: [-14, 32, 'start'], GORGONZOLA: [-10, -26, 'end'], VERONA: [0, -30, 'middle'], VENEZIA: [14, -22, 'start'], PIACENZA: [-30, 28, 'end'], BOLOGNA: [26, 8, 'start'], PISA: [-22, 16, 'end'], PESCARA: [24, -6, 'start'], CASILINA: [-30, 18, 'end'], 'SAN CESAREO': [-6, -40, 'end'], FERENTINO: [14, 32, 'start'] };
-  const TR_SC = 'Scorta', TR_GEN = 'Generale';
-  const TR_CAT = ['Gadget', 'Abbigliamento', 'Stampa e grafica', 'Spedizione', 'Eventi e fiere', 'Altro'];
-  const TR_STATI = ['da ordinare', 'ordinato', 'consegnato'];
-  const TR_COL = ['var(--c1)', 'var(--c3)', 'var(--c2)', 'var(--c4)', 'var(--c5)', 'var(--c-other)', 'var(--c-other)'];
-  let trP = '', trAnim = true, trF = { q: '', piaz: '', art: '', ord: '' }, trLimit = 80, trMx = 'qty';
-  const trRows = () => db.torental || [];
-  const trOk = () => isLocal() || !db.v || db.v >= 'cdc-1.5';
-  const trN = s => String(s ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
-  const trMonths = () => [...new Set(trRows().map(r => String(r.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
-  const trIsSc = p => trN(p) === trN(TR_SC);
-  const trPiazCfg = () => { const c = cfg('trPiazzali'); return Array.isArray(c) && c.length ? c.map(x => ({ p: String(x.p || '').trim(), az: String(x.az || '').trim() })).filter(x => x.p) : TR_PIAZ_DEF.map(x => ({ ...x })); };
-  const trPiaz = () => {
-    const base = trPiazCfg();
-    trRows().forEach(r => { const p = String(r.piazzale || '').trim(); if (p && !trIsSc(p) && !base.some(x => trN(x.p) === trN(p))) base.push({ p, az: String(r.azienda || '').trim() }); });
-    return base;
+  const TR_DEF = {
+    ricarico: 2, transferta: 120,
+    nota: 'I prezzi si intendono al netto dell\'IVA e sono esclusi dalla fornitura i paraschizzi e i porta targa',
+    mat: [{ cod: '10215', n: 'Arancione', c: 6.7 }, { cod: '10216', n: 'Grigio', c: 6.7 }, { cod: '6377', n: 'APP', c: 0.95, tape: true }],
+    kit: [
+      { cod: '15572', n: 'Kit Torental Frigo 3800', q: { 10215: 3.6, 10216: 6.1, 6377: 11 }, prep: 60, app: 100, rim: 200 },
+      { cod: '15573', n: 'Kit Torental Cassone standard', q: { 10215: 4.6, 10216: 6.8, 6377: 12 }, prep: 60, app: 100, rim: 200 },
+      { cod: '15757', n: 'Kit Torental Sponda', q: { 10215: 4, 10216: 6, 6377: 11 }, prep: 60, app: 100, rim: 200 },
+      { cod: '15835', n: 'Kit Motrice', q: { 10215: 6.4, 10216: 8.2, 6377: 15.5 }, prep: 60, app: 100, rim: 200 },
+      { cod: '', n: 'Kit Motrice - Trattore', q: { 10215: 2.2, 10216: 3.2, 6377: 5.9 }, prep: 25, app: 45, rim: 90, fx: { mat: 41.44, prezzo: 82.88, fattura: 107.88 } },
+      { cod: '', n: 'Kit Cliente', q: { 10215: 0.9, 10216: 1.3, 6377: 2 }, prep: 20, app: 31, rim: 62, fx: { mat: 16, prezzo: 32, fattura: 52 } },
+      { cod: '15835', n: 'Kit Rimorchio e semirimorchio', q: { 10215: 6.4, 10216: 8.2, 6377: 15.5 }, prep: 60, app: 100, rim: 200 }
+    ],
+    sing: [{ cod: 'TOR.PAR', n: 'Torental parabrezza', p: 3.88 }, { cod: 'TOR.SPE', n: 'Torental sotto specchi', p: 1.75 }, { cod: 'TOR.LAT', n: 'Torental laterale mezzo pesante', p: 3.88 }, { cod: 'AD.TERZI', n: 'Adesivo conto terzi', p: 1.1 }]
   };
-  const trListino = () => { const c = cfg('trListino'); return Array.isArray(c) ? c.filter(x => x && String(x.a || '').trim()).map(x => ({ a: String(x.a).trim(), f: String(x.f || '').trim(), p: num(x.p), min: num(x.min), note: String(x.note || '') })) : []; };
-  let trLiSrc, trLiMap = new Map();
-  const trLi = a => { const c = cfg('trListino'); if (c !== trLiSrc) { trLiSrc = c; trLiMap = new Map(trListino().map(x => [trN(x.a), x])); } return trLiMap.get(trN(a)); };
-  const trPrezzo = r => num(r.prezzo) || num((trLi(r.articolo) || {}).p);
-  const trTotN = r => r2(num(r.quantita) * trPrezzo(r));
-  const trTot = r => r2(num(r.quantita) * trPrezzo(r) * mul(r));
-  const trSum = arr => r2(arr.reduce((a, r) => a + trTot(r), 0));
-  const trSumN = arr => r2(arr.reduce((a, r) => a + trTotN(r), 0));
-  const trQty = arr => arr.reduce((a, r) => a + num(r.quantita), 0);
-  const trPz = r => String(r.piazzale || '').trim() || TR_GEN;
-  const trAz = r => { const p = trPz(r); if (trIsSc(p)) return 'Scorta'; if (p === TR_GEN) return 'Generale'; return String(r.azienda || '').trim() || (trPiaz().find(x => trN(x.p) === trN(p)) || {}).az || '—'; };
-  const trOrdK = r => String(r.ordine || '').trim() || 'Spese senza ordine';
-  const trStato = r => { const s = String(r.stato || '').trim().toLowerCase(); return TR_STATI.includes(s) ? s : 'ordinato'; };
-  const trCatOf = a => {
-    const t = trN(a);
-    if (/T-?SHIRT|POLO|FELPA|GILET|CAPPELL|GIUBB|MAGLI|PILE|SOFT|CAMICI|GIACC/.test(t)) return 'Abbigliamento';
-    if (/SPEDIZ|TRASPORT|CORRIER/.test(t)) return 'Spedizione';
-    if (/STAMP|GRAFIC|BANNER|VOLANTIN|ADESIV|ROLL.?UP|BROCHURE|INSEGN|CARTELLON|PELLICOL|WRAP|BIGLIETT/.test(t)) return 'Stampa e grafica';
-    if (/FIERA|EVENT|STAND/.test(t)) return 'Eventi e fiere';
-    return 'Gadget';
-  };
-  const trGeo = p => { const k = trN(p); if (TR_GEO[k]) return TR_GEO[k]; const C = (window.GLS_GEO || {}).CITY || {}; const hit = Object.keys(C).find(x => x.split('|')[0] === k); return hit ? [C[hit][1], C[hit][0]] : null; };
-  const trStChip = s => `<span class="chip tr-st ${s === 'consegnato' ? 'paid' : s === 'da ordinare' ? 'late' : 'soon'}">${esc(s.replace(/^./, c => c.toUpperCase()))}</span>`;
-  const trInRange = r => !trP || String(r.data).slice(0, 7) === trP;
-  function trOrders(rows) {
-    return [...groupBy(rows, trOrdK)].map(([k, v]) => {
-      const st = v.some(r => trStato(r) === 'da ordinare') ? 'da ordinare' : v.some(r => trStato(r) === 'ordinato') ? 'ordinato' : 'consegnato';
-      return { k, rows: v, st, d: v.map(r => r.data).filter(validD).sort()[0] || '', t: trSum(v), q: trQty(v), forn: [...new Set(v.map(r => String(r.fornitore || '').trim()).filter(Boolean))], np: new Set(v.filter(r => r.piazzale && !trIsSc(r.piazzale)).map(r => trN(r.piazzale))).size };
-    }).sort((a, b) => String(b.d).localeCompare(String(a.d)));
+  const TR_COLS = { mat: 'var(--tk-mat)', ric: 'var(--tk-ric)', prep: 'var(--tk-prep)', app: 'var(--tk-app)' };
+  let trAnim = true, trQ = LS.get('cdc_trq', null);
+  const trData = () => { const c = cfg('trKit'); return c && typeof c === 'object' && !Array.isArray(c) && Array.isArray(c.kit) && c.kit.length ? c : TR_DEF; };
+  const trV = v => (Number(v) || 0) * (ivaOn ? 1.22 : 1);
+  const trE = v => eur(trV(v)), trE0 = v => eur0(trV(v));
+  const trShort = n => String(n || '').replace(/^\s*kit\s+(torental\s+)?/i, '').replace(/^./, c => c.toUpperCase()) || String(n || '');
+  const trNice = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase().split(' ').map((w, i) => i && /^(e|di|a|da|con|per|il|la)$/.test(w) ? w : w.length <= 3 && /^[a-z]+$/.test(w) && i ? w : w.replace(/^./, c => c.toUpperCase())).join(' ');
+  const trFmtQ = v => fmtNum(v, Number.isInteger(v) ? 0 : (Math.round(v * 10) === v * 10 ? 1 : 2));
+  function trCalc(k, D) {
+    D = D || trData();
+    const comp = D.mat.map(m => { const q = num((k.q || {})[m.cod]); return { ...m, q, cost: q * num(m.c), prezzo: q * num(m.c) * num(D.ricarico) }; }).filter(x => x.q);
+    const cMat = comp.reduce((a, x) => a + x.cost, 0), cPrezzo = cMat * num(D.ricarico);
+    const calc = { mat: r2(cMat), prezzo: r2(cPrezzo), fattura: r2(r2(cPrezzo) + num(k.prep)) };
+    const fx = k.fx || {};
+    const mat = fx.mat != null && fx.mat !== '' ? num(fx.mat) : calc.mat, prezzo = fx.prezzo != null && fx.prezzo !== '' ? num(fx.prezzo) : calc.prezzo;
+    const fattura = fx.fattura != null && fx.fattura !== '' ? num(fx.fattura) : r2(prezzo + num(k.prep));
+    const film = comp.filter(x => !x.tape).reduce((a, x) => a + x.q, 0), tape = comp.filter(x => x.tape).reduce((a, x) => a + x.q, 0);
+    const hand = Math.abs(fattura - calc.fattura) > .009 || Math.abs(prezzo - calc.prezzo) > .009;
+    return { comp, calc, mat, prezzo, ric: r2(prezzo - mat), prep: num(k.prep), fattura, app: num(k.app), rim: num(k.rim), full: r2(fattura + num(k.app)), film, tape, hand };
   }
-  const trDl = () => {
-    const L = trListino(), forn = [...new Set([...L.map(x => x.f), ...trRows().map(x => x.fornitore)].map(x => String(x || '').trim()).filter(Boolean))].sort();
-    const arts = [...new Set([...L.map(x => x.a), ...trRows().map(x => String(x.articolo || '').trim())].filter(Boolean))];
-    const ords = [...new Set(trRows().map(x => String(x.ordine || '').trim()).filter(Boolean))];
-    return `<datalist id="tr-dla">${arts.map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="tr-dlf">${forn.map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="tr-dlo">${ords.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
-  };
-
-  /* ---------- controlli ---------- */
-  function trChecks(rows) {
-    const A = [];
-    const np = rows.filter(r => num(r.quantita) && !trPrezzo(r));
-    if (np.length) { const arts = [...new Set(np.map(r => trN(r.articolo)))]; A.push({ t: 'warn', h: 'Gadget senza prezzo', d: `${arts.length} ${arts.length === 1 ? 'articolo' : 'articoli'} senza prezzo (${arts.slice(0, 4).map(esc).join(', ')}${arts.length > 4 ? '…' : ''}): ${fmtNum(trQty(np), 0)} pezzi non entrano nel totale. Inserisci il prezzo nel listino.`, v: fmtNum(trQty(np), 0) + ' pz', ids: np.map(r => r.id), go: 'trlistino' }); }
-    const O = trOrders(rows), low = [];
-    O.forEach(o => groupBy(o.rows, r => trN(r.articolo)).forEach((v, a) => { const li = trLi(a), q = trQty(v); if (li && li.min && q < li.min) low.push({ o: o.k, a, q, min: li.min, ids: v.map(r => r.id) }); }));
-    if (low.length) A.push({ t: 'warn', h: 'Sotto il minimo d\'ordine', d: low.slice(0, 3).map(x => `${esc(x.a)} in «${esc(x.o)}»: ${fmtNum(x.q, 0)} pezzi, minimo ${fmtNum(x.min, 0)}`).join(' · ') + (low.length > 3 ? ' …' : '') + '. Apri l\'ordine e aggiungi la differenza alla scorta.', v: low.length + (low.length === 1 ? ' articolo' : ' articoli'), ids: low.flatMap(x => x.ids) });
-    const old = O.filter(o => o.st !== 'consegnato' && o.d && (parseD(today()) - parseD(o.d)) / 864e5 > 30);
-    if (old.length) A.push({ t: 'info', h: 'Ordini non ancora consegnati', d: old.slice(0, 3).map(o => `«${esc(o.k)}» del ${esc(shortDate(o.d))} (${o.st})`).join(' · ') + ': sono passati più di 30 giorni.', v: old.length + (old.length === 1 ? ' ordine' : ' ordini'), ids: old.flatMap(o => o.rows.map(r => r.id)) });
-    const dif = rows.filter(r => { const li = trLi(r.articolo); return num(r.prezzo) && li && li.p && Math.abs(num(r.prezzo) / li.p - 1) > .02; });
-    if (dif.length) A.push({ t: 'info', h: 'Prezzo diverso dal listino', d: `${dif.length} righe con un prezzo diverso da quello del listino: ${[...new Set(dif.map(r => esc(trN(r.articolo))))].slice(0, 3).join(', ')}.`, v: dif.length + ' righe', ids: dif.map(r => r.id) });
-    const dup = [...groupBy(rows.filter(r => r.piazzale), r => [trN(r.ordine), trN(r.piazzale), trN(r.articolo)].join('|'))].filter(([, v]) => v.length > 1);
-    if (dup.length) A.push({ t: 'warn', h: 'Righe doppie', d: `${dup.length} combinazioni ordine · piazzale · articolo compaiono più volte: ${dup.slice(0, 2).map(([, v]) => `${esc(v[0].articolo)} a ${esc(v[0].piazzale)}`).join(', ')}${dup.length > 2 ? '…' : ''}.`, v: eur(dup.reduce((a, [, v]) => a + trSum(v.slice(1)), 0)), ids: dup.flatMap(([, v]) => v.map(r => r.id)) });
+  function trChecks(D) {
+    const A = [], K = D.kit.map((k, i) => ({ k, i, c: trCalc(k, D) }));
+    K.filter(x => x.c.hand).forEach(x => A.push({ t: 'info', h: `${esc(trShort(x.k.n))}: prezzo scritto a mano`, d: `Nel listino il totale fattura è ${eur(x.c.fattura)} ma con le formule (m² × €/m² × ${fmtNum(num(D.ricarico), 2).replace(/,00$/, '')} + preparazione) sarebbe ${eur(x.c.calc.fattura)}. Il costo materiale scritto è ${eur(x.c.mat)} invece di ${eur(x.c.calc.mat)}.`, v: (x.c.fattura - x.c.calc.fattura > 0 ? '+' : '') + eur(x.c.fattura - x.c.calc.fattura), fix: x.i }));
+    [...groupBy(K.filter(x => x.k.cod), x => String(x.k.cod))].filter(([, v]) => v.length > 1).forEach(([cod, v]) => {
+      const same = v.every(x => JSON.stringify(x.k.q) === JSON.stringify(v[0].k.q));
+      A.push({ t: 'warn', h: `Codice ${esc(cod)} usato per ${v.length} kit`, d: `${v.map(x => esc(trShort(x.k.n))).join(' e ')} hanno lo stesso codice${same ? ' e le stesse quantità' : ' ma quantità diverse'}: in fattura non si distinguono.`, v: v.length + ' kit' });
+    });
+    const nc = K.filter(x => !String(x.k.cod || '').trim()); if (nc.length) A.push({ t: 'info', h: 'Kit senza codice', d: `${nc.map(x => esc(trShort(x.k.n))).join(', ')} non hanno un codice articolo.`, v: nc.length + ' kit' });
+    const np = K.filter(x => !x.c.fattura); if (np.length) A.push({ t: 'warn', h: 'Kit senza prezzo', d: `${np.map(x => esc(trShort(x.k.n))).join(', ')}: mancano quantità o costi dei materiali.`, v: np.length + ' kit' });
+    const ns = K.filter(x => !x.c.app); if (ns.length) A.push({ t: 'info', h: 'Applicazione senza prezzo', d: `${ns.map(x => esc(trShort(x.k.n))).join(', ')}.`, v: ns.length + ' kit' });
     return A;
   }
 
   /* ---------- pagina ---------- */
-  function trPlist(rows) {
-    const byP = groupBy(rows, r => trN(trPz(r)));
-    const base = [...trPiaz().map(x => ({ p: x.p, az: x.az })), { p: TR_SC, az: 'Scorta' }];
-    if (byP.has(trN(TR_GEN))) base.push({ p: TR_GEN, az: 'Generale' });
-    return base.map(x => { const v = byP.get(trN(x.p)) || []; return { ...x, rows: v, t: trSum(v), q: trQty(v) }; });
-  }
   function renderTor() {
-    const months = trMonths();
-    if (trP && !months.includes(trP)) trP = '';
-    $('#tr-per').innerHTML = `<option value=""${trP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === trP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
-    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(trP);
-    $('#tr-prev').disabled = ix >= opts.length - 1; $('#tr-next').disabled = ix <= 0;
-    sub(`${ivaLbl()} · gadget e materiale pubblicitario`);
-    const all = trRows(), rows = all.filter(trInRange);
+    const D = trData(), K = D.kit.map((k, i) => ({ k, i, c: trCalc(k, D) }));
+    sub(`${ivaLbl()} · listino kit adesivi e servizi per i mezzi Torental`);
     const anim = trAnim && !reduced(); trAnim = false;
     const body = $('#tr-body'); body.classList.toggle('cc-anim', anim);
-    const warn = trOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati di Torental.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.5 (Code.gs nuovo).</span></div>`;
-    if (!rows.length) {
-      body.innerHTML = warn + `<div class="gl-hero tr-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${trArt()}</div><div class="gh-main"><span class="gh-lbl">Pubblicità Torental</span><h3>Nessuna spesa registrata</h3><p>Importa il file Excel dell'ordine gadget (piazzali × articoli) oppure crea un nuovo ordine: l'app calcola i costi per piazzale, azienda e articolo.</p><div class="tr-hb"><button class="btn sm" id="tr-imp2" type="button">Importa file d'ordine</button><button class="btn sm" id="tr-new2" type="button">+ Nuovo ordine</button></div></div></div></div>`;
-      return;
-    }
-    const T = trSum(rows), Q = trQty(rows), Qp = trQty(rows.filter(r => trPrezzo(r)));
-    const O = trOrders(rows), open = O.filter(o => o.st !== 'consegnato');
-    const PL = trPlist(rows), act = PL.filter(x => x.q && !trIsSc(x.p) && x.p !== TR_GEN);
-    const sc = PL.find(x => trIsSc(x.p)), gen = PL.find(x => x.p === TR_GEN);
-    const forn = new Set(rows.map(r => trN(r.fornitore)).filter(Boolean)).size;
-    const yr = (trP || today()).slice(0, 4), bud = num(cfg('trBudget')) * (ivaOn ? 1.22 : 1), spentY = trSum(all.filter(r => String(r.data).slice(0, 4) === yr));
-    const per = trP ? mLabel(trP) : months.length > 1 ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : months.length ? mLabel(months[0]) : '';
-    const prevK = trP ? months[months.indexOf(trP) - 1] : null, PT = prevK ? trSum(all.filter(r => String(r.data).slice(0, 7) === prevK)) : 0;
-    const int = v => fmtNum(Math.round(v), 0);
-    const K = [
-      ['Pezzi', Q, int, sc && sc.q ? `${fmtNum(sc.q, 0)} di scorta` : 'nessuna scorta'],
-      ['Costo medio a pezzo', Qp ? T / Qp : 0, eur, Qp < Q ? `${fmtNum(Q - Qp, 0)} pz senza prezzo` : 'tutti con prezzo'],
-      ['Piazzali serviti', act.length, int, `su ${trPiaz().length} piazzali`],
-      ['Media per piazzale', act.length ? act.reduce((a, x) => a + x.t, 0) / act.length : 0, eur0, 'scorta esclusa'],
-      ['Ordini', O.length, int, open.length ? `${open.length} da consegnare` : 'tutti consegnati'],
-      bud ? ['Budget ' + yr, spentY / bud * 100, v => fmtNum(v, 0) + '%', `${eur0(spentY)} di ${eur0(bud)}`] : ['Articoli', new Set(rows.map(r => trN(r.articolo))).size, int, `${forn} ${forn === 1 ? 'fornitore' : 'fornitori'}`]
+    const F = K.map(x => x.c.fattura).filter(Boolean), lo = Math.min(...F), hi = Math.max(...F);
+    const cheap = K.find(x => x.c.fattura === lo), dear = K.find(x => x.c.fattura === hi);
+    const avgFull = K.reduce((a, x) => a + x.c.full, 0) / (K.length || 1);
+    const film = D.mat.filter(m => !m.tape), filmC = film.length ? film.reduce((a, m) => a + num(m.c), 0) / film.length : 0;
+    const A = trChecks(D), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
+    const ricPct = (num(D.ricarico) - 1) * 100;
+    const KP = [
+      ['Kit a listino', K.length, v => fmtNum(Math.round(v), 0), `${D.sing.length} articoli singoli`],
+      ['Kit più economico', trV(lo), eur, trShort(cheap ? cheap.k.n : '')],
+      ['Kit più caro', trV(hi), eur, trShort(dear ? dear.k.n : '')],
+      ['Intervento medio', trV(avgFull), eur, 'kit + applicazione'],
+      ['Ricarico materiali', ricPct, v => '+' + fmtNum(v, 0) + '%', `prezzo = costo × ${fmtNum(num(D.ricarico), 2).replace(/,00$/, '')}`],
+      ['Transferta', trV(D.transferta), eur0, '1 giorno · 100 km']
     ];
-    body.innerHTML = warn + `
+    body.innerHTML = `
       <div class="gl-hero tr-hero">
         <div class="gh-top"><div class="gh-art">${trArt()}</div>
-        <div class="gh-main"><span class="gh-lbl">Pubblicità Torental · ${esc(per)}</span><div class="gh-big k-tr">0 €</div>
-          <div class="gh-sub"><span>${fmtNum(Q, 0)} pezzi</span><span>${O.length} ${O.length === 1 ? 'ordine' : 'ordini'}</span><span>${act.length} piazzali</span>${PT ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs((T / PT - 1) * 100), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div></div></div>
-        <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-trk="${i}">0</b><small>${esc(s)}</small></div>`).join('')}</div>
+        <div class="gh-main"><span class="gh-lbl">Listino kit Torental · totale fattura per mezzo</span><div class="gh-big">${eur0(trV(lo))} – ${eur0(trV(hi))}</div>
+          <div class="gh-sub"><span>${K.length} kit</span><span>pellicola ${eur(filmC)}/m² fornitore</span><span>${ivaOn ? 'IVA inclusa' : 'IVA esclusa'}</span></div></div></div>
+        <div class="gh-kpis">${KP.map(([l, , , s], i) => `<div class="gh-k"><span>${l}</span><b data-trk="${i}">0</b><small>${esc(s)}</small></div>`).join('')}</div>
       </div>
-      <div class="card" id="tr-anom"></div>
-      <div class="card tr-mapcard"><div class="card-h"><h3>Piazzali</h3><span class="muted small">${ivaLbl()} · tocca per filtrare</span><button class="btn sm" id="tr-set" type="button">Piazzali e budget</button></div>
-        <div class="tr-dash"><div class="cc-map tr-map" id="tr-map"></div><div class="tr-rank" id="tr-rank"></div></div></div>
-      <div class="gl-2">
-        <div class="card"><div class="card-h"><h3>Per azienda</h3><span class="muted small">${ivaLbl()}</span></div><div id="tr-az"></div></div>
-        <div class="card"><div class="card-h"><h3>Per articolo</h3><button class="btn sm" id="tr-list" type="button">Listino prezzi</button></div><div id="tr-art"></div></div>
+      ${D.nota ? `<div class="tr-nota"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>${esc(D.nota)}</span></div>` : ''}
+      <div class="tk-grid">${K.map((x, j) => { const c = x.c, T = c.mat + c.ric + c.prep || 1; return `<button type="button" class="card tk" data-trkit="${x.i}" style="--d:${120 + j * 60}ms">
+        <span class="tk-h"><span class="tk-cod">${x.k.cod ? esc(x.k.cod) : 'senza codice'}</span>${c.hand ? '<span class="tk-flag" title="Prezzo scritto a mano nel listino">manuale</span>' : ''}</span>
+        <b class="tk-n">${esc(trShort(x.k.n))}</b>
+        <span class="tk-p">${esc(trE(c.fattura))}<small>totale fattura kit</small></span>
+        <span class="tk-bar"><i style="flex:${c.mat};background:${TR_COLS.mat}"></i><i style="flex:${Math.max(0, c.ric)};background:${TR_COLS.ric}"></i><i style="flex:${c.prep};background:${TR_COLS.prep}"></i></span>
+        <span class="tk-l"><span><i style="background:${TR_COLS.mat}"></i>Materiale ${esc(trE0(c.mat))}</span><span><i style="background:${TR_COLS.ric}"></i>Ricarico ${esc(trE0(c.ric))}</span><span><i style="background:${TR_COLS.prep}"></i>Prep. ${esc(trE0(c.prep))}</span></span>
+        <span class="tk-s"><span><small>Applicazione</small><b>${esc(trE0(c.app))}</b></span><span><small>Rimozione</small><b>${esc(trE0(c.rim))}</b></span><span><small>Pellicola</small><b>${trFmtQ(c.film)} m²</b></span></span>
+      </button>`; }).join('')}</div>
+      <div class="card" id="tr-anom"><div class="card-h"><h3>Controlli sul listino</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto coerente'}</span></div>${A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span>${x.fix != null ? `<button type="button" class="tr-fixb" data-trfix="${x.fix}">Usa il prezzo calcolato</button>` : ''}</div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Quantità, prezzi e codici sono coerenti</div>'}</div>
+      <div class="card"><div class="card-h"><h3>Confronto: intervento completo per mezzo</h3><span class="muted small">kit + applicazione · ${ivaLbl()}</span></div>
+        <div class="tr-leg">${[['mat', 'Costo materiale'], ['ric', 'Ricarico'], ['prep', 'Preparazione kit'], ['app', 'Applicazione']].map(([k, l]) => `<span><i style="background:${TR_COLS[k]}"></i>${l}</span>`).join('')}</div>
+        <div class="tr-cmp" id="tr-cmp"></div></div>
+      <div class="tr-2">
+        <div class="card tr-calc" id="tr-calc"></div>
+        <div class="card"><div class="card-h"><h3>Articoli singoli</h3><span class="muted small">prezzo cadauno · ${ivaLbl()}</span></div>
+          <div class="tr-sing">${D.sing.map((s, i) => `<div class="tr-si" style="--d:${200 + i * 50}ms"><span class="tr-sc">${esc(s.cod || '—')}</span><span class="tr-sn">${esc(trNice(s.n))}</span><b>${esc(trE(s.p))}</b></div>`).join('') || '<div class="empty">Nessun articolo singolo</div>'}</div>
+          <div class="cf-sub" style="margin:18px 0 8px">Materiali</div>
+          <div class="tr-sing">${D.mat.map(m => `<div class="tr-si"><span class="tr-sc">${esc(m.cod)}</span><span class="tr-sn">${esc(m.n)}${m.tape ? ' <em>application tape</em>' : ' <em>pellicola</em>'}</span><span class="tr-mp"><b>${esc(eur(num(m.c)))}/m²</b><small>al cliente ${esc(trE(num(m.c) * num(D.ricarico)))}/m²</small></span></div>`).join('')}</div></div>
       </div>
-      <div class="card"><div class="card-h"><h3>Distribuzione</h3><span class="muted small">piazzali × articoli, come il file d'ordine</span><div class="tr-seg" role="tablist"><button type="button" data-trmx="qty" class="${trMx === 'qty' ? 'on' : ''}">Pezzi</button><button type="button" data-trmx="eur" class="${trMx === 'eur' ? 'on' : ''}">Euro</button></div></div><div class="mx-wrap" id="tr-mx"></div></div>
-      <div class="${months.length > 1 && !trP ? 'gl-2' : ''}">
-        <div class="card"><div class="card-h"><h3>Ordini</h3><button class="btn sm" id="tr-new3" type="button">+ Nuovo ordine</button></div><div class="tr-ords" id="tr-ords"></div></div>
-        ${months.length > 1 && !trP ? `<div class="card"><div class="card-h"><h3>Mese per mese</h3><span class="muted small">${ivaLbl()}</span></div><div class="mbars fa-bars" id="tr-tr"></div></div>` : ''}
-      </div>
-      <div class="card gl-list"><div class="card-h"><h3>Tutte le spese</h3><span class="muted small" id="tr-cnt"></span><button class="btn sm" id="tr-addr" type="button">+ Spesa</button></div>
-        <div class="filters f4 gl-f"><input id="tr-q" type="search" placeholder="Cerca articolo, fornitore, note…" value="${esc(trF.q)}"><select id="tr-fp"></select><select id="tr-fa"></select><select id="tr-fo"></select></div>
-        <div id="tr-list-rows"></div></div>`;
-    countTo($('.k-tr', body), T, eur0);
-    $$('[data-trk]', body).forEach(el => { const i = +el.dataset.trk; el._v = 0; countTo(el, K[i][1], K[i][2]); });
-    // controlli
-    const A = trChecks(rows), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
-    $('#tr-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` + (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-trq="${esc(x.ids.join(' '))}"${x.go ? ` data-trgo="${x.go}"` : ''}><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia: prezzi, minimi d\'ordine e consegne in regola</div>');
-    trMap(PL, T, anim);
-    // aziende
-    const byA = [...groupBy(rows, trAz)].map(([k, v]) => ({ k, t: trSum(v), q: trQty(v), np: new Set(v.map(r => trN(trPz(r)))).size })).sort((a, b) => b.t - a.t || b.q - a.q);
-    const aT = byA.reduce((s, x) => s + x.t, 0), useQ = !aT;
-    $('#tr-az').innerHTML = `<div class="tr-stack">${byA.map((x, i) => `<i style="flex:${Math.max(useQ ? x.q : x.t, (useQ ? Q : aT) * .006)};background:${TR_COL[Math.min(i, TR_COL.length - 1)]}" title="${esc(x.k)}"></i>`).join('')}</div>
-      <div class="tr-azl">${byA.map((x, i) => `<div class="tr-azr gl-anim-row" style="--d:${200 + i * 60}ms" data-traz="${esc(x.k)}"><i style="background:${TR_COL[Math.min(i, TR_COL.length - 1)]}"></i><span class="tr-azm"><b>${esc(x.k)}</b><small>${x.k === 'Scorta' ? 'eccedenze in magazzino' : x.k === 'Generale' ? 'spese non legate a un piazzale' : `${x.np} ${x.np === 1 ? 'piazzale' : 'piazzali'}`} · ${fmtNum(x.q, 0)} pezzi</small></span><span class="tr-azv"><b>${eur0(x.t)}</b><small>${fmtNum(pct(useQ ? x.q : x.t, useQ ? Q : aT), 1)}%</small></span></div>`).join('')}</div>`;
-    // articoli
-    const byArt = [...groupBy(rows, r => trN(r.articolo))].map(([k, v]) => { const li = trLi(k) || {}; return { k, name: String(v[0].articolo || k).trim(), t: trSum(v), q: trQty(v), f: (v.find(r => r.fornitore) || {}).fornitore || li.f || '', pu: trPrezzo(v[0]) * mul(v[0]), np: !v.some(r => trPrezzo(r)) }; }).sort((a, b) => b.t - a.t || b.q - a.q);
-    const mT = Math.max(1, ...byArt.map(x => x.t)), mQ = Math.max(1, ...byArt.map(x => x.q));
-    $('#tr-art').innerHTML = byArt.map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms" data-trart="${esc(x.k)}"><div class="bar-top"><span>${esc(x.name)}<em>${esc(x.f || 'fornitore ?')} · ${fmtNum(x.q, 0)} pz${x.np ? '' : ' · ' + eurP(x.pu) + '/pz'}</em></span><span>${x.np ? '<span class="chip late">senza prezzo</span>' : eur0(x.t)}</span></div><div class="bar-track"><div class="bar-fill${x.np ? ' tr-nop' : ''}" style="width:${((x.np ? x.q / mQ : x.t / mT) * 100).toFixed(2)}%"></div></div></div>`).join('');
-    trMatrix(rows, PL, anim);
-    // ordini
-    $('#tr-ords').innerHTML = O.map((o, i) => { const d = validD(o.d) ? parseD(o.d) : null; return `<button type="button" class="tr-or" data-trord="${esc(o.k)}" style="--d:${200 + i * 50}ms"><span class="tr-od"><b>${d ? d.getDate() : '—'}</b><small>${d ? esc(MESI[d.getMonth()].slice(0, 3)) + ' ' + String(d.getFullYear()).slice(2) : ''}</small></span><span class="tr-om"><b>${esc(o.k)}</b><small>${fmtNum(o.q, 0)} pezzi · ${o.np} piazzali${o.forn.length ? ' · ' + esc(o.forn.slice(0, 3).join(', ')) + (o.forn.length > 3 ? '…' : '') : ''}</small></span>${trStChip(o.st)}<b class="tr-ov">${eur0(o.t)}</b></button>`; }).join('');
-    if ($('#tr-tr')) { const mm = months.map(k => ({ k, v: trSum(all.filter(r => String(r.data).slice(0, 7) === k)) })), mx = Math.max(...mm.map(x => x.v), 1); $('#tr-tr').innerHTML = mm.map((x, i) => `<div class="mb gl-mb" data-trper="${x.k}" title="${esc(mLabel(x.k))}: ${esc(eur(x.v))}"><span class="mbv">${esc(eur0(x.v))}</span><i class="${x.v === mx ? 'cur' : ''}" style="height:${Math.max(3, x.v / mx * 100)}%;animation-delay:${i * 50}ms"></i><span class="mbl">${esc(MESI[Number(x.k.slice(5)) - 1].slice(0, 3))}</span></div>`).join(''); }
-    // filtri
-    const pzs = PL.filter(x => x.rows.length), ars = byArt, ors = O;
-    if (trF.piaz && !pzs.some(x => trN(x.p) === trF.piaz)) trF.piaz = '';
-    if (trF.art && !ars.some(x => x.k === trF.art)) trF.art = '';
-    if (trF.ord && !ors.some(x => x.k === trF.ord)) trF.ord = '';
-    $('#tr-fp').innerHTML = `<option value="">Tutti i piazzali</option>` + pzs.map(x => `<option value="${esc(trN(x.p))}"${trF.piaz === trN(x.p) ? ' selected' : ''}>${esc(x.p)}</option>`).join('');
-    $('#tr-fa').innerHTML = `<option value="">Tutti gli articoli</option>` + ars.map(x => `<option value="${esc(x.k)}"${trF.art === x.k ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
-    $('#tr-fo').innerHTML = `<option value="">Tutti gli ordini</option>` + ors.map(x => `<option value="${esc(x.k)}"${trF.ord === x.k ? ' selected' : ''}>${esc(x.k)}</option>`).join('');
-    renderTorList(rows);
+      <div class="card"><div class="card-h"><h3>Composizione dei kit</h3><span class="muted small">m² di materiale e prezzi · ${ivaLbl()}</span></div><div class="mx-wrap" id="tr-tab"></div></div>`;
+    $$('[data-trk]', body).forEach(el => { const i = +el.dataset.trk; el._v = 0; countTo(el, KP[i][1], KP[i][2]); });
+    // confronto
+    const mx = Math.max(1, ...K.map(x => x.c.full)), S = K.slice().sort((a, b) => b.c.full - a.c.full);
+    $('#tr-cmp').innerHTML = S.map((x, j) => { const c = x.c; return `<div class="tr-cr" data-trkit="${x.i}" style="--d:${200 + j * 60}ms"><span class="tr-cn"><b>${esc(trShort(x.k.n))}</b><small>${x.k.cod ? esc(x.k.cod) : 'senza codice'}</small></span><span class="tr-ct"><span class="tr-cb" style="width:${(c.full / mx * 100).toFixed(2)}%">${[['mat', c.mat], ['ric', c.ric], ['prep', c.prep], ['app', c.app]].map(([k, v]) => v > 0 ? `<i style="flex:${v};background:${TR_COLS[k]}" title="${esc(trE(v))}"></i>` : '').join('')}</span></span><b class="tr-cv">${esc(trE0(c.full))}</b></div>`; }).join('');
+    // tabella
+    $('#tr-tab').innerHTML = `<table class="mx tr-tabl"><thead><tr><th>Kit</th><th class="l">Codice</th>${D.mat.map(m => `<th>${esc(m.n)}<small>m²</small></th>`).join('')}<th>Costo materiale</th><th>Prezzo materiale</th><th>Preparazione</th><th>Totale fattura</th><th>Applicazione</th><th>Rimozione</th><th>Guadagno sul materiale</th></tr></thead><tbody>
+      ${K.map(x => { const c = x.c; return `<tr data-trkit="${x.i}"><td>${esc(trShort(x.k.n))}${c.hand ? ' <span class="tk-flag">manuale</span>' : ''}</td><td class="l m2">${esc(x.k.cod || '—')}</td>${D.mat.map(m => `<td>${num(x.k.q[m.cod]) ? trFmtQ(num(x.k.q[m.cod])) : '—'}</td>`).join('')}<td>${esc(trE(c.mat))}</td><td>${esc(trE(c.prezzo))}</td><td>${esc(trE(c.prep))}</td><td><b>${esc(trE(c.fattura))}</b></td><td>${esc(trE(c.app))}</td><td>${esc(trE(c.rim))}</td><td class="tr-gain">${esc(trE(c.ric))}<small>${c.fattura ? fmtNum(c.ric / c.fattura * 100, 0) : 0}% del kit</small></td></tr>`; }).join('')}</tbody></table>`;
+    renderTrCalc();
   }
 
-  function trMap(PL, T, anim) {
-    const mx = Math.max(1, ...PL.map(x => x.t)), mq = Math.max(1, ...PL.map(x => x.q)), byT = PL.some(x => x.t);
-    const pins = PL.filter(x => trGeo(x.p)).map((x, i) => { const [px, py] = proj(trGeo(x.p)); return { ...x, px, py, r: x.q ? 4 + 9 * Math.sqrt(byT ? x.t / mx : x.q / mq) : 2.6, i }; });
-    const lab = p => {
-      const [dx, dy, an] = TR_LBL[trN(p.p)] || [p.r + 10, -6, 'start'];
-      const lx = p.px + dx, ly = p.py + dy, ex = lx + (an === 'end' ? 4 : an === 'start' ? -4 : 0);
-      return `<g class="cm-lbl" data-trp="${esc(trN(p.p))}" style="--d:${900 + p.i * 70}ms"><path class="cm-lead" d="M${p.px.toFixed(1)} ${p.py.toFixed(1)} L${ex.toFixed(1)} ${(ly - 4).toFixed(1)}"/>
-        <text x="${lx.toFixed(1)}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n">${esc(trN(p.p))}</text>
-        <text x="${lx.toFixed(1)}" y="${(ly + 9).toFixed(1)}" text-anchor="${an}" class="cm-v">${byT ? eur0(p.t) + ' · ' : ''}${fmtNum(p.q, 0)} pz</text></g>`;
-    };
-    $('#tr-map').innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei piazzali">
-      <path class="cm-land" pathLength="1" d="${IT_PATH}"/>
-      ${pins.slice().sort((a, b) => b.r - a.r).map(p => `<g class="cm-pin tr-pin${p.q ? ' act' : ''}${trF.piaz === trN(p.p) ? ' on' : ''}" data-trp="${esc(trN(p.p))}" style="--d:${500 + p.i * 70}ms" transform="translate(${p.px.toFixed(1)} ${p.py.toFixed(1)})"><title>${esc(p.p)}${p.az ? ' · ' + esc(p.az) : ''}: ${fmtNum(p.q, 0)} pezzi${byT ? ' · ' + esc(eur(p.t)) : ''}</title><circle class="cm-hit" r="${(p.r + 8).toFixed(1)}"/><circle class="cm-c" r="${p.r.toFixed(1)}"/></g>`).join('')}
-      ${pins.filter(p => p.q).map(lab).join('')}
-    </svg>`;
-    const rank = PL.filter(x => x.rows.length).sort((a, b) => b.t - a.t || b.q - a.q), rT = rank.reduce((s, x) => s + x.t, 0);
-    $('#tr-rank').innerHTML = rank.map((x, i) => `<button type="button" class="cr-row${trF.piaz === trN(x.p) ? ' on' : ''}" data-trp="${esc(trN(x.p))}" style="--d:${200 + i * 60}ms">
-        <span class="cr-n">${i + 1}</span>
-        <span class="cr-main"><span class="cr-top"><b>${esc(x.p)}</b><span><em>${byT ? fmtNum(pct(x.t, rT), 1) + '%' : ''}</em><strong>${byT ? eur0(x.t) : fmtNum(x.q, 0) + ' pz'}</strong></span></span>
-        <span class="cr-track"><i style="width:${((byT ? x.t / mx : x.q / mq) * 100).toFixed(2)}%"></i></span>
-        <span class="cr-sub">${esc(x.az || '—')} · ${fmtNum(x.q, 0)} pezzi · ${new Set(x.rows.map(r => trN(r.articolo))).size} articoli</span></span>
-      </button>`).join('') + (PL.some(x => !x.rows.length && !trIsSc(x.p)) ? `<div class="muted small tr-none">Nessun gadget: ${PL.filter(x => !x.rows.length && !trIsSc(x.p) && x.p !== TR_GEN).map(x => esc(x.p)).join(', ')}</div>` : '');
+  /* ---------- preventivo rapido ---------- */
+  function trQState() {
+    const D = trData();
+    const q = trQ && typeof trQ === 'object' ? trQ : {};
+    return { kit: Math.min(Math.max(0, +q.kit || 0), D.kit.length - 1), n: Math.max(1, +q.n || 1), app: q.app !== false, rim: !!q.rim, gg: Math.max(0, +q.gg || 0), sing: q.sing && typeof q.sing === 'object' ? q.sing : {} };
+  }
+  function trQuote() {
+    const D = trData(), Q = trQState(), k = D.kit[Q.kit], c = trCalc(k, D), L = [];
+    L.push({ t: `${trShort(k.n)} · kit${k.cod ? ' ' + k.cod : ''}`, q: Q.n, p: c.fattura });
+    if (Q.app && c.app) L.push({ t: 'Applicazione', q: Q.n, p: c.app });
+    if (Q.rim && c.rim) L.push({ t: 'Rimozione kit esistente', q: Q.n, p: c.rim });
+    if (Q.gg) L.push({ t: 'Transferta (1 giorno, 100 km)', q: Q.gg, p: num(D.transferta) });
+    D.sing.forEach(s => { const n = num(Q.sing[s.cod || s.n]); if (n > 0) L.push({ t: trNice(s.n), q: n, p: num(s.p) }); });
+    const imp = r2(L.reduce((a, x) => a + x.q * x.p, 0));
+    return { D, Q, L, imp, iva: r2(imp * .22), tot: r2(imp * 1.22) };
+  }
+  function renderTrCalc() {
+    const el = $('#tr-calc'); if (!el) return;
+    const { D, Q, L, imp, iva, tot } = trQuote();
+    el.innerHTML = `<div class="card-h"><h3>Preventivo rapido</h3><span class="muted small">calcola il prezzo per uno o più mezzi</span></div>
+      <div class="f-row"><label class="f"><span>Tipo di kit</span><select data-trq="kit">${D.kit.map((k, i) => `<option value="${i}"${i === Q.kit ? ' selected' : ''}>${esc(trShort(k.n))}</option>`).join('')}</select></label><label class="f"><span>Numero di mezzi</span><input data-trq="n" type="number" min="1" step="1" inputmode="numeric" value="${Q.n}"></label></div>
+      <div class="tr-opts"><label class="tr-ck"><input type="checkbox" data-trq="app"${Q.app ? ' checked' : ''}><span>Applicazione</span></label><label class="tr-ck"><input type="checkbox" data-trq="rim"${Q.rim ? ' checked' : ''}><span>Rimozione kit esistente</span></label><label class="tr-gg"><span>Giorni di transferta</span><input data-trq="gg" type="number" min="0" step="1" inputmode="numeric" value="${Q.gg}"></label></div>
+      ${D.sing.length ? `<details class="tr-sd"${D.sing.some(s => num(Q.sing[s.cod || s.n])) ? ' open' : ''}><summary>Aggiungi articoli singoli</summary><div class="tr-sg">${D.sing.map(s => `<label><span>${esc(trNice(s.n))}<small>${esc(eur(s.p))} cad.</small></span><input data-trqs="${esc(s.cod || s.n)}" type="number" min="0" step="1" inputmode="numeric" value="${num(Q.sing[s.cod || s.n]) || ''}" placeholder="0"></label>`).join('')}</div></details>` : ''}
+      <div class="tr-ql">${L.map(x => `<div><span>${esc(x.t)}${x.q !== 1 ? ` <em>× ${fmtNum(x.q, 0)}</em>` : ''}</span><b>${esc(eur(x.q * x.p))}</b></div>`).join('')}</div>
+      <div class="iva-sum"><div><span>Imponibile</span><b>${esc(eur(imp))}</b></div><div><span>IVA 22%</span><b>${esc(eur(iva))}</b></div><div class="t"><span>Totale</span><b>${esc(eur(tot))}</b></div></div>
+      <div class="row-btns" style="margin-top:12px"><button type="button" class="btn sm" id="tr-copy">Copia il preventivo</button></div>`;
+  }
+  function trQSet(e) {
+    const t = e.target, Q = trQState();
+    if (t.dataset.trq) { const k = t.dataset.trq; Q[k] = t.type === 'checkbox' ? t.checked : +t.value || 0; }
+    else if (t.dataset.trqs) { Q.sing = { ...Q.sing, [t.dataset.trqs]: +t.value || 0 }; }
+    else return;
+    trQ = Q; LS.set('cdc_trq', Q);
+    const keep = t.dataset.trq || t.dataset.trqs, pos = t.selectionStart;
+    renderTrCalc();
+    if (e.type === 'input') { const n = $(`#tr-calc [data-trq="${keep}"], #tr-calc [data-trqs="${CSS.escape(keep)}"]`); if (n) { n.focus(); try { if (pos != null) n.setSelectionRange(pos, pos); } catch {} } }
+  }
+  async function trCopy() {
+    const { L, imp, iva, tot } = trQuote();
+    const txt = ['Preventivo kit Torental', ...L.map(x => `- ${x.t}${x.q !== 1 ? ' × ' + fmtNum(x.q, 0) : ''}: ${eur(x.q * x.p)}`), `Imponibile: ${eur(imp)}`, `IVA 22%: ${eur(iva)}`, `Totale: ${eur(tot)}`, '', trData().nota || ''].join('\n').trim();
+    try { await navigator.clipboard.writeText(txt); toast('Preventivo copiato: incollalo dove vuoi'); }
+    catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Preventivo copiato'); } catch { toast('Copia non riuscita'); } ta.remove(); }
   }
 
-  function trMatrix(rows, PL, anim) {
-    const arts = [...groupBy(rows, r => trN(r.articolo))].map(([k, v]) => ({ k, name: String(v[0].articolo || k).trim(), f: (v.find(r => r.fornitore) || {}).fornitore || (trLi(k) || {}).f || '', t: trSum(v), q: trQty(v) })).sort((a, b) => b.q - a.q);
-    const P = PL.filter(x => x.rows.length || (!trIsSc(x.p) && x.p !== TR_GEN));
-    const cell = {}; rows.forEach(r => { const k = trN(trPz(r)) + '|' + trN(r.articolo); const c = cell[k] || (cell[k] = { q: 0, e: 0 }); c.q += num(r.quantita); c.e += trTot(r); });
-    const E = trMx === 'eur', val = c => c ? (E ? c.e : c.q) : 0, fmt = v => E ? eur0(v) : fmtNum(v, 0);
-    const mxv = Math.max(1, ...Object.values(cell).map(val));
-    const heat = v => !v ? 'h0' : v / mxv > .45 ? 'h3' : v / mxv > .15 ? 'h2' : v / mxv > .03 ? 'h1' : '';
-    $('#tr-mx').innerHTML = `<table class="mx tr-mxt${anim ? ' mx-anim' : ''}"><thead><tr><th>Piazzale</th><th class="tr-azc">Azienda</th>${arts.map(a => `<th title="${esc(a.f)}">${esc(a.name)}<small>${esc(a.f)}</small></th>`).join('')}<th>${E ? 'Totale' : 'Pezzi'}</th>${E ? '' : '<th>Spesa</th>'}</tr></thead><tbody>
-      ${P.map((p, r) => `<tr data-trp="${esc(trN(p.p))}"${p.rows.length ? '' : ' class="tr-z"'}><td>${esc(p.p)}</td><td class="tr-azc">${esc(trIsSc(p.p) ? '—' : p.az || '—')}</td>${arts.map((a, j) => { const v = val(cell[trN(p.p) + '|' + a.k]); return `<td class="${heat(v)}" style="--d:${(r + j) * 25}ms">${v ? fmt(v) : '—'}</td>`; }).join('')}<td><b>${E ? eur0(p.t) : fmtNum(p.q, 0)}</b></td>${E ? '' : `<td>${p.t ? eur0(p.t) : '—'}</td>`}</tr>`).join('')}
-      <tr class="tot"><td>Totale</td><td class="tr-azc"></td>${arts.map(a => `<td>${E ? eur0(a.t) : fmtNum(a.q, 0)}</td>`).join('')}<td>${E ? eur0(trSum(rows)) : fmtNum(trQty(rows), 0)}</td>${E ? '' : `<td>${eur0(trSum(rows))}</td>`}</tr></tbody></table>`;
+  /* ---------- dettaglio kit ---------- */
+  function trKitDetail(i) {
+    const D = trData(), k = D.kit[i]; if (!k) return;
+    const c = trCalc(k, D);
+    openSheet(trNice(k.n), `
+      <div class="kv">${[['Codice', k.cod || '—'], ['Pellicola', trFmtQ(c.film) + ' m²'], ['Application tape', trFmtQ(c.tape) + ' m²'], ['Ricarico', '× ' + fmtNum(num(D.ricarico), 2).replace(/,00$/, '')]].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
+      <div class="fa-rows tr-dr"><div class="fa-rh"><span>Componente</span><span>m²</span><span>€/m²</span><span>Costo</span><span>Prezzo</span></div>
+        ${c.comp.map(x => `<div class="fa-rr"><span><b>${esc(x.n)}</b><small>${esc(x.cod)}</small></span><span>${trFmtQ(x.q)}</span><span>${esc(eurP(num(x.c)))}</span><span>${esc(eur(x.cost))}</span><span>${esc(eur(x.prezzo))}</span></div>`).join('')}
+        <div class="fa-rr tr-dt"><span><b>Totale materiale</b></span><span></span><span></span><span>${esc(eur(c.mat))}</span><span>${esc(eur(c.prezzo))}</span></div></div>
+      ${c.hand ? `<div class="fa-chk ko"><b>Prezzo scritto a mano nel listino</b><span>Con le formule il totale sarebbe ${esc(eur(c.calc.fattura))} (materiale ${esc(eur(c.calc.mat))}, prezzo ${esc(eur(c.calc.prezzo))}).</span></div>` : ''}
+      <div class="iva-sum" style="margin-top:14px"><div><span>Prezzo materiale</span><b>${esc(eur(c.prezzo))}</b></div><div><span>Preparazione kit</span><b>${esc(eur(c.prep))}</b></div><div class="t"><span>Totale fattura kit (IVA esclusa)</span><b>${esc(eur(c.fattura))}</b></div></div>
+      <div class="iva-sum" style="margin-top:10px"><div><span>Applicazione</span><b>${esc(eur(c.app))}</b></div><div><span>Rimozione</span><b>${esc(eur(c.rim))}</b></div><div><span>Transferta 1 giorno (100 km)</span><b>${esc(eur(num(D.transferta)))}</b></div><div class="t"><span>Kit + applicazione</span><b>${esc(eur(c.full))}</b></div></div>
+      <div class="row-btns" style="margin-top:14px"><button type="button" class="btn sm" id="tr-use">Usa nel preventivo</button><button type="button" class="btn sm" id="tr-edit">Modifica listino</button></div>`, null, null, 'Chiudi');
+    $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
+    $('#tr-use').onclick = () => { trQ = { ...trQState(), kit: i }; LS.set('cdc_trq', trQ); closeSheet(); renderTrCalc(); setTimeout(() => $('#tr-calc').scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); };
+    $('#tr-edit').onclick = () => { closeSheet(); setTimeout(trForm, 250); };
   }
 
-  function renderTorList(rows, only) {
-    rows = rows || trRows().filter(trInRange);
-    const q = trF.q.trim().toLowerCase();
-    const Ls = (only || rows).filter(r => (!trF.piaz || trN(trPz(r)) === trF.piaz) && (!trF.art || trN(r.articolo) === trF.art) && (!trF.ord || trOrdK(r) === trF.ord)
-      && (!q || `${r.articolo} ${r.fornitore} ${r.note} ${r.piazzale} ${r.azienda} ${r.ordine}`.toLowerCase().includes(q)))
-      .sort((a, b) => String(b.data).localeCompare(String(a.data)) || trN(a.ordine).localeCompare(trN(b.ordine)) || trN(a.piazzale).localeCompare(trN(b.piazzale)));
-    $('#tr-cnt').textContent = `${Ls.length} righe · ${fmtNum(trQty(Ls), 0)} pezzi · ${eur(trSum(Ls))}`;
-    if (!Ls.length) { $('#tr-list-rows').innerHTML = '<div class="empty">Nessuna spesa</div>'; return; }
-    const sh = Ls.slice(0, trLimit), more = Ls.length > trLimit ? `<div class="more-row"><button class="btn sm" id="tr-more">Mostra tutte (${Ls.length})</button></div>` : '';
-    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
-    const pr = r => num(r.prezzo) ? eurP(num(r.prezzo) * mul(r)) : trPrezzo(r) ? `<span title="dal listino">${eurP(trPrezzo(r) * mul(r))}</span>` : '<span class="chip late">manca</span>';
-    if (isDesk()) $('#tr-list-rows').innerHTML = `<div class="tr-tw"><table class="tbl gl-st tr-tbl"><thead><tr><th>Data</th><th>Ordine</th><th>Articolo</th><th>Piazzale</th><th class="tr-azc2">Azienda</th><th class="r">Pezzi</th><th class="r">Prezzo</th><th class="r">Totale</th><th>Stato</th></tr></thead><tbody>
-      ${sh.map(r => `<tr data-trrow="${esc(r.id)}"><td class="d">${dd(r.data)}</td><td class="m2 tr-oc">${esc(r.ordine || '—')}</td><td><b>${esc(r.articolo)}</b><small class="tr-nt">${esc([r.fornitore, r.note].filter(Boolean).join(' · ') || '—')}</small></td><td>${esc(trPz(r))}</td><td class="m2 tr-azc2">${esc(trAz(r))}</td><td class="num">${qtyFmt(num(r.quantita))}</td><td class="num">${pr(r)}</td><td class="num amt">${trPrezzo(r) ? eur(trTot(r)) : '—'}</td><td>${trStChip(trStato(r))}</td></tr>`).join('')}</tbody></table></div>${more}`;
-    else $('#tr-list-rows').innerHTML = `<div class="list">${sh.map(r => `<div class="item" data-trrow="${esc(r.id)}"><span class="ic tr-ic"><svg viewBox="0 0 24 24">${TR_IC}</svg></span><div class="main"><div class="t">${esc(r.articolo)} · ${qtyFmt(num(r.quantita))} pz</div><div class="s">${esc(trPz(r))} · ${dd(r.data)}${r.fornitore ? ' · ' + esc(r.fornitore) : ''}</div></div><div class="amt">${trPrezzo(r) ? eur(trTot(r)) : '—'}</div></div>`).join('')}</div>${more}`;
-  }
-  const TR_IC = '<path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>';
-
-  /* ---------- ordine a matrice (piazzali × articoli) ---------- */
-  function trModel(k) {
-    const rows = k ? trRows().filter(r => trOrdK(r) === k && r.piazzale) : [];
-    const arts = [], piaz = trPiaz().map(x => ({ ...x })), q = {};
-    piaz.push({ p: TR_SC, az: '' });
-    rows.forEach(r => {
-      let a = arts.find(x => trN(x.a) === trN(r.articolo));
-      if (!a) { const li = trLi(r.articolo) || {}; a = { id: uid(), a: String(r.articolo || '').trim(), f: String(r.fornitore || li.f || '').trim(), p: num(r.prezzo) || li.p || '', min: li.min || '', note: r.note || '' }; arts.push(a); }
-      let pi = piaz.findIndex(x => trN(x.p) === trN(r.piazzale));
-      if (pi < 0) { piaz.splice(piaz.length - 1, 0, { p: r.piazzale, az: r.azienda || '' }); pi = piaz.findIndex(x => trN(x.p) === trN(r.piazzale)); }
-      const key = trN(piaz[pi].p) + '|' + a.id; q[key] = (q[key] || 0) + num(r.quantita);
-    });
-    if (!arts.length) trListino().slice(0, 8).forEach(x => arts.push({ id: uid(), a: x.a, f: x.f, p: x.p || '', min: x.min || '', note: '' }));
-    if (!arts.length) arts.push({ id: uid(), a: '', f: '', p: '', min: '', note: '' });
-    const r0 = rows[0] || trRows().find(r => trOrdK(r) === k) || {};
-    return { k: k || null, ordine: k || '', data: validD(r0.data) ? r0.data : today(), stato: r0.stato ? trStato(r0) : 'da ordinare', arts, piaz, q };
-  }
-  function trForm(k, pre) {
-    if (!trOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.5)');
-    const M = pre || trModel(k);
-    const qk = (p, a) => trN(p.p) + '|' + a.id;
-    const others = M.k ? trRows().filter(r => trOrdK(r) === M.k && !r.piazzale) : [];
-    const title = pre ? (M.k ? 'Aggiorna ordine dal file' : 'Ordine letto dal file') : M.k ? 'Ordine · ' + M.k : 'Nuovo ordine gadget';
-    openSheet(title, `${pre ? `<div class="ai-note">${IC.spark}${M.k ? `Esiste già l'ordine «${esc(M.k)}»: salvando verrà aggiornato con i dati del file.` : 'Ordine letto dal file: controlla quantità e prezzi, poi salva.'}</div>` : ''}
-      <div class="f-row tr-f3"><label class="f"><span>Nome ordine</span><input name="ordine" required value="${esc(M.ordine)}" placeholder="Es. Ordine gadget ottobre 2026" data-focus></label><label class="f"><span>Data</span><input name="data" type="date" required value="${esc(M.data)}"></label><label class="f"><span>Stato</span><select name="stato">${opt(TR_STATI, M.stato)}</select></label></div>
-      <div class="tr-mxh"><span class="muted small">Scrivi i pezzi per piazzale. Fornitore, prezzo (IVA esclusa) e minimo d'ordine vanno anche nel listino.</span><button type="button" class="btn sm" id="tr-addart">+ Articolo</button></div>
-      <div id="tr-grid"></div>
-      <div class="iva-sum tr-sum" id="tr-sum"></div>
-      ${others.length ? `<p class="muted small" style="margin:8px 0 0">Altre spese di questo ordine senza piazzale: ${others.length} righe · ${esc(eur(trSum(others)))}</p>` : ''}
-      <div class="row-btns" style="margin-top:12px"><button type="button" class="btn sm" id="tr-ordxls">Scarica Excel dell'ordine</button></div>${trDl()}`,
-      fd => trSaveOrder(M, fd), M.k && !pre ? () => trDelOrder(M.k) : null, 'Salva ordine');
-    $('#sheet-form').classList.add('wide', 'xwide');
-    const grid = $('#tr-grid');
-    const colQ = a => M.piaz.reduce((s, p) => s + (M.q[qk(p, a)] || 0), 0);
-    const read = () => {
-      $$('[data-a]', grid).forEach(i => { const a = M.arts.find(x => x.id === i.dataset.a); if (!a) return; const f = i.dataset.f; a[f] = f === 'p' || f === 'min' ? (i.value.trim() === '' ? '' : num(i.value)) : i.value; });
-      $$('.tr-q', grid).forEach(i => { const v = num(i.value); if (v > 0) M.q[i.dataset.k] = v; else delete M.q[i.dataset.k]; });
-    };
-    const table = () => `<div class="tr-mxw"><table class="tr-mx"><thead><tr><th class="tr-c0">Piazzale</th>${M.arts.map(a => `<th><div class="tr-ah"><input class="tr-an" data-a="${a.id}" data-f="a" value="${esc(a.a)}" placeholder="Articolo" list="tr-dla"><button type="button" class="tr-ax" data-trdel="${a.id}" title="Togli articolo" aria-label="Togli articolo">×</button></div><input data-a="${a.id}" data-f="f" value="${esc(a.f)}" placeholder="Fornitore" list="tr-dlf"><div class="tr-ap"><input data-a="${a.id}" data-f="p" inputmode="decimal" value="${esc(fmtIn(a.p))}" placeholder="€/pz" title="Prezzo unitario IVA esclusa"><input data-a="${a.id}" data-f="min" inputmode="numeric" value="${esc(fmtIn(a.min))}" placeholder="min." title="Minimo d'ordine"></div></th>`).join('')}<th class="tr-cs">Spesa</th></tr></thead>
-      <tbody>${M.piaz.map(p => `<tr><td class="tr-c0"><b>${esc(p.p)}</b><small>${esc(trIsSc(p.p) ? 'eccedenze in magazzino' : p.az || '')}</small></td>${M.arts.map(a => `<td><input class="tr-q" data-k="${esc(qk(p, a))}" inputmode="numeric" value="${M.q[qk(p, a)] || ''}" placeholder="0" aria-label="${esc(p.p)} ${esc(a.a)}"></td>`).join('')}<td class="tr-rs" data-rs="${esc(trN(p.p))}">—</td></tr>`).join('')}</tbody>
-      <tfoot><tr class="tr-ft"><td class="tr-c0">Totale pezzi</td>${M.arts.map(a => `<td data-cq="${a.id}"></td>`).join('')}<td data-gq></td></tr>
-      <tr class="tr-ft2"><td class="tr-c0">Spesa</td>${M.arts.map(a => `<td data-ce="${a.id}"></td>`).join('')}<td data-ge></td></tr>
-      <tr class="tr-ftn"><td class="tr-c0">Note</td>${M.arts.map(a => `<td><input data-a="${a.id}" data-f="note" value="${esc(a.note)}" placeholder="note"></td>`).join('')}<td></td></tr></tfoot></table></div>`;
-    const calc = () => {
-      read();
-      let gq = 0, ge = 0;
-      M.arts.forEach(a => {
-        const q = colQ(a), e = q * (num(a.p) || 0), min = num(a.min); gq += q; ge += e;
-        const low = min && q < min;
-        $(`[data-cq="${a.id}"]`, grid).innerHTML = `<b>${fmtNum(q, 0)}</b>${low ? `<small class="tr-low">minimo ${fmtNum(min, 0)}</small><button type="button" class="tr-fill" data-trfill="${a.id}">+${fmtNum(min - q, 0)} in scorta</button>` : ''}`;
-        $(`[data-ce="${a.id}"]`, grid).innerHTML = num(a.p) ? esc(eur(e)) : q ? '<span class="tr-low">senza prezzo</span>' : '—';
-      });
-      M.piaz.forEach(p => { let q = 0, v = 0; M.arts.forEach(a => { const n = M.q[qk(p, a)] || 0; q += n; v += n * (num(a.p) || 0); }); const c = $(`[data-rs="${CSS.escape(trN(p.p))}"]`, grid); if (c) { c.textContent = q ? (v ? eur(v) : fmtNum(q, 0) + ' pz') : '—'; c.closest('tr').classList.toggle('has', !!q); } });
-      $('[data-gq]', grid).textContent = fmtNum(gq, 0); $('[data-ge]', grid).textContent = eur(ge);
-      $('#tr-sum').innerHTML = `<div><span>Pezzi totali</span><b>${fmtNum(gq, 0)}</b></div><div><span>Imponibile</span><b>${eur(ge)}</b></div><div class="t"><span>Totale con IVA 22%</span><b>${eur(ge * 1.22)}</b></div>`;
-    };
-    const draw = () => { const sl = grid.querySelector('.tr-mxw') ? grid.querySelector('.tr-mxw').scrollLeft : 0; grid.innerHTML = table(); grid.querySelector('.tr-mxw').scrollLeft = sl; calc(); };
-    draw();
-    grid.addEventListener('input', calc);
-    grid.addEventListener('change', e => {
-      if (e.target.dataset.f !== 'a') return;
-      const a = M.arts.find(x => x.id === e.target.dataset.a), li = trLi(e.target.value);
-      if (a && li) { read(); if (!a.f) a.f = li.f; if (!a.p) a.p = li.p || ''; if (!a.min) a.min = li.min || ''; draw(); }
-    });
-    grid.addEventListener('keydown', e => {
-      if (e.key !== 'Enter' || !e.target.classList.contains('tr-q')) return;
-      e.preventDefault();
-      const td = e.target.closest('td'), tr = td.parentElement, ix = [...tr.children].indexOf(td), nx = tr.nextElementSibling;
-      const inp = nx && nx.children[ix] && nx.children[ix].querySelector('input'); if (inp) inp.focus(); else e.target.blur();
-    });
-    grid.addEventListener('click', e => {
-      const d = e.target.closest('[data-trdel]');
-      if (d) { read(); const a = M.arts.find(x => x.id === d.dataset.trdel); if (!a) return; if (colQ(a) && !confirm(`Togliere «${a.a || 'articolo'}» dall'ordine?`)) return; M.arts = M.arts.filter(x => x !== a); Object.keys(M.q).forEach(k => { if (k.endsWith('|' + a.id)) delete M.q[k]; }); draw(); return; }
-      const fl = e.target.closest('[data-trfill]');
-      if (fl) { read(); const a = M.arts.find(x => x.id === fl.dataset.trfill), sp = M.piaz.find(p => trIsSc(p.p)); if (!a || !sp) return; const diff = num(a.min) - colQ(a); if (diff <= 0) return; M.q[qk(sp, a)] = (M.q[qk(sp, a)] || 0) + diff; draw(); toast(`${fmtNum(diff, 0)} pezzi aggiunti alla scorta`); }
-    });
-    $('#tr-addart').onclick = () => { read(); M.arts.push({ id: uid(), a: '', f: '', p: '', min: '', note: '' }); draw(); setTimeout(() => { const w = grid.querySelector('.tr-mxw'); w.scrollLeft = w.scrollWidth; const ins = $$('.tr-an', grid); ins[ins.length - 1].focus(); }, 30); };
-    $('#tr-ordxls').onclick = () => { read(); const fd = new FormData($('#sheet-form')); exportTrOrd(M, String(fd.get('ordine') || '').trim() || 'Ordine gadget', String(fd.get('data') || today())); };
-  }
-  function trSaveOrder(M, fd) {
-    const ordine = String(fd.get('ordine') || '').trim(), data = String(fd.get('data') || ''), stato = String(fd.get('stato') || 'ordinato');
-    if (!ordine) return toast('Scrivi il nome dell\'ordine');
-    if (!validD(data)) return toast('Data non valida');
-    const qk = (p, a) => trN(p.p) + '|' + a.id;
-    if (M.arts.some(a => !String(a.a).trim() && M.piaz.some(p => M.q[qk(p, a)]))) return toast('Manca il nome di un articolo con delle quantità');
-    const arts = M.arts.filter(a => String(a.a).trim());
-    if (!arts.some(a => M.piaz.some(p => M.q[qk(p, a)]))) return toast('Inserisci almeno una quantità');
-    const merge = ordine !== (M.k || '') && trRows().some(r => trOrdK(r) === ordine);
-    if (merge && !confirm(`Esiste già un ordine «${ordine}». Unire queste quantità a quell'ordine?`)) return;
-    const ops = [], used = new Set(), now = new Date().toISOString();
-    const oldRows = M.k ? trRows().filter(r => trOrdK(r) === M.k) : [];
-    const pool = [...oldRows, ...(merge ? trRows().filter(r => trOrdK(r) === ordine) : [])];
-    arts.forEach(a => M.piaz.forEach(p => {
-      const q = M.q[qk(p, a)]; if (!q) return;
-      const ex = pool.find(r => !used.has(r.id) && r.piazzale && trN(r.piazzale) === trN(p.p) && trN(r.articolo) === trN(a.a));
-      const id = ex ? ex.id : 'tr' + uid() + ops.length; used.add(id);
-      ops.push({ action: 'upsert', sheet: 'Torental', row: { ...(ex || {}), id, data, ordine, fornitore: String(a.f || '').trim(), articolo: String(a.a).trim(), categoria: (ex && ex.categoria) || trCatOf(a.a), piazzale: p.p, azienda: trIsSc(p.p) ? '' : p.az || '', quantita: q, prezzo: num(a.p) || '', iva: ex && ex.iva !== '' && ex.iva != null ? ex.iva : 0.22, stato, note: String(a.note || '').trim(), creato: ex && ex.creato ? ex.creato : now } });
-    }));
-    oldRows.filter(r => r.piazzale && !used.has(r.id)).forEach(r => ops.push({ action: 'delete', sheet: 'Torental', id: r.id }));
-    oldRows.filter(r => !r.piazzale).forEach(r => ops.push({ action: 'upsert', sheet: 'Torental', row: { ...r, ordine, stato } }));
-    // listino: fornitore, prezzo e minimo
-    const L = trListino(); let ch = false;
-    arts.forEach(a => {
-      const i = L.findIndex(x => trN(x.a) === trN(a.a)), o = L[i] || {};
-      const nv = { a: o.a || String(a.a).trim(), f: String(a.f || '').trim() || o.f || '', p: num(a.p) || o.p || 0, min: num(a.min) || o.min || 0, note: o.note || '' };
-      if (i < 0) { L.push(nv); ch = true; } else if (JSON.stringify(o) !== JSON.stringify(nv)) { L[i] = nv; ch = true; }
-    });
-    if (ch) ops.push({ action: 'upsert', sheet: 'Config', row: { chiave: 'trListino', valore: JSON.stringify(L) } });
-    // piazzali nuovi arrivati dal file
-    const base = trPiazCfg(), add = M.piaz.filter(p => !trIsSc(p.p) && !base.some(x => trN(x.p) === trN(p.p)) && arts.some(a => M.q[qk(p, a)]));
-    if (add.length) ops.push({ action: 'upsert', sheet: 'Config', row: { chiave: 'trPiazzali', valore: JSON.stringify([...base, ...add.map(p => ({ p: p.p, az: p.az || '' }))]) } });
-    write(ops); trP = ''; trAnim = true;
-    toast(M.k || merge ? 'Ordine aggiornato' : 'Ordine salvato');
-    return true;
-  }
-  function trDelOrder(k) {
-    const rows = trRows().filter(r => trOrdK(r) === k);
-    if (!confirm(`Eliminare l'ordine «${k}» e tutte le sue ${rows.length} righe?`)) return;
-    write(rows.map(r => ({ action: 'delete', sheet: 'Torental', id: r.id }))); toast('Ordine eliminato'); return true;
-  }
-
-  /* ---------- singola spesa (stampa, grafica, spedizioni…) ---------- */
-  function trFormRow(r) {
-    if (!trOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.5)');
-    const isNew = !r || !trRows().some(x => x.id === r.id);
-    r = { id: 'tr' + uid(), data: today(), ordine: trF.ord || '', fornitore: '', articolo: '', categoria: '', piazzale: '', azienda: '', quantita: 1, prezzo: '', iva: 0.22, stato: 'ordinato', note: '', ...(r || {}) };
-    const pz = [TR_GEN, ...trPiaz().map(x => x.p), TR_SC], li = trLi(r.articolo);
-    openSheet(isNew ? 'Nuova spesa pubblicitaria' : 'Modifica spesa', `
-      <label class="f"><span>Voce o articolo</span><input name="articolo" required list="tr-dla" value="${esc(r.articolo)}" data-focus placeholder="Es. banner, volantini, T-shirt…"></label>
-      <div class="f-row"><label class="f"><span>Fornitore</span><input name="fornitore" list="tr-dlf" value="${esc(r.fornitore)}"></label><label class="f"><span>Categoria</span><select name="categoria"><option value="">Automatica</option>${opt(TR_CAT, r.categoria)}</select></label></div>
-      <div class="f-row"><label class="f"><span>Data</span><input name="data" type="date" required value="${esc(validD(r.data) ? r.data : today())}"></label><label class="f"><span>Ordine</span><input name="ordine" list="tr-dlo" value="${esc(r.ordine)}" placeholder="facoltativo"></label></div>
-      <div class="f-row"><label class="f"><span>Piazzale</span><select name="piazzale">${pz.map(p => `<option value="${esc(p === TR_GEN ? '' : p)}"${trN(p) === trN(r.piazzale || TR_GEN) ? ' selected' : ''}>${esc(p === TR_GEN ? 'Generale (tutti / nessuno)' : p)}</option>`).join('')}</select></label><label class="f"><span>Stato</span><select name="stato">${opt(TR_STATI, trStato(r))}</select></label></div>
-      <div class="f-row tr-f3"><label class="f"><span>Quantità</span><input name="quantita" inputmode="decimal" value="${esc(fmtIn(r.quantita))}"></label><label class="f"><span>Prezzo unitario €</span><input name="prezzo" inputmode="decimal" value="${esc(fmtIn(r.prezzo))}" placeholder="${li && li.p ? 'listino ' + esc(fmtIn(li.p)) : 'IVA esclusa'}"></label><label class="f"><span>IVA %</span><input name="iva" inputmode="decimal" value="${esc(fmtNum(ivaRate(r) * 100, 0))}"></label></div>
-      <label class="f"><span>Note</span><input name="note" value="${esc(r.note)}"></label>${trDl()}`,
+  /* ---------- modifica listino ---------- */
+  function trForm() {
+    const D = JSON.parse(JSON.stringify(trData()));
+    const inp = (attr, v, ph, cls = '') => `<input ${attr} inputmode="decimal" value="${v === '' || v == null ? '' : esc(fmtIn(v))}" placeholder="${ph}"${cls ? ` class="${cls}"` : ''}>`;
+    const kitRow = (k, i) => `<tr data-ki="${i}"><td><input data-kf="n" value="${esc(k.n)}" placeholder="Nome kit"></td><td><input data-kf="cod" value="${esc(k.cod || '')}" placeholder="—" class="tr-in-s"></td>${D.mat.map(m => `<td>${inp(`data-kq="${esc(m.cod)}"`, (k.q || {})[m.cod], '0', 'tr-in-n')}</td>`).join('')}<td>${inp('data-kf="prep"', k.prep, '0', 'tr-in-n')}</td><td>${inp('data-kf="app"', k.app, '0', 'tr-in-n')}</td><td>${inp('data-kf="rim"', k.rim, '0', 'tr-in-n')}</td><td><button type="button" class="icon-btn tr-lx" data-kdel aria-label="Togli kit">×</button></td></tr>`;
+    const singRow = s => `<div class="tr-pr3"><input data-sf="cod" value="${esc(s.cod || '')}" placeholder="Codice"><input data-sf="n" value="${esc(s.n || '')}" placeholder="Articolo">${inp('data-sf="p"', s.p, '€')}<button type="button" class="icon-btn tr-lx" data-sdel aria-label="Togli">×</button></div>`;
+    openSheet('Modifica listino Torental', `
+      <p class="muted small" style="margin:0 0 12px">Prezzi IVA esclusa. Il prezzo del materiale è costo fornitore × ricarico, più la preparazione del kit.</p>
+      <div class="f-row tr-f3"><label class="f"><span>Ricarico sul materiale (×)</span>${inp('name="ricarico"', D.ricarico, '2')}</label><label class="f"><span>Transferta 1 giorno (100 km) €</span>${inp('name="transferta"', D.transferta, '0')}</label><label class="f"><span>Nota del listino</span><input name="nota" value="${esc(D.nota || '')}"></label></div>
+      <div class="cf-sub" style="margin:6px 0 8px">Materiali · costo fornitore €/m²</div>
+      <div class="tr-mats">${D.mat.map((m, j) => `<label class="f"><span>${esc(m.cod)} · ${esc(m.n)}</span>${inp(`data-mc="${j}"`, m.c, '€/m²')}</label>`).join('')}</div>
+      <div class="cf-sub" style="margin:6px 0 8px">Kit · m² di materiale e servizi (€)</div>
+      <div class="tr-mxw"><table class="tr-mx tr-kt"><thead><tr><th class="tr-c0">Kit</th><th>Codice</th>${D.mat.map(m => `<th>${esc(m.n)} m²</th>`).join('')}<th>Prep. €</th><th>Applic. €</th><th>Rimoz. €</th><th></th></tr></thead><tbody id="tr-kb">${D.kit.map(kitRow).join('')}</tbody></table></div>
+      <button type="button" class="btn sm" id="tr-kadd">+ Kit</button>
+      <div class="cf-sub" style="margin:18px 0 8px">Articoli singoli</div>
+      <div id="tr-sb">${D.sing.map(singRow).join('')}</div>
+      <button type="button" class="btn sm" id="tr-sadd" style="margin-top:8px">+ Articolo</button>`,
       fd => {
-        const piaz = String(fd.get('piazzale') || ''), art = String(fd.get('articolo') || '').trim();
-        const row = { ...r, data: String(fd.get('data')), ordine: String(fd.get('ordine') || '').trim(), fornitore: String(fd.get('fornitore') || '').trim(), articolo: art, categoria: String(fd.get('categoria') || '') || trCatOf(art), piazzale: piaz, azienda: piaz && !trIsSc(piaz) ? (trPiaz().find(x => trN(x.p) === trN(piaz)) || {}).az || '' : '', quantita: num(fd.get('quantita')) || 1, prezzo: num(fd.get('prezzo')) || '', iva: String(fd.get('iva')).trim() === '' ? 0.22 : num(fd.get('iva')) / 100, stato: String(fd.get('stato')), note: String(fd.get('note') || '').trim() };
-        if (isNew) row.creato = new Date().toISOString();
-        write([{ action: 'upsert', sheet: 'Torental', row }]); toast(isNew ? 'Spesa salvata' : 'Spesa aggiornata'); return true;
-      }, isNew ? null : () => { if (!confirm('Eliminare questa riga?')) return; write([{ action: 'delete', sheet: 'Torental', id: r.id }]); toast('Riga eliminata'); return true; });
-    if (!isNew && r.piazzale && r.ordine) $('#sheet-body').insertAdjacentHTML('afterbegin', `<div class="ai-note tr-hint">Questa riga fa parte dell'ordine «${esc(r.ordine)}». <button type="button" class="link" data-trord="${esc(r.ordine)}">Apri l'ordine completo</button></div>`);
-  }
-
-  /* ---------- listino e piazzali ---------- */
-  function trFormListino() {
-    const L = trListino(), seen = new Set(L.map(x => trN(x.a)));
-    trRows().forEach(r => { const k = trN(r.articolo); if (k && !seen.has(k)) { seen.add(k); L.push({ a: String(r.articolo).trim(), f: String(r.fornitore || '').trim(), p: 0, min: 0, note: '' }); } });
-    const used = a => trQty(trRows().filter(r => trN(r.articolo) === trN(a)));
-    const row = x => `<div class="tr-lr"><input data-l="a" value="${esc(x.a)}" placeholder="Articolo"><input data-l="f" value="${esc(x.f)}" placeholder="Fornitore" list="tr-dlf"><input data-l="p" inputmode="decimal" value="${x.p ? esc(fmtIn(x.p)) : ''}" placeholder="€/pz"><input data-l="min" inputmode="numeric" value="${x.min ? esc(String(x.min)) : ''}" placeholder="min."><input data-l="note" value="${esc(x.note)}" placeholder="Note o link al prodotto"><button type="button" class="icon-btn tr-lx" title="Togli" aria-label="Togli">×</button>${x.a && used(x.a) ? `<small class="tr-lu">${fmtNum(used(x.a), 0)} pezzi acquistati</small>` : ''}</div>`;
-    openSheet('Listino gadget', `<p class="muted small" style="margin:0 0 12px">Prezzo unitario IVA esclusa e minimo d'ordine del fornitore. Le righe senza prezzo usano automaticamente quello del listino.</p>
-      <div class="tr-lh"><span>Articolo</span><span>Fornitore</span><span>€/pz</span><span>Minimo</span><span>Note</span><span></span></div>
-      <div id="tr-ll">${(L.length ? L : [{ a: '', f: '', p: 0, min: 0, note: '' }]).map(row).join('')}</div>
-      <button type="button" class="btn sm" id="tr-ladd" style="margin-top:10px">+ Articolo</button>${trDl()}`,
-      () => {
-        const out = [];
-        $$('#tr-ll .tr-lr').forEach(el => { const g = k => $(`[data-l="${k}"]`, el).value.trim(), a = g('a'); if (!a || out.some(x => trN(x.a) === trN(a))) return; out.push({ a, f: g('f'), p: num(g('p')), min: num(g('min')), note: g('note') }); });
-        setConfig('trListino', out); toast('Listino salvato'); return true;
+        const old = trData(), N = { ricarico: num(fd.get('ricarico')) || 1, transferta: num(fd.get('transferta')), nota: String(fd.get('nota') || '').trim(), mat: D.mat.map((m, j) => ({ ...m, c: num($(`[data-mc="${j}"]`).value) })), kit: [], sing: [] };
+        const globCh = N.ricarico !== num(old.ricarico) || N.mat.some((m, j) => num(m.c) !== num((old.mat[j] || {}).c));
+        $$('#tr-kb tr').forEach(tr => {
+          const g = f => $(`[data-kf="${f}"]`, tr).value.trim(), n = g('n'); if (!n) return;
+          const q = {}; $$('[data-kq]', tr).forEach(x => { const v = num(x.value); if (v) q[x.dataset.kq] = v; });
+          const k = { cod: g('cod'), n, q, prep: num(g('prep')), app: num(g('app')), rim: num(g('rim')) };
+          const o = old.kit[+tr.dataset.ki];
+          if (o && o.fx && !globCh && JSON.stringify(o.q) === JSON.stringify(q) && num(o.prep) === k.prep) k.fx = o.fx; // il prezzo scritto a mano resta solo se nulla è cambiato
+          N.kit.push(k);
+        });
+        $$('#tr-sb .tr-pr3').forEach(r => { const n = $('[data-sf="n"]', r).value.trim(); if (!n) return; N.sing.push({ cod: $('[data-sf="cod"]', r).value.trim(), n, p: num($('[data-sf="p"]', r).value) }); });
+        if (!N.kit.length) return toast('Serve almeno un kit');
+        setConfig('trKit', N); trAnim = true; toast('Listino salvato'); return true;
       }, null, 'Salva listino');
-    $('#sheet-form').classList.add('wide');
-    $('#tr-ladd').onclick = () => { $('#tr-ll').insertAdjacentHTML('beforeend', row({ a: '', f: '', p: 0, min: 0, note: '' })); const ins = $$('#tr-ll [data-l="a"]'); ins[ins.length - 1].focus(); };
-    $('#tr-ll').onclick = e => { const x = e.target.closest('.tr-lx'); if (x) x.closest('.tr-lr').remove(); };
+    $('#sheet-form').classList.add('wide', 'xwide');
+    $('#tr-kadd').onclick = () => { $('#tr-kb').insertAdjacentHTML('beforeend', kitRow({ n: '', cod: '', q: {}, prep: '', app: '', rim: '' }, -1)); const l = $$('#tr-kb [data-kf="n"]'); l[l.length - 1].focus(); };
+    $('#tr-sadd').onclick = () => { $('#tr-sb').insertAdjacentHTML('beforeend', singRow({})); const l = $$('#tr-sb [data-sf="cod"]'); l[l.length - 1].focus(); };
+    $('#sheet-body').addEventListener('click', e => { const k = e.target.closest('[data-kdel]'); if (k) { k.closest('tr').remove(); return; } const s = e.target.closest('[data-sdel]'); if (s) s.closest('.tr-pr3').remove(); });
   }
-  function trFormSet() {
-    const P = trPiaz();
-    const row = x => `<div class="tr-pr"><input data-s="p" value="${esc(x.p)}" placeholder="Piazzale"><input data-s="az" value="${esc(x.az)}" placeholder="Azienda" list="tr-dlaz"><button type="button" class="icon-btn tr-lx" title="Togli" aria-label="Togli">×</button></div>`;
-    openSheet('Piazzali e budget', `<label class="f"><span>Budget annuale pubblicità € (IVA esclusa)</span><input name="budget" inputmode="decimal" value="${num(cfg('trBudget')) ? esc(fmtIn(num(cfg('trBudget')))) : ''}" placeholder="lascia vuoto per non usarlo"></label>
-      <div class="cf-sub" style="margin:16px 0 8px">Piazzali e azienda di appartenenza</div>
-      <div id="tr-pl">${P.map(row).join('')}</div>
-      <button type="button" class="btn sm" id="tr-padd" style="margin-top:10px">+ Piazzale</button>
-      <p class="muted small" style="margin:12px 0 0">La riga «Scorta» (gadget in eccesso tenuti in magazzino) c'è sempre negli ordini e non va aggiunta.</p>
-      <datalist id="tr-dlaz">${[...new Set(P.map(x => x.az).filter(Boolean))].map(a => `<option value="${esc(a)}">`).join('')}</datalist>`,
-      fd => {
-        const out = [];
-        $$('#tr-pl .tr-pr').forEach(el => { const p = $('[data-s="p"]', el).value.trim(), az = $('[data-s="az"]', el).value.trim(); if (p && !trIsSc(p) && !out.some(x => trN(x.p) === trN(p))) out.push({ p, az }); });
-        write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'trPiazzali', valore: JSON.stringify(out) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'trBudget', valore: JSON.stringify(num(fd.get('budget'))) } }]);
-        toast('Impostazioni salvate'); return true;
-      });
-    $('#tr-padd').onclick = () => { $('#tr-pl').insertAdjacentHTML('beforeend', row({ p: '', az: '' })); const ins = $$('#tr-pl [data-s="p"]'); ins[ins.length - 1].focus(); };
-    $('#tr-pl').onclick = e => { const x = e.target.closest('.tr-lx'); if (x) x.closest('.tr-pr').remove(); };
+  function trFix(i) {
+    const D = JSON.parse(JSON.stringify(trData())), k = D.kit[i]; if (!k) return;
+    const c = trCalc({ ...k, fx: null }, D);
+    if (!confirm(`${trShort(k.n)}: usare il prezzo calcolato ${eur(c.fattura)} al posto di ${eur(trCalc(k, D).fattura)}?`)) return;
+    delete k.fx; setConfig('trKit', D); toast('Prezzo aggiornato');
   }
 
-  /* ---------- importazione ---------- */
-  const xlDate = v => v instanceof Date ? ymd(new Date(v.getTime() + 12 * 36e5)) : typeof v === 'number' && v > 20000 ? ymd(new Date(Math.round((v - 25569) * 864e5))) : (() => { const m = String(v || '').match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[2])}-${pad(m[1])}` : validD(v) ? String(v).slice(0, 10) : ''; })();
+  /* ---------- importa / esporta ---------- */
+  function trParse(wb) {
+    const U = XLSX.utils, sn = wb.SheetNames, D = { ricarico: 0, transferta: 0, nota: '', mat: [], kit: [], sing: [] };
+    const ws = wb.Sheets[sn.find(n => /kit/i.test(n)) || sn[0]], aoa = U.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    const hi = aoa.findIndex(r => r.some(c => /^consumo/.test(nh(c))));
+    if (hi < 0) throw new Error('Non trovo la colonna «CONSUMO (m²)»: è il listino dei kit?');
+    const H = aoa[hi].map(nh), col = re => H.findIndex(h => re.test(h));
+    const C = { cod: col(/^codice/), n: col(/^prodotto|^articolo|^componente|^descrizione/), q: col(/^consumo/), c: col(/^costofornitore/), e: col(/^costomateriale/), f: col(/^prezzo/), g: col(/^preparazione/), h: col(/^totale/), i: col(/^applicazion/), j: col(/^rimo/), k: col(/^transferta/) };
+    const cell = (R, c) => c < 0 ? null : ws[U.encode_cell({ r: R, c })];
+    const isN = v => typeof v === 'number' || (/\d/.test(String(v)) && !/[a-z]/i.test(String(v)) && String(v).trim() !== '');
+    let cur = null;
+    for (let R = 0; R < aoa.length; R++) {
+      const r = aoa[R], long = r.map(x => String(x ?? '')).find(x => x.length > 45 && /iva|prezz/i.test(x));
+      if (long && !D.nota) { D.nota = long.trim(); continue; }
+      if (R <= hi) continue;
+      if (nh(r[C.cod]) === 'codice') break; // da qui: tabella articoli singoli
+      const name = String(r[C.n] ?? '').trim(), q = r[C.q];
+      if (name && !isN(q) && !isN(r[C.c])) { cur = { cod: String(r[C.cod] ?? '').trim(), n: trNice(name), q: {}, prep: 0, app: 0, rim: 0 }; D.kit.push(cur); continue; }
+      if (cur && name && isN(q)) {
+        const cod = String(r[C.cod] ?? '').trim() || name.toUpperCase();
+        if (!D.mat.some(m => m.cod === cod)) D.mat.push({ cod, n: name.length <= 3 ? name.toUpperCase() : trNice(name), c: num(r[C.c]), tape: /^app/i.test(name) });
+        const first = !Object.keys(cur.q).length; // prezzi e servizi stanno sulla prima riga del kit (celle unite)
+        cur.q[cod] = num(q);
+        const cf = cell(R, C.f); if (!D.ricarico && cf && cf.f) { const m = String(cf.f).match(/\*\s*([\d.]+)\s*$/); if (m) D.ricarico = +m[1]; }
+        if (!D.ricarico && num(r[C.e]) && num(r[C.f])) D.ricarico = r2(num(r[C.f]) / num(r[C.e]));
+        if (first) {
+          cur.prep = num(r[C.g]); cur.app = num(r[C.i]); cur.rim = num(r[C.j]);
+          if (num(r[C.k]) && !D.transferta) D.transferta = num(r[C.k]);
+          const ch = cell(R, C.h); if (ch && typeof ch.v === 'number' && !ch.f) (cur.fx = cur.fx || {}).fattura = ch.v;
+        }
+        continue;
+      }
+      if (cur && !name) { // riga del totale materiale
+        const ce = cell(R, C.e), cf = cell(R, C.f);
+        if (ce && typeof ce.v === 'number' && !ce.f) (cur.fx = cur.fx || {}).mat = ce.v;
+        if (cf && typeof cf.v === 'number' && !cf.f) (cur.fx = cur.fx || {}).prezzo = cf.v;
+      }
+    }
+    if (!D.ricarico) D.ricarico = 2;
+    D.kit = D.kit.filter(k => Object.keys(k.q).length);
+    // tieni il prezzo scritto a mano solo se è diverso dal calcolo
+    D.kit.forEach(k => { if (!k.fx) return; const c = trCalc({ ...k, fx: null }, D); const fx = k.fx; if ((fx.fattura == null || Math.abs(fx.fattura - c.fattura) < .01) && (fx.prezzo == null || Math.abs(fx.prezzo - c.prezzo) < .01) && (fx.mat == null || Math.abs(fx.mat - c.mat) < .01)) delete k.fx; });
+    const parseSing = a => { const h = a.findIndex(r => r.some(c => nh(c) === 'articolo') && r.some(c => nh(c) === 'prezzo')); if (h < 0) return; const H2 = a[h].map(nh), ia = H2.indexOf('codice'), ib = H2.indexOf('articolo'), ip = H2.indexOf('prezzo'); a.slice(h + 1).forEach(r => { const n = String(r[ib] ?? '').trim(); if (!n || !num(r[ip])) return; const cod = ia >= 0 ? String(r[ia] ?? '').trim() : ''; if (!D.sing.some(x => (x.cod || x.n) === (cod || n))) D.sing.push({ cod, n: trNice(n), p: num(r[ip]) }); }); };
+    const ss = sn.find(n => /singol/i.test(n)); if (ss) parseSing(U.sheet_to_json(wb.Sheets[ss], { header: 1, raw: true, defval: '' }));
+    parseSing(aoa.slice(hi + 1));
+    if (!D.kit.length) throw new Error('Nessun kit trovato nel file');
+    return D;
+  }
   async function importTor() {
-    if (!trOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.5)');
-    let file; try { file = await pickFile('.xlsx,.xls,.csv'); } catch { return; }
+    let file; try { file = await pickFile('.xlsx,.xls'); } catch { return; }
     try {
-      busy('Leggo il file…'); await loadXlsx();
-      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); busy();
-      const sheets = wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }));
-      for (const aoa of sheets) { const hi = aoa.findIndex(r => r.some(c => nh(c) === 'articolo' || nh(c) === 'voce') && r.some(c => /^(quantita|qta|pezzi)/.test(nh(c)))); if (hi >= 0) return trImportFlat(aoa, hi); }
-      for (const aoa of sheets) { const hi = aoa.findIndex(r => r.some(c => nh(c) === 'piazzale')); if (hi >= 0) return trImportGrid(aoa, hi, file.name); }
-      toast('Formato non riconosciuto: serve la colonna PIAZZALE (file d\'ordine) oppure Articolo e Quantità');
+      busy('Leggo il listino…'); await loadXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellFormula: true }); const D = trParse(wb); busy();
+      const hand = D.kit.filter(k => k.fx).length;
+      if (!confirm(`Listino letto: ${D.kit.length} kit, ${D.mat.length} materiali, ${D.sing.length} articoli singoli, ricarico × ${fmtNum(D.ricarico, 2).replace(/,00$/, '')}.${hand ? `\n${hand} kit hanno il prezzo scritto a mano: lo tengo e lo segnalo nei controlli.` : ''}\nSostituire il listino attuale?`)) return;
+      setConfig('trKit', D); trAnim = true; toast('Listino Torental aggiornato');
     } catch (e) { busy(); toast(e.message); }
   }
-  function trImportGrid(aoa, hi, fname) {
-    const H = aoa[hi], hn = H.map(nh);
-    const pc = hn.indexOf('piazzale'), ac = hn.indexOf('azienda'), nc = hn.findIndex(h => /^note/.test(h));
-    const cols = []; H.forEach((h, i) => { if (i <= Math.max(pc, ac) || i === nc || !String(h).trim() || /^(totale|spesa|pezzi)/.test(nh(h))) return; cols.push(i); });
-    if (!cols.length) return toast('Nessun articolo trovato nell\'intestazione del file');
-    const fr = hi > 0 ? aoa[hi - 1] : [];
-    const arts = cols.map(i => { const a = String(H[i]).trim(), li = trLi(a) || {}; return { id: uid(), a, f: String(fr[i] ?? '').trim() || li.f || '', p: li.p || '', min: li.min || '', note: '', i }; });
-    const piaz = trPiaz().map(x => ({ ...x })), q = {}; let after = false;
-    aoa.slice(hi + 1).forEach(r => {
-      const p = String(r[pc] ?? '').trim(), L = nh(p) || nh(r[0]);
-      if (/^prezz/.test(L)) { arts.forEach(a => { const v = num(r[a.i]); if (v) a.p = v; }); return; }
-      if (/^minim/.test(L)) { arts.forEach(a => { const v = num(r[a.i]); if (v) a.min = v; }); return; }
-      if (/^note/.test(L)) { arts.forEach(a => { const v = String(r[a.i] ?? '').trim(); if (v) a.note = v; }); return; }
-      if (/^(totale|spesa)/.test(L)) { after = true; return; }
-      if (!p || after) { arts.forEach(a => { const v = r[a.i]; if (typeof v === 'string' && /[a-z]/i.test(v)) a.note = a.note ? a.note + ' · ' + v.trim() : v.trim(); }); return; }
-      if (trIsSc(p)) { arts.forEach(a => { const v = num(r[a.i]); if (v > 0) q[trN(TR_SC) + '|' + a.id] = (q[trN(TR_SC) + '|' + a.id] || 0) + v; }); return; }
-      const az = ac >= 0 ? String(r[ac] ?? '').trim() : '';
-      let x = piaz.find(y => trN(y.p) === trN(p));
-      if (!x) { x = { p, az }; piaz.push(x); } else if (az && !x.az) x.az = az;
-      arts.forEach(a => { const v = num(r[a.i]); if (v > 0) q[trN(p) + '|' + a.id] = (q[trN(p) + '|' + a.id] || 0) + v; });
-    });
-    piaz.push({ p: TR_SC, az: '' });
-    arts.forEach(a => delete a.i);
-    const m = String(fname).match(/(20\d\d)[._\- ](\d{1,2})[._\- ](\d{1,2})/), m2 = String(fname).match(/(\d{1,2})[._\- ](\d{1,2})[._\- ](20\d\d)/);
-    const data = m ? `${m[1]}-${pad(m[2])}-${pad(m[3])}` : m2 ? `${m2[3]}-${pad(m2[2])}-${pad(m2[1])}` : today();
-    const ordine = 'Ordine gadget ' + parseD(data).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const ex = trRows().some(r => trOrdK(r) === ordine);
-    trForm(null, { k: ex ? ordine : null, ordine, data, stato: 'ordinato', arts, piaz, q });
-  }
-  function trImportFlat(aoa, hi) {
-    const H = aoa[hi].map(nh), col = (...ks) => { for (const k of ks) { const i = H.findIndex(h => h === k || h.startsWith(k)); if (i >= 0) return i; } return -1; };
-    const c = { d: col('data'), o: col('ordine'), f: col('fornitore'), a: col('articolo', 'voce'), cat: col('categoria'), p: col('piazzale'), az: col('azienda'), q: col('quantita', 'qta', 'pezzi'), pr: col('prezzo'), iva: col('iva'), st: col('stato'), no: col('note') };
-    const g = (r, i) => i >= 0 ? r[i] : '';
-    const out = [], now = new Date().toISOString();
-    aoa.slice(hi + 1).forEach(r => {
-      const a = String(g(r, c.a) ?? '').trim(), q = num(g(r, c.q)); if (!a || !q || /^totale/i.test(a)) return;
-      const ordine = String(g(r, c.o) ?? '').trim(), p = String(g(r, c.p) ?? '').trim(), piaz = trN(p) === trN(TR_GEN) ? '' : p;
-      const ex = trRows().find(x => trN(x.ordine) === trN(ordine) && trN(x.piazzale) === trN(piaz) && trN(x.articolo) === trN(a) && !out.some(o => o.id === x.id));
-      const iv = c.iva >= 0 && String(g(r, c.iva)).trim() !== '' ? num(g(r, c.iva)) : null;
-      out.push({ ...(ex || {}), id: ex ? ex.id : 'tr' + uid() + out.length, data: xlDate(g(r, c.d)) || (ex ? ex.data : today()), ordine, fornitore: String(g(r, c.f) ?? '').trim(), articolo: a, categoria: String(g(r, c.cat) ?? '').trim() || trCatOf(a), piazzale: piaz, azienda: String(g(r, c.az) ?? '').trim(), quantita: q, prezzo: num(g(r, c.pr)) || '', iva: iv == null ? 0.22 : iv > 1 ? iv / 100 : iv, stato: TR_STATI.includes(String(g(r, c.st)).trim().toLowerCase()) ? String(g(r, c.st)).trim().toLowerCase() : 'ordinato', note: String(g(r, c.no) ?? '').trim(), creato: ex && ex.creato ? ex.creato : now });
-    });
-    if (!out.length) return toast('Nessuna riga trovata: servono le colonne Articolo e Quantità');
-    const upd = out.filter(x => trRows().some(y => y.id === x.id)).length;
-    if (!confirm(`${out.length} righe · ${fmtNum(trQty(out), 0)} pezzi.${upd ? `\n${upd} già presenti verranno aggiornate.` : ''}\nImportare?`)) return;
-    write(out.map(row => ({ action: 'upsert', sheet: 'Torental', row }))); trP = ''; trAnim = true; render(); toast(`${out.length} righe importate`);
-  }
-
-  /* ---------- esportazione ---------- */
-  const xlFmt = (ws, cols, z, r1, r2_) => { for (let R = r1; R <= r2_; R++) cols.forEach(c => { const x = ws[c + R]; if (x && x.t === 'n') x.z = z; }); };
-  const xlCol = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
   async function exportTor() {
-    const rows = trRows().filter(trInRange).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)) || trN(a.ordine).localeCompare(trN(b.ordine)));
-    if (!rows.length) return toast('Nessuna spesa da esportare');
+    const D = trData();
     try {
       busy('Preparo il file Excel…'); await loadXlsx();
       const U = XLSX.utils, wb = U.book_new(), E = '#,##0.00 "€"';
-      const lordo = r => r2(trTotN(r) * (1 + ivaRate(r)));
-      // riepilogo per piazzale
-      const PL = trPlist(rows).filter(x => x.rows.length);
-      const s1 = [['Piazzale', 'Azienda', 'Pezzi', 'Spesa IVA esclusa', 'Spesa IVA inclusa'], ...PL.map(x => [x.p, trIsSc(x.p) ? 'Scorta' : x.az || '', trQty(x.rows), trSumN(x.rows), r2(x.rows.reduce((a, r) => a + lordo(r), 0))]), ['TOTALE', '', trQty(rows), trSumN(rows), r2(rows.reduce((a, r) => a + lordo(r), 0))]];
-      const w1 = U.aoa_to_sheet(s1); xlFmt(w1, ['D', 'E'], E, 2, s1.length); w1['!cols'] = [18, 22, 10, 18, 18].map(w => ({ wch: w })); U.book_append_sheet(wb, w1, 'Per piazzale');
-      // distribuzione come il file d'ordine
-      const arts = [...groupBy(rows, r => trN(r.articolo))].map(([k, v]) => ({ k, a: String(v[0].articolo).trim(), f: (v.find(r => r.fornitore) || {}).fornitore || '' }));
-      const s2 = [['', '', ...arts.map(a => a.f)], ['PIAZZALE', 'AZIENDA', ...arts.map(a => a.a), 'TOTALE PEZZI', 'SPESA €'], ...PL.map(x => [x.p, trIsSc(x.p) ? '' : x.az || '', ...arts.map(a => trQty(x.rows.filter(r => trN(r.articolo) === a.k)) || 0), trQty(x.rows), trSumN(x.rows)]), ['TOTALE', '', ...arts.map(a => trQty(rows.filter(r => trN(r.articolo) === a.k))), trQty(rows), trSumN(rows)]];
-      const w2 = U.aoa_to_sheet(s2); xlFmt(w2, [xlCol(arts.length + 3)], E, 3, s2.length); w2['!cols'] = [18, 20, ...arts.map(() => 14), 13, 14].map(w => ({ wch: w })); U.book_append_sheet(wb, w2, 'Distribuzione');
-      // tutte le righe
-      const s3 = [['Data', 'Ordine', 'Stato', 'Fornitore', 'Articolo', 'Categoria', 'Piazzale', 'Azienda', 'Quantità', 'Prezzo', 'Totale IVA esclusa', 'IVA %', 'Totale IVA inclusa', 'Note'], ...rows.map(r => [validD(r.data) ? parseD(r.data) : '', r.ordine || '', trStato(r), r.fornitore || '', r.articolo || '', r.categoria || trCatOf(r.articolo), r.piazzale || TR_GEN, trAz(r), num(r.quantita), trPrezzo(r) || '', trTotN(r), Math.round(ivaRate(r) * 100), lordo(r), r.note || ''])];
-      const w3 = U.aoa_to_sheet(s3, { cellDates: true }); rows.forEach((r, i) => { const x = w3['A' + (i + 2)]; if (x && x.t === 'd') x.z = 'dd/mm/yyyy'; }); xlFmt(w3, ['J', 'K', 'M'], E, 2, s3.length);
-      w3['!cols'] = [11, 24, 12, 16, 22, 16, 14, 18, 9, 11, 15, 7, 15, 34].map(w => ({ wch: w })); w3['!autofilter'] = { ref: `A1:N${s3.length}` }; U.book_append_sheet(wb, w3, 'Righe');
-      // listino
-      const L = trListino(); if (L.length) { const w4 = U.aoa_to_sheet([['Articolo', 'Fornitore', 'Prezzo IVA esclusa', 'Minimo d\'ordine', 'Note'], ...L.map(x => [x.a, x.f, x.p || '', x.min || '', x.note])]); xlFmt(w4, ['C'], E, 2, L.length + 1); w4['!cols'] = [24, 18, 16, 14, 50].map(w => ({ wch: w })); U.book_append_sheet(wb, w4, 'Listino'); }
-      XLSX.writeFile(wb, `torental-${trP || 'completo'}.xlsx`); busy(); toast('Excel scaricato');
-    } catch (e) { busy(); toast(e.message); }
-  }
-  // l'ordine nello stesso formato del file originale, con prezzi e spesa (da mandare o archiviare)
-  async function exportTrOrd(M, ordine, data) {
-    try {
-      busy('Preparo il file Excel…'); await loadXlsx();
-      const U = XLSX.utils, E = '#,##0.00 "€"', arts = M.arts.filter(a => String(a.a).trim()), qk = (p, a) => trN(p.p) + '|' + a.id;
-      if (!arts.length) { busy(); return toast('Nessun articolo'); }
-      const n = arts.length, first = 3, last = first + M.piaz.length - 1, cT = xlCol(n + 2);
-      const aoa = [['', '', ...arts.map(a => a.f)], ['PIAZZALE', 'AZIENDA', ...arts.map(a => a.a), 'SPESA €'], ...M.piaz.map(p => [p.p, trIsSc(p.p) ? '' : p.az || '', ...arts.map(a => M.q[qk(p, a)] || 0), 0]),
-        ['TOTALE', '', ...arts.map(() => 0), 0], ['PREZZO €', '', ...arts.map(a => num(a.p) || 0), ''], ['SPESA €', '', ...arts.map(() => 0), 0], ['NOTE', '', ...arts.map(a => a.note || ''), '']];
-      const ws = U.aoa_to_sheet(aoa), rT = last + 1, rP = last + 2, rS = last + 3;
-      arts.forEach((a, j) => { const c = xlCol(j + 2); ws[c + rT] = { t: 'n', f: `SUM(${c}${first}:${c}${last})` }; ws[c + rS] = { t: 'n', f: `${c}${rT}*${c}${rP}`, z: E }; if (ws[c + rP]) ws[c + rP].z = E; });
-      for (let R = first; R <= last; R++) ws[cT + R] = { t: 'n', f: arts.map((a, j) => `${xlCol(j + 2)}${R}*${xlCol(j + 2)}$${rP}`).join('+'), z: E };
-      ws[cT + rT] = { t: 'n', f: `SUM(${cT}${first}:${cT}${last})`, z: E }; ws[cT + rS] = { t: 'n', f: `${cT}${rT}`, z: E };
-      ws['!cols'] = [16, 20, ...arts.map(() => 16), 14].map(w => ({ wch: w }));
-      const wb = U.book_new(); U.book_append_sheet(wb, ws, 'Ordine');
-      XLSX.writeFile(wb, `${ordine.replace(/[^\w\- ]+/g, '-').replace(/\s+/g, '_')}_${data}.xlsx`); busy(); toast('Excel dell\'ordine scaricato');
+      const head = ['CODICE', 'PRODOTTO / COMPONENTE', 'CONSUMO (m²)', 'COSTO FORNITORE (€/m²)', 'COSTO MATERIALE (€)', 'PREZZO CON RICARICO (€)', 'PREPARAZIONE KIT (€)', 'TOTALE FATTURA (€)', 'APPLICAZIONI', 'RIMOZIONE', 'TRANSFERTA 1 GIORNO (100KM)'];
+      const aoa = [head, [D.nota || '']], money = [];
+      D.kit.forEach(k => {
+        const c = trCalc(k, D); aoa.push([k.cod || '', k.n.toUpperCase()]);
+        c.comp.forEach((x, j) => { aoa.push([x.cod, String(x.n).toUpperCase(), x.q, num(x.c), r2(x.cost), r2(x.prezzo), j ? '' : c.prep, j ? '' : c.fattura, j ? '' : c.app, j ? '' : c.rim, j ? '' : num(D.transferta)]); money.push(aoa.length); });
+        aoa.push(['', '', '', '', c.mat, c.prezzo]); money.push(aoa.length);
+      });
+      aoa.push([], ['CODICE', 'ARTICOLO', 'PREZZO'], ...D.sing.map(s => [s.cod, s.n.toUpperCase(), num(s.p)]));
+      const ws = U.aoa_to_sheet(aoa); money.forEach(R => ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'].forEach(c => { if (ws[c + R] && ws[c + R].t === 'n') ws[c + R].z = E; }));
+      ws['!cols'] = [10, 34, 13, 18, 16, 18, 16, 16, 13, 12, 18].map(w => ({ wch: w })); U.book_append_sheet(wb, ws, 'KIT');
+      const w2 = U.aoa_to_sheet([['Kit', 'Codice', 'Costo materiale', 'Prezzo materiale', 'Preparazione', 'Totale fattura', 'Applicazione', 'Rimozione', 'Kit + applicazione', 'Guadagno sul materiale'], ...D.kit.map(k => { const c = trCalc(k, D); return [k.n, k.cod || '', c.mat, c.prezzo, c.prep, c.fattura, c.app, c.rim, c.full, c.ric]; })]);
+      D.kit.forEach((k, i) => ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].forEach(c => { const x = w2[c + (i + 2)]; if (x && x.t === 'n') x.z = E; }));
+      w2['!cols'] = [30, 10, 15, 15, 13, 14, 13, 12, 17, 20].map(w => ({ wch: w })); U.book_append_sheet(wb, w2, 'RIEPILOGO');
+      const w3 = U.aoa_to_sheet([['CODICE', 'ARTICOLO', 'PREZZO'], ...D.sing.map(s => [s.cod, s.n.toUpperCase(), num(s.p)])]); D.sing.forEach((s, i) => { const x = w3['C' + (i + 2)]; if (x) x.z = E; }); w3['!cols'] = [12, 34, 10].map(w => ({ wch: w })); U.book_append_sheet(wb, w3, 'SINGOLI');
+      XLSX.writeFile(wb, 'Listino_Kit_Torental.xlsx'); busy(); toast('Listino scaricato');
     } catch (e) { busy(); toast(e.message); }
   }
   function trArt() {
-    const tile = (x, y, cls, ic, d) => `<g class="tr-t ${cls}" style="--d:${d}ms" transform="translate(${x} ${y})"><rect width="78" height="78" rx="20"/><g class="tr-i">${ic}</g></g>`;
+    // strisce di pellicola (arancione e grigio) che si sovrappongono: richiamo alla livrea, senza disegnare mezzi
     return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg tr-svg">
       <defs><pattern id="trdots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern></defs>
       <rect x="300" width="340" height="260" fill="url(#trdots)"/>
-      ${tile(446, 50, 'k2', '<path d="M27 50 L47 30 L52 35 L32 55 L25 57 Z M44 33 l5 5"/>', 150)}
-      ${tile(534, 90, 'k2', '<circle cx="31" cy="31" r="7"/><path d="M36 36 L53 53 M47 47 l-4 4 M51 51 l-3 3"/>', 300)}
-      ${tile(400, 136, 'k1', '<path d="M24 30 L32 23 H46 L54 30 L49 37 L45 35 V56 H33 V35 L29 37 Z"/><path d="M34 23 Q39 29 44 23"/>', 450)}
-      ${tile(492, 176, 'k1', '<path d="M22 35 v9 h7 l15 9 V26 l-15 9 z"/><path d="M50 32 a9 9 0 0 1 0 15"/>', 600)}
+      <g class="tr-s s1" style="--d:150ms"><rect x="380" y="64" width="250" height="38" rx="19" transform="rotate(-14 505 83)"/></g>
+      <g class="tr-s s2" style="--d:300ms"><rect x="400" y="118" width="250" height="38" rx="19" transform="rotate(-14 525 137)"/></g>
+      <g class="tr-s s3" style="--d:450ms"><rect x="420" y="172" width="230" height="38" rx="19" transform="rotate(-14 535 191)"/></g>
     </svg>`;
   }
 
@@ -3302,7 +3080,7 @@
   function allChecks(P, per) {
     const tag = (a, go) => x => ({ ...x, a, go: x.go || go });
     const gV = gasVehicles(gasRows());
-    const out = [...attChecks(P.att).map(tag('att', 'movimenti')), ...glsChecks(P.gls).map(tag('gls', 'gls')), ...gasChecks(P.gas, gV).map(tag('gas', 'gasolio')), ...faChecks(P.fat).map(tag('fat', 'fatture')), ...trChecks(P.tor || []).map(tag('tor', 'torental'))];
+    const out = [...attChecks(P.att).map(tag('att', 'movimenti')), ...glsChecks(P.gls).map(tag('gls', 'gls')), ...gasChecks(P.gas, gV).map(tag('gas', 'gasolio')), ...faChecks(P.fat).map(tag('fat', 'fatture'))];
     if (P.gas.length && !P.gas.some(r => gPrezzo(r) > 0)) out.push({ a: 'gas', t: 'info', h: 'Prezzo del gasolio non impostato', d: `${fmtNum(gSum(P.gas, 'litri'), 0)} litri senza costo: il totale comprende solo i noleggi.`, v: '—', go: 'gasprice' });
     const merged = [...groupBy(out, x => x.a + '|' + x.h)].map(([, v]) => v.length === 1 ? v[0] : { ...v[0], h: `${v[0].h} · ${v.length} casi`, d: `${v[0].d} E altri ${v.length - 1} casi simili.`, v: v.length + ' casi' });
     return merged.sort((a, b) => (a.t === 'warn' ? 0 : 1) - (b.t === 'warn' ? 0 : 1));
@@ -3314,13 +3092,12 @@
       const gV = gasVehicles(gasRows()), R = gasRent();
       return {
         periodo: ovP ? mLabel(ovP) : 'tutto il periodo', importi: 'IVA esclusa',
-        totali: { attrezzatura: r2(V.att), gls: r2(V.gls), gasolioENoleggi: r2(V.gas), pubblicitaTorental: r2(V.tor || 0), fattureFornitori: r2(P.fat.reduce((a, r) => a + num(r.imponibile), 0)) },
-        meseperMese: byM.map(x => ({ mese: x.m, attrezzatura: r2(x.att), gls: r2(x.gls), gasolio: r2(x.gas), pubblicita: r2(x.tor || 0) })),
+        totali: { attrezzatura: r2(V.att), gls: r2(V.gls), gasolioENoleggi: r2(V.gas), fattureFornitori: r2(P.fat.reduce((a, r) => a + num(r.imponibile), 0)) },
+        meseperMese: byM.map(x => ({ mese: x.m, attrezzatura: r2(x.att), gls: r2(x.gls), gasolio: r2(x.gas) })),
         attrezzatura: { ...summary0(P.att), articoliPiuCostosi: undefined },
         gls: { spedizioni: P.gls.length, costo: r2(gTot(P.gls)), kgTassabili: r2(gSum(P.gls, 'kgTass')), perContratto: ['C1', 'C2'].map(c => { const v = P.gls.filter(r => r.contratto === c); return { contratto: c, spedizioni: v.length, costo: r2(gTot(v)) }; }), destinazioniTop: [...groupBy(P.gls, r => r.citta + ' (' + r.prov + ')')].map(([k, v]) => ({ k, costo: r2(gTot(v)), n: v.length })).sort((a, b) => b.costo - a.costo).slice(0, 8) },
         gasolio: { litri: r2(gSum(P.gas, 'litri')), rifornimenti: P.gas.length, prezzoLitro: gasPrice() || null, noleggiMensili: R, mezzi: [...groupBy(P.gas, r => plate(r.targa))].map(([p, v]) => { const x = gV.get(p); let k = 0, kl = 0; if (x) x.seg.forEach((d, id) => { const z = v.find(r => r.id === id); if (z) { k += d; kl += num(z.litri); } }); return { targa: p, nome: gasName(p) || undefined, litri: r2(gSum(v, 'litri')), km: k, kmPerLitro: kl ? r2(k / kl) : null }; }).sort((a, b) => b.litri - a.litri).slice(0, 10) },
         fatture: { numero: P.fat.length, perFornitore: [...groupBy(P.fat, r => String(r.fornitore || '').toUpperCase())].map(([k, v]) => ({ fornitore: k, imponibile: r2(v.reduce((a, r) => a + num(r.imponibile), 0)), fatture: v.length })), daPagare: r2(P.fat.filter(r => !faPaid(r)).reduce((a, r) => a + num(r.totale), 0)), scadute: P.fat.filter(faLate).length },
-        torental: (() => { const T = P.tor || []; return { descrizione: 'gadget e materiale pubblicitario distribuiti ai piazzali (Veneta Logistic, To Rental, Soluzione Veicolare, RL2)', pezzi: trQty(T), spesa: trSumN(T), ordini: trOrders(T).map(o => ({ ordine: o.k, data: o.d, stato: o.st, pezzi: o.q, spesa: r2(o.rows.reduce((a, r) => a + trTotN(r), 0)) })).slice(0, 10), perPiazzale: [...groupBy(T, trPz)].map(([k, v]) => ({ piazzale: k, azienda: trAz(v[0]), pezzi: trQty(v), spesa: trSumN(v) })).sort((a, b) => b.spesa - a.spesa), perArticolo: [...groupBy(T, r => trN(r.articolo))].map(([k, v]) => ({ articolo: k, fornitore: v[0].fornitore || '', pezzi: trQty(v), prezzo: trPrezzo(v[0]) || null, spesa: trSumN(v) })).sort((a, b) => b.spesa - a.spesa) }; })(),
         controlli: checks.map(x => ({ area: x.a, livello: x.t === 'warn' ? 'attenzione' : 'info', titolo: x.h, dettaglio: String(x.d).replace(/<[^>]+>/g, ''), impatto: String(x.v).replace(/<[^>]+>/g, '') }))
       };
     });
@@ -3330,10 +3107,10 @@
   function renderOvAI(ctx) {
     const el = $('#ov-ai'); if (!el) return;
     if (isLocal()) { el.hidden = true; return; }
-    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', generale: 'Generale' };
+    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', generale: 'Generale' };
     if (!db.ai) {
       el.innerHTML = `<div class="card-h"><h3 class="ai-title">${IC.spark}Intelligenza artificiale</h3></div>
-        <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, fatture, pubblicità Torental), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
+        <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, fatture), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
         <div class="ov-key"><input id="ov-key" type="password" placeholder="Incolla la chiave API di Gemini" autocomplete="off"><button class="btn primary sm" id="ov-key-go" type="button">Collega</button></div>`;
       return;
     }
@@ -3370,7 +3147,7 @@
     $('#sheet-del').onclick = () => { if (onDelete && onDelete() === true) closeSheet(); };
     $$('[data-close]').forEach(b => (b.onclick = closeSheet));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
-    $('#fab').onclick = () => view === 'torental' ? trForm() : view === 'gasolio' ? formGas() : view === 'fatture' ? (aiReady() ? readFatAI() : formFat()) : formMov(); $('#add-top').onclick = () => formMov();
+    $('#fab').onclick = () => view === 'gasolio' ? formGas() : view === 'fatture' ? (aiReady() ? readFatAI() : formFat()) : formMov(); $('#add-top').onclick = () => formMov();
 
     document.addEventListener('click', e => {
       const t = e.target;
@@ -3395,7 +3172,7 @@
       if (t.closest('.iva-tg')) { ivaOn = !ivaOn; try { localStorage.setItem('cdc_iva', ivaOn ? '1' : '0'); } catch {} if (view === 'attrezzatura') ccAnim = true; if (view === 'home') ovAnim = true; render(); toast(ivaOn ? 'Importi con IVA inclusa' : 'Importi senza IVA'); return; }
       const ovm = t.closest('[data-ovm]'); if (ovm) { ovP = ovP === ovm.dataset.ovm ? '' : ovm.dataset.ovm; ovAnim = true; renderOverview(); return; }
       if (t.closest('#ov-prev') || t.closest('#ov-next')) { const o = [...$('#ov-per').options].map(x => x.value), i = o.indexOf(ovP) + (t.closest('#ov-prev') ? 1 : -1); if (i >= 0 && i < o.length) { ovP = o[i]; ovAnim = true; renderOverview(); } return; }
-      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'gls') { gMonth = ovP || 'tutto'; gKeep = true; } if (g === 'gasolio') gasP = ovP; if (g === 'fatture') faP = ovP; if (g === 'torental' || g === 'trlistino') trP = ovP; if (g === 'trlistino') { location.hash = 'torental'; setTimeout(trFormListino, 300); } else if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
+      const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'gls') { gMonth = ovP || 'tutto'; gKeep = true; } if (g === 'gasolio') gasP = ovP; if (g === 'fatture') faP = ovP; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
       const ckf = t.closest('[data-ckf]'); if (ckf) { const k = ckf.dataset.ckf; $$('.ov-cf').forEach(b => b.classList.toggle('on', b === ckf)); $$('.ov-ci').forEach(b => { b.hidden = !!k && b.dataset.cka !== k; }); return; }
       if (t.closest('#ov-ai-go')) { ovAnalyze(); return; }
       if (t.closest('#ov-key-go')) { const k = $('#ov-key').value.trim(); if (!k) return; (async () => { try { busy('Collego Gemini…'); await api('setKey', { key: k }); db.ai = true; save(); toast('Gemini collegato'); render(); } catch (er) { if (!(er instanceof AuthError)) toast(er.message); } finally { busy(); } })(); return; }
@@ -3409,24 +3186,12 @@
       const faq = t.closest('[data-faq]'); if (faq) { const ids = faq.dataset.faq.split(' '); faF.q = ''; faF.forn = ''; faF.stato = ''; renderFatList(null, faRows().filter(r => ids.includes(r.id))); $('#fa-cnt').textContent += ' · filtro controllo'; $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const faf = t.closest('[data-faforn]'); if (faf) { faF.forn = faf.dataset.faforn; $('#fa-ff').value = faF.forn; renderFatList(); $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const fat = t.closest('[data-fat]'); if (fat) { faDetail(fat.dataset.fat); return; }
-      if (t.closest('#tr-imp') || t.closest('#tr-imp2')) { importTor(); return; }
+      if (t.closest('#tr-imp')) { importTor(); return; }
       if (t.closest('#tr-xls')) { exportTor(); return; }
-      if (t.closest('#tr-new') || t.closest('#tr-new2') || t.closest('#tr-new3')) { trForm(); return; }
-      if (t.closest('#tr-addr')) { trFormRow(); return; }
-      if (t.closest('#tr-list')) { trFormListino(); return; }
-      if (t.closest('#tr-set')) { trFormSet(); return; }
-      if (t.closest('#tr-more')) { trLimit = 9999; renderTorList(); return; }
-      if (t.closest('#tr-prev') || t.closest('#tr-next')) { const o = [...$('#tr-per').options].map(x => x.value), i = o.indexOf(trP) + (t.closest('#tr-prev') ? 1 : -1); if (i >= 0 && i < o.length) { trP = o[i]; trAnim = true; renderTor(); } return; }
-      const trm = t.closest('[data-trmx]'); if (trm) { trMx = trm.dataset.trmx; $$('[data-trmx]').forEach(b => b.classList.toggle('on', b === trm)); const rr = trRows().filter(trInRange); trMatrix(rr, trPlist(rr), false); return; }
-      const trpe = t.closest('[data-trper]'); if (trpe) { trP = trpe.dataset.trper; trAnim = true; renderTor(); return; }
-      const trTo = () => { const c = $('#tr-list-rows'); if (c) c.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-      const tro = t.closest('[data-trord]'); if (tro) { const k = tro.dataset.trord; if (k === 'Spese senza ordine') { trF.ord = k; $('#tr-fo').value = k; renderTorList(); trTo(); return; } if (t.closest('#sheet')) { closeSheet(); setTimeout(() => trForm(k), 250); } else trForm(k); return; }
-      const trgo = t.closest('[data-trgo]'); if (trgo) { trFormListino(); return; }
-      const trq = t.closest('[data-trq]'); if (trq) { const ids = trq.dataset.trq.split(' '); Object.assign(trF, { q: '', piaz: '', art: '', ord: '' }); $('#tr-q').value = ''; ['#tr-fp', '#tr-fa', '#tr-fo'].forEach(x => { $(x).value = ''; }); renderTorList(null, trRows().filter(r => ids.includes(String(r.id)))); $('#tr-cnt').textContent += ' · filtro controllo'; trTo(); return; }
-      const trp = t.closest('[data-trp]'); if (trp && !t.closest('#sheet')) { const k = trp.dataset.trp; trF.piaz = trF.piaz === k ? '' : k; $$('#tr-map .tr-pin, #tr-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.trp === trF.piaz)); $('#tr-fp').value = trF.piaz; renderTorList(); if (trF.piaz) trTo(); return; }
-      const tra = t.closest('[data-trart]'); if (tra) { trF.art = trF.art === tra.dataset.trart ? '' : tra.dataset.trart; $('#tr-fa').value = trF.art; renderTorList(); if (trF.art) trTo(); return; }
-      const traz = t.closest('[data-traz]'); if (traz) { const k = traz.dataset.traz; if (k === 'Scorta' || k === 'Generale') { trF.piaz = trN(k === 'Scorta' ? TR_SC : TR_GEN); trF.q = ''; } else { trF.piaz = ''; trF.q = k; } $('#tr-fp').value = trF.piaz; $('#tr-q').value = trF.q; renderTorList(); trTo(); return; }
-      const trr = t.closest('[data-trrow]'); if (trr) { const r = trRows().find(x => String(x.id) === trr.dataset.trrow); if (r) trFormRow(r); return; }
+      if (t.closest('#tr-mod')) { trForm(); return; }
+      if (t.closest('#tr-copy')) { trCopy(); return; }
+      const trfx = t.closest('[data-trfix]'); if (trfx) { trFix(+trfx.dataset.trfix); return; }
+      const trk = t.closest('[data-trkit]'); if (trk && !t.closest('#sheet')) { trKitDetail(+trk.dataset.trkit); return; }
       if (t.closest('#ga-imp')) { importGas(); return; }
       if (t.closest('#ga-xls')) { exportGas(); return; }
       if (t.closest('#ga-add')) { formGas(); return; }
@@ -3477,9 +3242,7 @@
     $('#ga-per').onchange = e => { gasP = e.target.value; gasAnim = true; renderGas(); };
     $('#ov-per').onchange = e => { ovP = e.target.value; ovAnim = true; renderOverview(); };
     $('#fa-per').onchange = e => { faP = e.target.value; faAnim = true; renderFat(); };
-    $('#tr-per').onchange = e => { trP = e.target.value; trAnim = true; renderTor(); };
-    document.addEventListener('input', e => { if (e.target.id === 'tr-q') { clearTimeout(qt); qt = setTimeout(() => { trF.q = e.target.value; renderTorList(); }, 180); } });
-    document.addEventListener('change', e => { if (e.target.id === 'tr-fp') { trF.piaz = e.target.value; $$('#tr-map .tr-pin, #tr-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.trp === trF.piaz)); renderTorList(); } if (e.target.id === 'tr-fa') { trF.art = e.target.value; renderTorList(); } if (e.target.id === 'tr-fo') { trF.ord = e.target.value; renderTorList(); } });
+    ['input', 'change'].forEach(ev => document.addEventListener(ev, e => { if (e.target.closest && e.target.closest('#tr-calc') && (e.target.dataset.trq || e.target.dataset.trqs) && (ev === 'change' || e.target.type === 'number')) trQSet(e); }));
     document.addEventListener('input', e => { if (e.target.id === 'fa-q') { clearTimeout(qt); qt = setTimeout(() => { faF.q = e.target.value; renderFatList(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'fa-ff') { faF.forn = e.target.value; renderFatList(); } if (e.target.id === 'fa-fs') { faF.stato = e.target.value; renderFatList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'ga-q') { clearTimeout(qt); qt = setTimeout(() => { gasF.q = e.target.value; renderGasList(); }, 180); } });
@@ -3515,7 +3278,7 @@
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
-    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'torental' && $('#tr-list-rows')) renderTorList(); }, 200); });
+    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); }, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
   }
 
