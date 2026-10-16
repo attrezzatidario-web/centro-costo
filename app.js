@@ -2845,17 +2845,17 @@
         <span class="tk-bar"><i style="flex:${c.mat};background:${TR_COLS.mat}"></i><i style="flex:${Math.max(0, c.ric)};background:${TR_COLS.ric}"></i><i style="flex:${c.prep};background:${TR_COLS.prep}"></i></span>
         <span class="tk-l"><span><i style="background:${TR_COLS.mat}"></i>Materiale ${esc(trE0(c.mat))}</span><span><i style="background:${TR_COLS.ric}"></i>Ricarico ${esc(trE0(c.ric))}</span><span><i style="background:${TR_COLS.prep}"></i>Prep. ${esc(trE0(c.prep))}</span></span>
         <span class="tk-s"><span><small>Applicazione</small><b>${esc(trE0(c.app))}</b></span><span><small>Rimozione</small><b>${esc(trE0(c.rim))}</b></span><span><small>Pellicola</small><b>${trFmtQ(c.film)} m²</b></span></span>
-      </button>`; }).join('')}</div>
+      </button>`; }).join('')}<button type="button" class="tk tk-add" data-trnewkit style="--d:${120 + K.length * 60}ms"><span class="tk-plus">+</span><b>Nuovo kit</b><small>aggiungi un tipo di mezzo</small></button></div>
       <div class="card" id="tr-anom"><div class="card-h"><h3>Controlli sul listino</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto coerente'}</span></div>${A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span>${x.fix != null ? `<button type="button" class="tr-fixb" data-trfix="${x.fix}">Usa il prezzo calcolato</button>` : ''}</div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Quantità, prezzi e codici sono coerenti</div>'}</div>
       <div class="card"><div class="card-h"><h3>Confronto: intervento completo per mezzo</h3><span class="muted small">kit + applicazione · ${ivaLbl()}</span></div>
         <div class="tr-leg">${[['mat', 'Costo materiale'], ['ric', 'Ricarico'], ['prep', 'Preparazione kit'], ['app', 'Applicazione']].map(([k, l]) => `<span><i style="background:${TR_COLS[k]}"></i>${l}</span>`).join('')}</div>
         <div class="tr-cmp" id="tr-cmp"></div></div>
       <div class="tr-2">
         <div class="card tr-calc" id="tr-calc"></div>
-        <div class="card"><div class="card-h"><h3>Articoli singoli</h3><span class="muted small">prezzo cadauno · ${ivaLbl()}</span></div>
-          <div class="tr-sing">${D.sing.map((s, i) => `<div class="tr-si" style="--d:${200 + i * 50}ms"><span class="tr-sc">${esc(s.cod || '—')}</span><span class="tr-sn">${esc(trNice(s.n))}</span><b>${esc(trE(s.p))}</b></div>`).join('') || '<div class="empty">Nessun articolo singolo</div>'}</div>
+        <div class="card"><div class="card-h"><h3>Articoli singoli</h3><span class="muted small">${ivaLbl()} · tocca per modificare</span><button type="button" class="btn sm" data-trsing="-1">+ Articolo</button></div>
+          <div class="tr-sing">${D.sing.map((s, i) => `<div class="tr-si" data-trsing="${i}" style="--d:${200 + i * 50}ms"><span class="tr-sc">${esc(s.cod || '—')}</span><span class="tr-sn">${esc(trNice(s.n))}</span><b>${esc(trE(s.p))}</b></div>`).join('') || '<div class="empty">Nessun articolo singolo</div>'}</div>
           <div class="cf-sub" style="margin:18px 0 8px">Materiali</div>
-          <div class="tr-sing">${D.mat.map(m => `<div class="tr-si"><span class="tr-sc">${esc(m.cod)}</span><span class="tr-sn">${esc(m.n)}${m.tape ? ' <em>application tape</em>' : ' <em>pellicola</em>'}</span><span class="tr-mp"><b>${esc(eur(num(m.c)))}/m²</b><small>al cliente ${esc(trE(num(m.c) * num(D.ricarico)))}/m²</small></span></div>`).join('')}</div></div>
+          <div class="tr-sing">${D.mat.map(m => `<div class="tr-si" data-trmat><span class="tr-sc">${esc(m.cod)}</span><span class="tr-sn">${esc(m.n)}${m.tape ? ' <em>application tape</em>' : ' <em>pellicola</em>'}</span><span class="tr-mp"><b>${esc(eur(num(m.c)))}/m²</b><small>al cliente ${esc(trE(num(m.c) * num(D.ricarico)))}/m²</small></span></div>`).join('')}</div></div>
       </div>
       <div class="card"><div class="card-h"><h3>Composizione dei kit</h3><span class="muted small">m² di materiale e prezzi · ${ivaLbl()}</span></div><div class="mx-wrap" id="tr-tab"></div></div>`;
     $$('[data-trk]', body).forEach(el => { const i = +el.dataset.trk; el._v = 0; countTo(el, KP[i][1], KP[i][2]); });
@@ -2924,48 +2924,105 @@
       ${c.hand ? `<div class="fa-chk ko"><b>Prezzo scritto a mano nel listino</b><span>Con le formule il totale sarebbe ${esc(eur(c.calc.fattura))} (materiale ${esc(eur(c.calc.mat))}, prezzo ${esc(eur(c.calc.prezzo))}).</span></div>` : ''}
       <div class="iva-sum" style="margin-top:14px"><div><span>Prezzo materiale</span><b>${esc(eur(c.prezzo))}</b></div><div><span>Preparazione kit</span><b>${esc(eur(c.prep))}</b></div><div class="t"><span>Totale fattura kit (IVA esclusa)</span><b>${esc(eur(c.fattura))}</b></div></div>
       <div class="iva-sum" style="margin-top:10px"><div><span>Applicazione</span><b>${esc(eur(c.app))}</b></div><div><span>Rimozione</span><b>${esc(eur(c.rim))}</b></div><div><span>Transferta 1 giorno (100 km)</span><b>${esc(eur(num(D.transferta)))}</b></div><div class="t"><span>Kit + applicazione</span><b>${esc(eur(c.full))}</b></div></div>
-      <div class="row-btns" style="margin-top:14px"><button type="button" class="btn sm" id="tr-use">Usa nel preventivo</button><button type="button" class="btn sm" id="tr-edit">Modifica listino</button></div>`, null, null, 'Chiudi');
+      <div class="row-btns" style="margin-top:14px"><button type="button" class="btn sm" id="tr-use">Usa nel preventivo</button><button type="button" class="btn sm primary" id="tr-kedit">Modifica questo kit</button><button type="button" class="btn sm" id="tr-edit">Modifica tutto il listino</button></div>`, null, null, 'Chiudi');
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
     $('#tr-use').onclick = () => { trQ = { ...trQState(), kit: i }; LS.set('cdc_trq', trQ); closeSheet(); renderTrCalc(); setTimeout(() => $('#tr-calc').scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); };
     $('#tr-edit').onclick = () => { closeSheet(); setTimeout(trForm, 250); };
+    $('#tr-kedit').onclick = () => { closeSheet(); setTimeout(() => trKitForm(i), 250); };
   }
 
-  /* ---------- modifica listino ---------- */
+  /* ---------- modifica listino (tutto) ---------- */
+  const trClone = () => JSON.parse(JSON.stringify(trData()));
+  const trSave = (D, msg) => { setConfig('trKit', D); trAnim = true; toast(msg || 'Listino salvato'); };
+  const trIn = (attr, v, ph, cls = '') => `<input ${attr} inputmode="decimal" value="${v === '' || v == null ? '' : esc(fmtIn(v))}" placeholder="${ph}"${cls ? ` class="${cls}"` : ''}>`;
+  const trNum = v => String(v ?? '').trim() === '' ? '' : num(v);
   function trForm() {
-    const D = JSON.parse(JSON.stringify(trData()));
-    const inp = (attr, v, ph, cls = '') => `<input ${attr} inputmode="decimal" value="${v === '' || v == null ? '' : esc(fmtIn(v))}" placeholder="${ph}"${cls ? ` class="${cls}"` : ''}>`;
-    const kitRow = (k, i) => `<tr data-ki="${i}"><td><input data-kf="n" value="${esc(k.n)}" placeholder="Nome kit"></td><td><input data-kf="cod" value="${esc(k.cod || '')}" placeholder="—" class="tr-in-s"></td>${D.mat.map(m => `<td>${inp(`data-kq="${esc(m.cod)}"`, (k.q || {})[m.cod], '0', 'tr-in-n')}</td>`).join('')}<td>${inp('data-kf="prep"', k.prep, '0', 'tr-in-n')}</td><td>${inp('data-kf="app"', k.app, '0', 'tr-in-n')}</td><td>${inp('data-kf="rim"', k.rim, '0', 'tr-in-n')}</td><td><button type="button" class="icon-btn tr-lx" data-kdel aria-label="Togli kit">×</button></td></tr>`;
-    const singRow = s => `<div class="tr-pr3"><input data-sf="cod" value="${esc(s.cod || '')}" placeholder="Codice"><input data-sf="n" value="${esc(s.n || '')}" placeholder="Articolo">${inp('data-sf="p"', s.p, '€')}<button type="button" class="icon-btn tr-lx" data-sdel aria-label="Togli">×</button></div>`;
-    openSheet('Modifica listino Torental', `
-      <p class="muted small" style="margin:0 0 12px">Prezzi IVA esclusa. Il prezzo del materiale è costo fornitore × ricarico, più la preparazione del kit.</p>
-      <div class="f-row tr-f3"><label class="f"><span>Ricarico sul materiale (×)</span>${inp('name="ricarico"', D.ricarico, '2')}</label><label class="f"><span>Transferta 1 giorno (100 km) €</span>${inp('name="transferta"', D.transferta, '0')}</label><label class="f"><span>Nota del listino</span><input name="nota" value="${esc(D.nota || '')}"></label></div>
-      <div class="cf-sub" style="margin:6px 0 8px">Materiali · costo fornitore €/m²</div>
-      <div class="tr-mats">${D.mat.map((m, j) => `<label class="f"><span>${esc(m.cod)} · ${esc(m.n)}</span>${inp(`data-mc="${j}"`, m.c, '€/m²')}</label>`).join('')}</div>
-      <div class="cf-sub" style="margin:6px 0 8px">Kit · m² di materiale e servizi (€)</div>
-      <div class="tr-mxw"><table class="tr-mx tr-kt"><thead><tr><th class="tr-c0">Kit</th><th>Codice</th>${D.mat.map(m => `<th>${esc(m.n)} m²</th>`).join('')}<th>Prep. €</th><th>Applic. €</th><th>Rimoz. €</th><th></th></tr></thead><tbody id="tr-kb">${D.kit.map(kitRow).join('')}</tbody></table></div>
-      <button type="button" class="btn sm" id="tr-kadd">+ Kit</button>
-      <div class="cf-sub" style="margin:18px 0 8px">Articoli singoli</div>
-      <div id="tr-sb">${D.sing.map(singRow).join('')}</div>
-      <button type="button" class="btn sm" id="tr-sadd" style="margin-top:8px">+ Articolo</button>`,
+    const M = trClone();
+    M.kit.forEach(k => { k._q = M.mat.map(m => num((k.q || {})[m.cod]) || ''); k._fx = k.fx && k.fx.fattura != null ? k.fx.fattura : ''; k._fx0 = k._fx; });
+    openSheet('Modifica listino Torental', `<div class="tr-sw">
+      <p class="muted small" style="margin:0 0 12px">Tutti i prezzi sono IVA esclusa. Prezzo kit = m² × costo fornitore × ricarico + preparazione. Se scrivi un «Totale fisso», il kit usa quel prezzo al posto del calcolo.</p>
+      <div class="f-row tr-f3"><label class="f"><span>Ricarico sul materiale (×)</span>${trIn('name="ricarico"', M.ricarico, '2')}</label><label class="f"><span>Transferta 1 giorno (100 km) €</span>${trIn('name="transferta"', M.transferta, '0')}</label><label class="f"><span>Nota del listino</span><input name="nota" value="${esc(M.nota || '')}"></label></div>
+      <div class="tr-fh"><span class="cf-sub">Materiali</span><button type="button" class="btn sm" id="tr-madd">+ Materiale</button></div>
+      <div id="tr-fm"></div>
+      <div class="tr-fh"><span class="cf-sub">Kit · m² di materiale, servizi e prezzo</span><button type="button" class="btn sm" id="tr-kadd">+ Kit</button></div>
+      <div id="tr-fk"></div>
+      <div class="tr-fh"><span class="cf-sub">Articoli singoli</span><button type="button" class="btn sm" id="tr-sadd">+ Articolo</button></div>
+      <div id="tr-fs"></div>
+      <div class="tr-reset"><button type="button" class="link" id="tr-reset">Ripristina il listino del file originale</button></div></div>`,
       fd => {
-        const old = trData(), N = { ricarico: num(fd.get('ricarico')) || 1, transferta: num(fd.get('transferta')), nota: String(fd.get('nota') || '').trim(), mat: D.mat.map((m, j) => ({ ...m, c: num($(`[data-mc="${j}"]`).value) })), kit: [], sing: [] };
-        const globCh = N.ricarico !== num(old.ricarico) || N.mat.some((m, j) => num(m.c) !== num((old.mat[j] || {}).c));
-        $$('#tr-kb tr').forEach(tr => {
-          const g = f => $(`[data-kf="${f}"]`, tr).value.trim(), n = g('n'); if (!n) return;
-          const q = {}; $$('[data-kq]', tr).forEach(x => { const v = num(x.value); if (v) q[x.dataset.kq] = v; });
-          const k = { cod: g('cod'), n, q, prep: num(g('prep')), app: num(g('app')), rim: num(g('rim')) };
-          const o = old.kit[+tr.dataset.ki];
-          if (o && o.fx && !globCh && JSON.stringify(o.q) === JSON.stringify(q) && num(o.prep) === k.prep) k.fx = o.fx; // il prezzo scritto a mano resta solo se nulla è cambiato
-          N.kit.push(k);
+        read();
+        const mats = M.mat.map((m, j) => ({ j, cod: String(m.cod || '').trim() || String(m.n || '').trim().toUpperCase(), n: String(m.n || '').trim() || String(m.cod || '').trim(), c: num(m.c), tape: !!m.tape })).filter(m => m.cod);
+        const dup = mats.find((m, i) => mats.findIndex(x => x.cod === m.cod) !== i); if (dup) return toast(`Due materiali hanno lo stesso codice ${dup.cod}`);
+        if (!mats.length) return toast('Serve almeno un materiale');
+        const N = { ricarico: num(fd.get('ricarico')) || 1, transferta: num(fd.get('transferta')), nota: String(fd.get('nota') || '').trim(), mat: mats.map(({ j, ...m }) => m), kit: [], sing: [] };
+        M.kit.forEach(k => {
+          const n = String(k.n || '').trim(); if (!n) return;
+          const q = {}; mats.forEach(m => { const v = num(k._q[m.j]); if (v) q[m.cod] = v; });
+          const o = { cod: String(k.cod || '').trim(), n, q, prep: num(k.prep), app: num(k.app), rim: num(k.rim) };
+          if (k._fx !== '' && k._fx != null) o.fx = String(k._fx) === String(k._fx0) && k.fx ? k.fx : { fattura: num(k._fx) };
+          N.kit.push(o);
         });
-        $$('#tr-sb .tr-pr3').forEach(r => { const n = $('[data-sf="n"]', r).value.trim(); if (!n) return; N.sing.push({ cod: $('[data-sf="cod"]', r).value.trim(), n, p: num($('[data-sf="p"]', r).value) }); });
         if (!N.kit.length) return toast('Serve almeno un kit');
-        setConfig('trKit', N); trAnim = true; toast('Listino salvato'); return true;
+        M.sing.forEach(s => { const n = String(s.n || '').trim(); if (n) N.sing.push({ cod: String(s.cod || '').trim(), n, p: num(s.p) }); });
+        trSave(N); return true;
       }, null, 'Salva listino');
     $('#sheet-form').classList.add('wide', 'xwide');
-    $('#tr-kadd').onclick = () => { $('#tr-kb').insertAdjacentHTML('beforeend', kitRow({ n: '', cod: '', q: {}, prep: '', app: '', rim: '' }, -1)); const l = $$('#tr-kb [data-kf="n"]'); l[l.length - 1].focus(); };
-    $('#tr-sadd').onclick = () => { $('#tr-sb').insertAdjacentHTML('beforeend', singRow({})); const l = $$('#tr-sb [data-sf="cod"]'); l[l.length - 1].focus(); };
-    $('#sheet-body').addEventListener('click', e => { const k = e.target.closest('[data-kdel]'); if (k) { k.closest('tr').remove(); return; } const s = e.target.closest('[data-sdel]'); if (s) s.closest('.tr-pr3').remove(); });
+    const body = $('#sheet-body .tr-sw');
+    const drawM = () => { $('#tr-fm').innerHTML = `<div class="tr-mh"><span>Codice</span><span>Nome</span><span>€/m² fornitore</span><span>Tipo</span><span></span></div>` + M.mat.map((m, j) => `<div class="tr-mr" data-j="${j}"><input data-m="cod" value="${esc(m.cod || '')}" placeholder="Codice"><input data-m="n" value="${esc(m.n || '')}" placeholder="Nome">${trIn('data-m="c"', m.c, '€/m²')}<select data-m="tape"><option value="0">Pellicola</option><option value="1"${m.tape ? ' selected' : ''}>Application tape</option></select><button type="button" class="icon-btn tr-lx" data-mdel="${j}" aria-label="Togli materiale">×</button></div>`).join(''); };
+    const drawK = () => { $('#tr-fk').innerHTML = `<div class="tr-mxw"><table class="tr-mx tr-kt"><thead><tr><th class="tr-c0">Kit</th><th>Codice</th>${M.mat.map(m => `<th>${esc(m.n || m.cod || 'nuovo')} m²</th>`).join('')}<th>Prep. €</th><th>Applic. €</th><th>Rimoz. €</th><th>Totale fisso €</th><th></th></tr></thead><tbody>${M.kit.map((k, i) => `<tr data-i="${i}"><td><input data-k="n" value="${esc(k.n || '')}" placeholder="Nome kit"></td><td><input data-k="cod" value="${esc(k.cod || '')}" placeholder="—" class="tr-in-s"></td>${M.mat.map((m, j) => `<td>${trIn(`data-kq="${j}"`, k._q[j], '0', 'tr-in-n')}</td>`).join('')}<td>${trIn('data-k="prep"', k.prep, '0', 'tr-in-n')}</td><td>${trIn('data-k="app"', k.app, '0', 'tr-in-n')}</td><td>${trIn('data-k="rim"', k.rim, '0', 'tr-in-n')}</td><td>${trIn('data-k="_fx"', k._fx, 'calcolato', 'tr-in-n tr-in-fx')}</td><td><button type="button" class="icon-btn tr-lx" data-kdel="${i}" aria-label="Togli kit">×</button></td></tr>`).join('')}</tbody></table></div>`; };
+    const drawS = () => { $('#tr-fs').innerHTML = M.sing.map((s, i) => `<div class="tr-pr3" data-s="${i}"><input data-sf="cod" value="${esc(s.cod || '')}" placeholder="Codice"><input data-sf="n" value="${esc(s.n || '')}" placeholder="Articolo">${trIn('data-sf="p"', s.p, '€')}<button type="button" class="icon-btn tr-lx" data-sdel="${i}" aria-label="Togli articolo">×</button></div>`).join('') || '<div class="muted small">Nessun articolo singolo</div>'; };
+    function read() {
+      $$('#tr-fm .tr-mr').forEach(el => { const m = M.mat[+el.dataset.j]; if (!m) return; m.cod = $('[data-m="cod"]', el).value; m.n = $('[data-m="n"]', el).value; m.c = trNum($('[data-m="c"]', el).value); m.tape = $('[data-m="tape"]', el).value === '1'; });
+      $$('#tr-fk tbody tr').forEach(el => { const k = M.kit[+el.dataset.i]; if (!k) return; k.n = $('[data-k="n"]', el).value; k.cod = $('[data-k="cod"]', el).value; ['prep', 'app', 'rim', '_fx'].forEach(f => { k[f] = trNum($(`[data-k="${f}"]`, el).value); }); $$('[data-kq]', el).forEach(x => { k._q[+x.dataset.kq] = trNum(x.value); }); });
+      $$('#tr-fs .tr-pr3').forEach(el => { const s = M.sing[+el.dataset.s]; if (!s) return; s.cod = $('[data-sf="cod"]', el).value; s.n = $('[data-sf="n"]', el).value; s.p = trNum($('[data-sf="p"]', el).value); });
+    }
+    drawM(); drawK(); drawS();
+    const focusLast = sel => { const l = $$(sel, body); if (l.length) l[l.length - 1].focus(); };
+    $('#tr-madd').onclick = () => { read(); M.mat.push({ cod: '', n: '', c: '', tape: false }); M.kit.forEach(k => k._q.push('')); drawM(); drawK(); focusLast('#tr-fm [data-m="cod"]'); };
+    $('#tr-kadd').onclick = () => { read(); M.kit.push({ n: '', cod: '', _q: M.mat.map(() => ''), prep: '', app: '', rim: '', _fx: '', _fx0: '' }); drawK(); focusLast('#tr-fk [data-k="n"]'); const w = $('#tr-fk .tr-mxw'); if (w) w.scrollTop = w.scrollHeight; };
+    $('#tr-sadd').onclick = () => { read(); M.sing.push({ cod: '', n: '', p: '' }); drawS(); focusLast('#tr-fs [data-sf="cod"]'); };
+    $('#tr-reset').onclick = () => { if (!confirm('Tornare al listino del file originale? Le modifiche fatte qui andranno perse.')) return; trSave(JSON.parse(JSON.stringify(TR_DEF)), 'Listino originale ripristinato'); closeSheet(); };
+    body.addEventListener('change', e => { if (e.target.dataset.m === 'n' || e.target.dataset.m === 'cod') { read(); drawK(); } });
+    body.addEventListener('click', e => {
+      const md = e.target.closest('[data-mdel]'); if (md) { read(); const j = +md.dataset.mdel, m = M.mat[j]; if (M.kit.some(k => num(k._q[j])) && !confirm(`Il materiale «${m.n || m.cod}» è usato nei kit: toglierlo?`)) return; M.mat.splice(j, 1); M.kit.forEach(k => k._q.splice(j, 1)); drawM(); drawK(); return; }
+      const kd = e.target.closest('[data-kdel]'); if (kd) { read(); const k = M.kit[+kd.dataset.kdel]; if (k.n && !confirm(`Togliere «${k.n}» dal listino?`)) return; M.kit.splice(+kd.dataset.kdel, 1); drawK(); return; }
+      const sd = e.target.closest('[data-sdel]'); if (sd) { read(); M.sing.splice(+sd.dataset.sdel, 1); drawS(); }
+    });
+  }
+  // un solo kit (comodo sul telefono); i = -1 per un kit nuovo
+  function trKitForm(i) {
+    const D = trClone(), isNew = !(i >= 0 && D.kit[i]);
+    const k = isNew ? { cod: '', n: '', q: {}, prep: '', app: '', rim: '' } : D.kit[i];
+    const fx0 = k.fx && k.fx.fattura != null ? k.fx.fattura : '';
+    openSheet(isNew ? 'Nuovo kit' : 'Modifica · ' + trShort(k.n), `<div class="tr-sw">
+      <div class="f-row"><label class="f"><span>Nome del kit</span><input name="n" required value="${esc(k.n)}" placeholder="Es. Kit Torental Furgone" data-focus></label><label class="f"><span>Codice</span><input name="cod" value="${esc(k.cod || '')}" placeholder="facoltativo"></label></div>
+      <div class="cf-sub" style="margin:4px 0 8px">Materiale · m² per kit</div>
+      <div class="tr-mats">${D.mat.map(m => `<label class="f"><span>${esc(m.n)} <em class="muted">${esc(m.cod)} · ${esc(eur(num(m.c)))}/m²</em></span>${trIn(`name="q_${esc(m.cod)}"`, (k.q || {})[m.cod], '0')}</label>`).join('')}</div>
+      <div class="f-row tr-f4"><label class="f"><span>Preparazione €</span>${trIn('name="prep"', k.prep, '0')}</label><label class="f"><span>Applicazione €</span>${trIn('name="app"', k.app, '0')}</label><label class="f"><span>Rimozione €</span>${trIn('name="rim"', k.rim, '0')}</label><label class="f"><span>Totale fisso €</span>${trIn('name="fx"', fx0, 'calcolato')}</label></div>
+      <div class="iva-sum" id="tr-kprev"></div></div>`,
+      fd => {
+        const n = String(fd.get('n') || '').trim(); if (!n) return toast('Scrivi il nome del kit');
+        const q = {}; D.mat.forEach(m => { const v = num(fd.get('q_' + m.cod)); if (v) q[m.cod] = v; });
+        const o = { cod: String(fd.get('cod') || '').trim(), n, q, prep: num(fd.get('prep')), app: num(fd.get('app')), rim: num(fd.get('rim')) };
+        const fx = String(fd.get('fx') || '').trim(); if (fx !== '') o.fx = String(num(fx)) === String(fx0) && k.fx ? k.fx : { fattura: num(fx) };
+        if (isNew) D.kit.push(o); else D.kit[i] = o;
+        trSave(D, isNew ? 'Kit aggiunto' : 'Kit aggiornato'); return true;
+      }, isNew ? null : () => { if (D.kit.length < 2) return toast('Serve almeno un kit'); if (!confirm(`Togliere «${trShort(k.n)}» dal listino?`)) return; D.kit.splice(i, 1); trSave(D, 'Kit tolto'); return true; });
+    const prev = () => {
+      const fd = new FormData($('#sheet-form')), q = {}; D.mat.forEach(m => { const v = num(fd.get('q_' + m.cod)); if (v) q[m.cod] = v; });
+      const fx = String(fd.get('fx') || '').trim(), c = trCalc({ q, prep: num(fd.get('prep')), app: num(fd.get('app')), rim: num(fd.get('rim')), fx: fx !== '' ? { fattura: num(fx) } : null }, D);
+      $('#tr-kprev').innerHTML = `<div><span>Costo materiale</span><b>${esc(eur(c.mat))}</b></div><div><span>Prezzo materiale (× ${fmtNum(num(D.ricarico), 2).replace(/,00$/, '')})</span><b>${esc(eur(c.prezzo))}</b></div><div><span>Calcolato con le formule</span><b>${esc(eur(c.calc.fattura))}</b></div><div class="t"><span>Totale fattura kit</span><b>${esc(eur(c.fattura))}</b></div>`;
+    };
+    prev(); $('#sheet-body .tr-sw').addEventListener('input', prev);
+  }
+  // un solo articolo singolo; i = -1 per uno nuovo
+  function trSingForm(i) {
+    const D = trClone(), isNew = !(i >= 0 && D.sing[i]), s = isNew ? { cod: '', n: '', p: '' } : D.sing[i];
+    openSheet(isNew ? 'Nuovo articolo singolo' : 'Modifica articolo', `
+      <div class="f-row"><label class="f"><span>Codice</span><input name="cod" value="${esc(s.cod || '')}" placeholder="Es. TOR.POR" data-focus></label><label class="f"><span>Prezzo € (IVA esclusa)</span>${trIn('name="p"', s.p, '0')}</label></div>
+      <label class="f"><span>Articolo</span><input name="n" required value="${esc(s.n || '')}"></label>`,
+      fd => { const n = String(fd.get('n') || '').trim(); if (!n) return toast('Scrivi il nome dell\'articolo'); const o = { cod: String(fd.get('cod') || '').trim(), n, p: num(fd.get('p')) }; if (isNew) D.sing.push(o); else D.sing[i] = o; trSave(D, isNew ? 'Articolo aggiunto' : 'Articolo aggiornato'); return true; },
+      isNew ? null : () => { if (!confirm(`Togliere «${s.n}»?`)) return; D.sing.splice(i, 1); trSave(D, 'Articolo tolto'); return true; });
   }
   function trFix(i) {
     const D = JSON.parse(JSON.stringify(trData())), k = D.kit[i]; if (!k) return;
@@ -3191,6 +3248,9 @@
       if (t.closest('#tr-mod')) { trForm(); return; }
       if (t.closest('#tr-copy')) { trCopy(); return; }
       const trfx = t.closest('[data-trfix]'); if (trfx) { trFix(+trfx.dataset.trfix); return; }
+      if (t.closest('[data-trnewkit]')) { trKitForm(-1); return; }
+      const trsg = t.closest('[data-trsing]'); if (trsg && !t.closest('#sheet')) { trSingForm(+trsg.dataset.trsing); return; }
+      if (t.closest('[data-trmat]')) { trForm(); return; }
       const trk = t.closest('[data-trkit]'); if (trk && !t.closest('#sheet')) { trKitDetail(+trk.dataset.trkit); return; }
       if (t.closest('#ga-imp')) { importGas(); return; }
       if (t.closest('#ga-xls')) { exportGas(); return; }

@@ -1180,3 +1180,22 @@ body.has-sel .fab { display: none; }
 .tr-pr3 input { min-width: 0; }
 /* menu: 7 voci sul telefono */
 @media (max-width: 899px) { .nav a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; } .nav a { padding-left: 2px; padding-right: 2px; } }
+/* Torental: modifica completa */
+.tr-fh { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 16px 0 8px; }
+.tr-mh, .tr-mr { display: grid; grid-template-columns: 110px minmax(0, 1fr) 110px 150px 32px; gap: 6px; align-items: center; }
+.tr-mh { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 0 2px 4px; }
+.tr-mr { padding: 3px 0; } .tr-mr input, .tr-mr select { min-width: 0; }
+@media (max-width: 639px) { .tr-mh { display: none; } .tr-mr { grid-template-columns: 1fr 1fr 32px; padding: 8px 0; border-bottom: 1px solid var(--line); } .tr-mr [data-m="cod"] { grid-column: 1; } .tr-mr [data-m="n"] { grid-column: 2; } .tr-mr .tr-lx { grid-column: 3; grid-row: 1; } }
+.tr-mx .tr-in-fx { width: 96px; border-style: dashed !important; }
+.tr-reset { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+.tr-reset .link { background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--danger); cursor: pointer; text-decoration: underline; }
+.tr-f4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+@media (max-width: 559px) { .tr-f4 { grid-template-columns: 1fr 1fr !important; } }
+.tr-mats em { font-style: normal; font-size: 11px; font-weight: 500; }
+.tk-add { align-items: center; justify-content: center; text-align: center; background: transparent; border: 1.5px dashed color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: var(--radius, 16px); min-height: 180px; color: var(--accent); box-shadow: none; }
+.tk-add:hover { background: var(--accent-soft); }
+.tk-plus { width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; font-size: 24px; font-weight: 600; }
+.tk-add small { color: var(--muted); font-size: 12px; }
+.tr-si[data-trsing], .tr-si[data-trmat] { cursor: pointer; transition: background .15s; }
+.tr-si[data-trsing]:hover, .tr-si[data-trmat]:hover { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+#tr-body .card-h { flex-wrap: wrap; gap: 6px 12px; } #tr-body .card-h > .btn { margin-left: auto; }
