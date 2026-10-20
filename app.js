@@ -2353,11 +2353,14 @@
   const AREAS = [
     { k: 'att', t: 'Attrezzatura', go: 'attrezzatura', ic: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>' },
     { k: 'gls', t: 'Spedizioni GLS', go: 'gls', ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' },
-    { k: 'gas', t: 'Gasolio e noleggi', go: 'gasolio', ic: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/>' }
+    { k: 'gas', t: 'Gasolio e noleggi', go: 'gasolio', ic: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/>' },
+    { k: 'ly', t: 'Lyreco', go: 'lyreco', ic: '<path d="M9 4h6v3H9z"/><path d="M15 5h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3M9 12h6M9 16h4"/>' },
+    { k: 'am', t: 'Amazon', go: 'amazon', ic: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10M7.5 5l9 4"/>' }
   ];
-  const ovMonthOf = { att: r => validD(r.data) ? String(r.data).slice(0, 7) : '', gls: r => r.mese || '', gas: r => String(r.data || '').slice(0, 7) };
-  const ovRows = () => ({ att: db.movimenti || [], gls: glsRows(), gas: gasRows() });
-  const ovVal = { att: arr => sumT(arr), gls: arr => gTot(arr) * gMul(), gas: (arr, m) => (gCost(arr) + gasRentTot() * rentMonths(m).length) * gMul() };
+  const ovMonthOf = { att: r => validD(r.data) ? String(r.data).slice(0, 7) : '', gls: r => r.mese || '', gas: r => String(r.data || '').slice(0, 7), ly: r => String(r.data || '').slice(0, 7), am: o => String(o.data || '').slice(0, 7) };
+  const ovRows = () => ({ att: db.movimenti || [], gls: glsRows(), gas: gasRows(), ly: lyRows(), am: amOrd() });
+  const ovVal = { att: arr => sumT(arr), gls: arr => gTot(arr) * gMul(), gas: (arr, m) => (gCost(arr) + gasRentTot() * rentMonths(m).length) * gMul(), ly: arr => lySum(arr), am: arr => amSum(arr) };
+  const ovShort = { att: 'Attrezzatura', gls: 'GLS', gas: 'Gasolio', ly: 'Lyreco', am: 'Amazon', fat: 'Fatture' };
   function renderOverview() {
     const D = ovRows();
     const months = [...new Set(AREAS.flatMap(a => D[a.k].map(ovMonthOf[a.k])).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
@@ -2365,125 +2368,171 @@
     $('#ov-per').innerHTML = `<option value=""${ovP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === ovP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
     const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(ovP);
     $('#ov-prev').disabled = ix >= opts.length - 1; $('#ov-next').disabled = ix <= 0;
-    sub(`${ivaLbl()} · attrezzatura, spedizioni e gasolio`);
+    sub(`${ivaLbl()} · tutte le aree di spesa`);
     const pick = (k, m) => m ? D[k].filter(r => ovMonthOf[k](r) === m) : D[k];
-    const P = {}; AREAS.forEach(a => { P[a.k] = pick(a.k, ovP); });
-    const V = {}; AREAS.forEach(a => { V[a.k] = ovVal[a.k](P[a.k], ovP); });
-    const T = V.att + V.gls + V.gas;
+    const P = {}, V = {};
+    AREAS.forEach(a => { P[a.k] = pick(a.k, ovP); V[a.k] = ovVal[a.k](P[a.k], ovP); });
+    const T = AREAS.reduce((s, a) => s + V[a.k], 0);
     const prevK = ovP ? months[months.indexOf(ovP) - 1] : null;
     const PV = prevK ? AREAS.reduce((o, a) => (o[a.k] = ovVal[a.k](pick(a.k, prevK), prevK), o), {}) : null;
-    const PT = PV ? PV.att + PV.gls + PV.gas : 0;
+    const PT = PV ? AREAS.reduce((s, a) => s + PV[a.k], 0) : 0;
     const lit = gSum(P.gas, 'litri'), noPrice = P.gas.length && !P.gas.some(r => gPrezzo(r) > 0);
     const per = ovP ? mLabel(ovP) : months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : 'nessun dato';
     const anim = ovAnim && !reduced(); ovAnim = false;
     const body = $('#ov-body');
     body.classList.toggle('cc-anim', anim);
-    const byM = months.map(m => { const o = { m }; AREAS.forEach(a => { o[a.k] = ovVal[a.k](pick(a.k, m), m); }); o.t = o.att + o.gls + o.gas; return o; });
+    const byM = months.map(m => { const o = { m }; AREAS.forEach(a => { o[a.k] = ovVal[a.k](pick(a.k, m), m); }); o.t = AREAS.reduce((s, a) => s + o[a.k], 0); return o; });
     const undated = sumT(D.att.filter(r => !validD(r.data)));
     const top = byM.slice().sort((a, b) => b.t - a.t)[0];
     const avgM = byM.length ? byM.reduce((s, x) => s + x.t, 0) / byM.length : 0;
     const dPct = (a, b) => b ? (a / b - 1) * 100 : null;
-    const dChip = (a, b, cls = '') => { const p = dPct(a, b); if (p == null || !isFinite(p)) return ''; return `<span class="ov-d ${p > 0 ? 'up' : 'down'} ${cls}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}%</span>`; };
-    // controlli
-    const zero = P.att.filter(r => !num(r.prezzo)).length;
-    const glsBad = P.gls.filter(r => r.contratto === 'C2' && num(r.kgTass) < 30).length, glsNoD = P.gls.filter(r => r.gg === '' || r.gg == null).length;
-    const gasNoKm = P.gas.filter(r => !num(r.km)).length, gasNoOp = P.gas.filter(r => !String(r.operatore || '').trim() || String(r.operatore).trim() === '?').length;
+    const dChip = (a, b) => { const p = dPct(a, b); if (p == null || !isFinite(p)) return ''; return `<span class="ov-d ${p > 0 ? 'up' : 'down'}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}%</span>`; };
+    const mName = k => MESI[Number(k.slice(5)) - 1].replace(/^./, c => c.toUpperCase());
     P.fat = ovP ? faRows().filter(r => String(r.data).slice(0, 7) === ovP) : faRows();
-    const CK = allChecks(P, ovP), AL = CK, OVA = { att: 'Attrezzatura', gls: 'GLS', gas: 'Gasolio', fat: 'Fatture' };
-    const ckW = CK.filter(x => x.t === 'warn').length;
-    // sparkline per area
+    const CK = allChecks(P, ovP), ckW = CK.filter(x => x.t === 'warn').length;
+    const lyDocsN = new Set(P.ly.map(r => r.fattura)).size, amA = amArts(P.am);
+    const nDocs = P.att.length + P.gls.length + P.gas.length + lyDocsN + P.am.length;
+    const active = AREAS.filter(a => V[a.k] > 0 || P[a.k].length);
+    // sparkline
     const spark = (k, i) => {
-      const vals = byM.map(x => x[k]); if (vals.length < 2) return '';
-      const mx = Math.max(...vals, 1), w = 200, h = 44, st = w / (vals.length - 1);
-      const pts = vals.map((v, j) => [j * st, h - 4 - (v / mx) * (h - 10)]);
+      const vals = byM.map(x => x[k]); if (vals.length < 2) return '<div class="db-spk0"></div>';
+      const mx = Math.max(...vals, 1), w = 200, h = 40, st = w / (vals.length - 1);
+      const pts = vals.map((v, j) => [j * st, h - 3 - (v / mx) * (h - 8)]);
       const d = pts.map((p, j) => `${j ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
       const sel = ovP ? months.indexOf(ovP) : -1;
-      return `<svg class="ov-spark" viewBox="-4 0 208 ${h}" preserveAspectRatio="none"><path class="ov-sa a-${k}" d="${d} L200 ${h} L0 ${h} Z"/><path class="ov-sl a-${k}" pathLength="1" style="--d:${400 + i * 120}ms" d="${d}"/>${sel >= 0 ? `<circle class="ov-sd a-${k}" cx="${pts[sel][0].toFixed(1)}" cy="${pts[sel][1].toFixed(1)}" r="3.2"/>` : ''}</svg>`;
+      return `<svg class="ov-spark db-spark" viewBox="-4 0 208 ${h}" preserveAspectRatio="none" aria-hidden="true"><path class="ov-sa" d="${d} L200 ${h} L0 ${h} Z"/><path class="ov-sl" pathLength="1" style="--d:${400 + i * 100}ms" d="${d}"/>${sel >= 0 ? `<circle class="ov-sd" cx="${pts[sel][0].toFixed(1)}" cy="${pts[sel][1].toFixed(1)}" r="3.2"/>` : ''}</svg>`;
     };
     const stats = {
-      att: () => { const cc = new Set(P.att.map(r => r.centro).filter(Boolean)).size; return [[fmtNum(P.att.length, 0), 'righe'], [cc, 'centri'], [fmtNum(new Set(P.att.map(prodKey)).size, 0), 'prodotti']]; },
-      gls: () => [[P.gls.length, 'spedizioni'], [fmtNum(gSum(P.gls, 'kgTass'), 0) + ' kg', 'tassabili'], [gSum(P.gls, 'kgTass') ? fmtNum(gTot(P.gls) / gSum(P.gls, 'kgTass') * gMul(), 3) + ' €' : '—', 'al kg']],
-      gas: () => [[fmtNum(lit, 0) + ' L', 'litri'], [P.gas.length, 'pieni'], [eur0(gasRentTot() * rentMonths(ovP).length * gMul()), 'noleggi']]
+      att: () => [[fmtNum(P.att.length, 0), 'righe'], [new Set(P.att.map(r => r.centro).filter(Boolean)).size, 'centri']],
+      gls: () => [[fmtNum(P.gls.length, 0), 'spedizioni'], [gSum(P.gls, 'kgTass') ? fmtNum(gTot(P.gls) / gSum(P.gls, 'kgTass') * gMul(), 2) + ' €' : '—', 'al kg']],
+      gas: () => [[fmtNum(lit, 0) + ' L', 'litri'], [eur0(gasRentTot() * rentMonths(ovP).length * gMul()), 'noleggi']],
+      ly: () => [[lyDocsN, 'fatture'], [new Set(P.ly.map(r => r.cdc || LY_NONE).filter(c => c !== LY_NONE)).size, 'piazzali']],
+      am: () => [[P.am.length, 'ordini'], [new Set(P.am.map(o => o.cdc || LY_NONE).filter(c => c !== LY_NONE)).size, 'piazzali']]
     };
+    const note = {
+      gas: () => noPrice ? 'solo noleggi · prezzo €/L da impostare' : '',
+      att: () => !ovP && undated ? `${eur0(undated)} senza data` : '',
+      am: () => { const e = P.am.filter(amEst).length; return e ? `${e} ordini con IVA stimata` : ''; },
+      ly: () => { const n = P.ly.filter(r => (r.cdc || LY_NONE) === LY_NONE).length; return n ? `${n} righe da attribuire` : ''; },
+      gls: () => ''
+    };
+    // forniture per piazzale (Lyreco + Amazon)
+    const pz = lyCdcList().map(c => ({ c, ly: lySum(P.ly.filter(r => (r.cdc || LY_NONE) === c.cod)), am: amSum(P.am.filter(o => (o.cdc || LY_NONE) === c.cod)) })).map(x => ({ ...x, t: x.ly + x.am })).filter(x => x.t > 0).sort((a, b) => (a.c.cod === LY_NONE) - (b.c.cod === LY_NONE) || b.t - a.t);
+    const pzT = pz.reduce((s, x) => s + x.t, 0), pzM = Math.max(1, ...pz.map(x => x.t));
+    // fatture e Torental
+    const F = P.fat, open = F.filter(r => !faPaid(r)), late = F.filter(faLate);
+    let TK = null; try { const TD = trData(); if (TD && TD.kit && TD.kit.length) { const pr = TD.kit.map(k => trCalc(k, TD).fattura).filter(v => v > 0); TK = { n: TD.kit.length, s: (TD.sing || []).length, min: Math.min(...pr), max: Math.max(...pr), tr: num(TD.transferta), kits: TD.kit.map(k => ({ n: trShort(k.n), cod: k.cod, p: trCalc(k, TD).fattura })).sort((a, b) => b.p - a.p) }; } } catch { TK = null; }
+
     body.innerHTML = `
-      <div class="gl-hero ov-hero">
-        <div class="gh-top"><div class="gh-art">${ovArt(AREAS.map(a => T ? V[a.k] / T : 1 / 3))}</div>
-        <div class="gh-main">
-          <span class="gh-lbl">Spesa totale · ${esc(per)}</span>
-          <div class="gh-big k-ovt">0 €</div>
-          <div class="gh-sub">${AREAS.map(a => `<span class="ov-chip"><i class="a-${a.k}"></i>${a.t.replace('Spedizioni ', '')} ${T ? fmtNum(pct(V[a.k], T), 0) : 0}%</span>`).join('')}${PV ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs(dPct(T, PT) || 0), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div>
-        </div></div>
-        <div class="ov-stack">${AREAS.map(a => `<i class="a-${a.k}" style="flex:${Math.max(V[a.k], T * .004) || 1}" title="${esc(a.t)}: ${esc(eur(V[a.k]))}"></i>`).join('')}</div>
-        <div class="gh-kpis">
-          ${AREAS.map((a, i) => `<div class="gh-k"><span><i class="ov-dot a-${a.k}"></i>${a.t}</span><b data-ovk="${i}">0 €</b><small>${a.k === 'gas' && noPrice ? 'solo noleggi · prezzo €/L da impostare' : (T ? fmtNum(pct(V[a.k], T), 1) + '% del totale' : '—')}</small></div>`).join('')}
-          <div class="gh-k"><span>Media mensile</span><b data-ovk="3">0 €</b><small>${byM.length} mesi con dati</small></div>
-          <div class="gh-k"><span>Mese più costoso</span><b>${top ? esc(MESI[Number(top.m.slice(5)) - 1].replace(/^./, c => c.toUpperCase())) : '—'}</b><small>${top ? esc(eur0(top.t)) : ''}</small></div>
-          <div class="gh-k"><span>Da controllare</span><b data-ovk="4">0</b><small>${AL.length ? `${ckW} importanti` : 'tutto in ordine'}</small></div>
+      <div class="gl-hero db-hero">
+        <div class="db-top">
+          <div class="db-hl">
+            <span class="gh-lbl">Spesa totale · ${esc(per)}</span>
+            <div class="gh-big k-ovt">0 €</div>
+            <div class="gh-sub"><span>${ivaLbl()}</span><span>${active.length} ${active.length === 1 ? 'area' : 'aree'} con spese</span>${PV ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs(dPct(T, PT) || 0), 0)}% rispetto a ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div>
+          </div>
+          <div class="db-hr">
+            <div class="db-mix">${AREAS.map(a => V[a.k] > 0 ? `<i class="h-${a.k}" style="flex:${V[a.k]}" title="${esc(a.t)}: ${esc(eur(V[a.k]))}"></i>` : '').join('')}</div>
+            <div class="db-mixl">${AREAS.map(a => `<a class="db-mr" href="#${a.go}"><i class="h-${a.k}"></i><span>${ovShort[a.k]}</span><b>${eur0(V[a.k])}</b><em>${T ? fmtNum(pct(V[a.k], T), 0) : 0}%</em></a>`).join('')}</div>
+          </div>
+        </div>
+        <div class="gh-kpis db-kpis">
+          <div class="gh-k"><span>Media mensile</span><b data-ovk="0">0 €</b><small>${byM.length} ${byM.length === 1 ? 'mese' : 'mesi'} con dati</small></div>
+          <div class="gh-k"><span>Mese più alto</span><b>${top ? esc(mName(top.m)) : '—'}</b><small>${top ? esc(eur0(top.t)) : ''}</small></div>
+          <div class="gh-k"><span>Documenti registrati</span><b data-ovk="1">0</b><small>acquisti, spedizioni, pieni, fatture e ordini</small></div>
+          <div class="gh-k"><span>Da controllare</span><b data-ovk="2">0</b><small>${CK.length ? `${ckW} importanti` : 'tutto in ordine'}</small></div>
         </div>
       </div>
-      <div class="ov-areas">${AREAS.map((a, i) => { const st = stats[a.k]();
-        return `<a class="card ov-area" href="#${a.go}" style="--d:${150 + i * 90}ms">
-          <div class="ov-ah"><span class="ov-ic a-${a.k}"><svg viewBox="0 0 24 24">${a.ic}</svg></span><span class="ov-at">${a.t}</span><span class="ov-go">Apri<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
-          <div class="ov-av"><b data-ova="${i}">0 €</b>${PV ? dChip(V[a.k], PV[a.k]) : ''}</div>
-          ${a.k === 'gas' && noPrice ? `<div class="ov-note">noleggi · ${fmtNum(lit, 0)} litri ancora senza prezzo</div>` : `<div class="ov-note">${T ? fmtNum(pct(V[a.k], T), 1) : 0}% della spesa${ovP ? '' : a.k === 'att' && undated ? ` · ${eur0(undated)} senza data` : ` · media ${eur0(byM.length ? byM.reduce((s, x) => s + x[a.k], 0) / byM.length : 0)}/mese`}</div>`}
+
+      <div class="db-areas">${AREAS.map((a, i) => { const st = stats[a.k](), nt = note[a.k]();
+        return `<a class="card db-area a-${a.k}" href="#${a.go}" style="--d:${120 + i * 70}ms">
+          <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24">${a.ic}</svg></span><span class="db-at"><span class="lb-d">${a.t}</span><span class="lb-m">${ovShort[a.k]}</span></span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+          <div class="db-av"><b data-ova="${i}">0 €</b></div>
+          <div class="db-am">${PV ? dChip(V[a.k], PV[a.k]) : ''}<span>${T ? fmtNum(pct(V[a.k], T), 1) : 0}% del totale</span></div>
           ${spark(a.k, i)}
-          <div class="ov-as">${st.map(([v, l]) => `<div><b>${esc(String(v))}</b><small>${l}</small></div>`).join('')}</div>
-        </a>`; }).join('')}${(() => { const F = P.fat, open = F.filter(r => !faPaid(r)), late = F.filter(faLate); return `<a class="card ov-area a-fat" href="#fatture" style="--d:420ms">
-          <div class="ov-ah"><span class="ov-ic a-fat"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><span class="ov-at">Fatture fornitori</span><span class="ov-go">Apri<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
-          <div class="ov-av"><b>${eur0(open.reduce((a, r) => a + num(r.totale), 0))}</b>${late.length ? `<span class="ov-d up">${late.length} ${late.length === 1 ? "scaduta" : "scadute"}</span>` : ''}</div>
-          <div class="ov-note">da pagare · non sommate alla spesa (sono già negli acquisti)</div>
-          <div class="ov-fbar">${F.length ? `<i style="flex:${F.length - open.length}" class="pd"></i><i style="flex:${open.length - late.length}" class="op"></i><i style="flex:${late.length}" class="lt"></i>` : ''}</div>
-          <div class="ov-as"><div><b>${F.length}</b><small>fatture</small></div><div><b>${eur0(F.reduce((a, r) => a + faV(r), 0))}</b><small>fatturato</small></div><div><b>${F.filter(r => faLink(r).ok).length}/${F.length}</b><small>verificate</small></div></div>
-        </a>`; })()}</div>
-      <div class="card ov-trend"><div class="card-h"><h3>Spesa mese per mese</h3>${!ovP && undated ? `<span class="muted small">${esc(eur0(undated))} di attrezzatura senza data non sono nel grafico</span>` : ''}<span class="ov-leg">${AREAS.map(a => `<span><i class="a-${a.k}"></i>${a.t}</span>`).join('')}</span></div><div class="ov-bars" id="ov-bars"></div></div>
-      <div class="card ov-ck" id="ov-ck"><div class="card-h"><h3>Cose da verificare</h3><span class="muted small">${CK.length ? `${CK.length} punti · ${ckW} importanti` : 'tutto coincide'}</span></div>
-        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'fat'].map(k => [k, OVA[k], CK.filter(x => x.a === k).length])].map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}"${n || !k ? '' : ' disabled'}>${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
-        ${CK.length ? `<div class="ov-cl">${CK.map((x, i) => `<button type="button" class="ov-ci ${x.t}" data-ovgo="${x.go}" data-cka="${x.a}" style="--d:${150 + Math.min(i, 12) * 45}ms"><span class="ov-cl-l"></span><span class="ov-cm"><span class="ov-ct"><em class="ov-tag t-${x.a}">${OVA[x.a]}</em><b>${x.h}</b></span><small>${x.d}</small></span><b class="ov-cv">${x.v}</b><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>` : '<div class="empty">Tutto coincide: nessuna anomalia trovata</div>'}</div>
-      <div class="ov-2">
-        <div class="card ov-aic" id="ov-ai"></div>
-        <div class="card"><div class="card-h"><h3>Ultimi movimenti</h3><span class="muted small">tutte le aree</span></div><div class="ov-feed" id="ov-feed"></div></div>
+          <div class="db-as">${st.map(([v, l]) => `<div><b>${esc(String(v))}</b><small>${l}</small></div>`).join('')}</div>
+          ${nt ? `<div class="db-an">${esc(nt)}</div>` : ''}
+        </a>`; }).join('')}</div>
+
+      <div class="db-row">
+        <div class="card ov-trend"><div class="card-h"><h3>Spesa mese per mese</h3><span class="muted small">${ivaLbl()} · tocca un mese per vederlo</span></div>
+          <div class="ov-bars" id="ov-bars"></div>
+          <div class="ov-leg db-leg">${AREAS.map(a => `<span class="a-${a.k}"><i></i>${ovShort[a.k]}</span>`).join('')}${!ovP && undated ? `<span class="muted">${esc(eur0(undated))} di attrezzatura senza data non sono nel grafico</span>` : ''}</div></div>
+        <div class="card db-split"><div class="card-h"><h3>Peso delle aree</h3><span class="muted small">${esc(ovP ? mLabel(ovP) : 'tutto il periodo')}</span></div>
+          ${AREAS.slice().sort((a, b) => V[b.k] - V[a.k]).map((a, i) => `<a class="db-sr a-${a.k}" href="#${a.go}" style="--d:${200 + i * 60}ms">
+            <span class="db-st"><b>${a.t}</b><span><em>${T ? fmtNum(pct(V[a.k], T), 1) : 0}%</em><strong>${eur0(V[a.k])}</strong></span></span>
+            <span class="db-sb"><i style="width:${T ? (V[a.k] / Math.max(...AREAS.map(x => V[x.k]), 1) * 100).toFixed(1) : 0}%"></i></span>
+            <small>${PV ? (PV[a.k] ? `${V[a.k] >= PV[a.k] ? '+' : '−'}${eur0(Math.abs(V[a.k] - PV[a.k]))} rispetto a ${esc(MESI[Number(prevK.slice(5)) - 1])}` : 'nessuna spesa il mese prima') : `media ${eur0(byM.length ? byM.reduce((s, x) => s + x[a.k], 0) / byM.length : 0)} al mese`}</small>
+          </a>`).join('')}
+          <div class="db-stot"><span>Totale</span><b>${eur(T)}</b></div>
+        </div>
       </div>
-      <div class="ov-3" id="ov-tops"></div>`;
+
+      <div class="db-row">
+        <div class="card db-pz"><div class="card-h"><h3>Forniture per piazzale</h3><span class="muted small">Lyreco + Amazon · ${ivaLbl()}</span></div>
+          ${pz.length ? `<div class="db-pzl">${pz.map((x, i) => `<div class="db-pr${x.c.cod === LY_NONE ? ' na' : ''}" style="--d:${200 + i * 45}ms">
+              <span class="db-pn">${x.c.cod === LY_NONE ? '?' : i + 1}</span>
+              <span class="db-pm"><span class="db-pt"><b>${esc(x.c.n)}</b><strong>${eur0(x.t)}</strong></span>
+                <span class="db-pb" style="width:${(x.t / pzM * 100).toFixed(1)}%">${x.ly > 0 ? `<i class="a-ly" style="flex:${x.ly}" title="Lyreco ${esc(eur(x.ly))}"></i>` : ''}${x.am > 0 ? `<i class="a-am" style="flex:${x.am}" title="Amazon ${esc(eur(x.am))}"></i>` : ''}</span>
+                <small>${esc(x.c.cod)}${x.c.citta ? ' · ' + esc(x.c.citta) : ''} · ${fmtNum(pct(x.t, pzT), 1)}%${x.ly > 0 ? ` · Lyreco ${eur0(x.ly)}` : ''}${x.am > 0 ? ` · Amazon ${eur0(x.am)}` : ''}</small></span>
+            </div>`).join('')}</div>
+            <div class="ov-leg db-leg"><span class="a-ly"><i></i>Lyreco</span><span class="a-am"><i></i>Amazon</span><span class="muted">${pz.filter(x => x.c.cod !== LY_NONE).length} piazzali · ${eur0(pzT)}</span></div>` : '<div class="empty">Nessuna fornitura Lyreco o Amazon nel periodo</div>'}
+        </div>
+        <div class="db-side">
+          <a class="card db-mini a-fat" href="#fatture">
+            <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><span class="db-at">Fatture fornitori</span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+            <div class="db-mv"><b>${eur0(open.reduce((a, r) => a + num(r.totale), 0))}</b><span>da pagare · ${open.length} di ${F.length} fatture</span>${late.length ? `<span class="ov-d up">${late.length} ${late.length === 1 ? 'scaduta' : 'scadute'}</span>` : ''}</div>
+            <div class="ov-fbar">${F.length ? `<i style="flex:${F.length - open.length}" class="pd"></i><i style="flex:${open.length - late.length}" class="op"></i><i style="flex:${late.length}" class="lt"></i>` : ''}</div>
+            ${open.length ? `<div class="db-ml">${open.slice().sort((a, b) => String(a.scadenza || '9').localeCompare(String(b.scadenza || '9'))).slice(0, 3).map(r => `<div class="db-mli${faLate(r) ? ' late' : ''}"><span><b>${esc(String(r.fornitore || '—').split(/\s+/).slice(0, 2).join(' '))}</b><small>n. ${esc(r.numero || '—')}${validD(r.scadenza) ? ` · ${faLate(r) ? 'scaduta il' : 'scade il'} ${esc(shortDate(r.scadenza))}` : ''}</small></span><strong>${eur(num(r.totale))}</strong></div>`).join('')}</div>` : ''}
+            <div class="db-an">non sommate alla spesa: sono già negli acquisti</div>
+          </a>
+          <a class="card db-mini a-tr" href="#torental">
+            <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24"><path d="M3 7h12v9H3zM15 10h3.5L21 13v3h-6"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17.5" cy="17.5" r="1.7"/><path d="M6 10.5h6"/></svg></span><span class="db-at">Listino Torental</span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+            ${TK ? `<div class="db-mv"><b>${TK.n} kit</b><span>da ${eur0(TK.min)} a ${eur0(TK.max)}</span></div>
+            <div class="db-ml">${TK.kits.slice(0, 3).map(k => `<div class="db-mli"><span><b>${esc(k.n)}</b><small>${k.cod ? 'cod. ' + esc(k.cod) : 'senza codice'}</small></span><strong>${eur(k.p)}</strong></div>`).join('')}</div>
+            <div class="db-an">listino di vendita, non è una spesa · ${TK.s} articoli singoli · transferta ${eur0(TK.tr)}/giorno</div>` : '<div class="db-an">Importa il listino dalla sezione Torental</div>'}
+          </a>
+        </div>
+      </div>
+
+      <div class="db-row db-row2">
+        <div class="card ov-ck" id="ov-ck"><div class="card-h"><h3>Cose da verificare</h3><span class="muted small">${CK.length ? `${CK.length} punti · ${ckW} importanti` : 'tutto coincide'}</span></div>
+        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'ly', 'am', 'fat'].map(k => [k, ovShort[k], CK.filter(x => x.a === k).length])].filter(([k, , n]) => !k || n).map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}">${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
+        ${CK.length ? `<div class="ov-cl">${CK.map((x, i) => `<button type="button" class="ov-ci ${x.t}" data-ovgo="${x.go}" data-cka="${x.a}" style="--d:${150 + Math.min(i, 12) * 45}ms"${i >= 4 ? ' data-more="1"' : ''}><span class="ov-cl-l"></span><span class="ov-cm"><span class="ov-ct"><em class="ov-tag t-${x.a}">${ovShort[x.a]}</em><b>${x.h}</b></span><small>${x.d}</small></span><b class="ov-cv">${x.v}</b><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>${CK.length > 4 ? `<button type="button" class="db-more" id="ov-ckmore">Mostra tutti i ${CK.length} punti</button>` : ''}` : '<div class="empty">Tutto coincide: nessuna anomalia trovata</div>'}</div>
+        <div class="card db-feed"><div class="card-h"><h3>Ultimi movimenti</h3><span class="muted small">tutte le aree</span></div><div class="ov-feed" id="ov-feed"></div></div>
+      </div>
+      <div class="card ov-aic db-ai" id="ov-ai"></div>
+      <div class="ov-3 db-tops" id="ov-tops"></div>`;
 
     countTo($('.k-ovt', body), T, eur0);
-    $$('[data-ovk]', body).forEach(el => { const i = +el.dataset.ovk; el._v = 0; const v = i < 3 ? V[AREAS[i].k] : i === 3 ? avgM : AL.length; countTo(el, v, i === 4 ? x => fmtNum(Math.round(x), 0) : eur0); });
+    const KV = [avgM, nDocs, CK.length];
+    $$('[data-ovk]', body).forEach(el => { const i = +el.dataset.ovk; el._v = 0; countTo(el, KV[i], i ? x => fmtNum(Math.round(x), 0) : eur0); });
     $$('[data-ova]', body).forEach(el => { const a = AREAS[+el.dataset.ova]; el._v = 0; countTo(el, V[a.k], eur0); });
 
     // barre impilate
     const mx = Math.max(...byM.map(x => x.t), 1);
-    $('#ov-bars').innerHTML = byM.length ? byM.map((x, i) => `<div class="ov-b${x.m === ovP ? ' on' : ''}" data-ovm="${x.m}" title="${esc(mLabel(x.m))}: ${esc(eur(x.t))}"><span class="ov-bv">${esc(eur0(x.t))}</span><div class="ov-bc" style="height:${Math.max(1.5, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${AREAS.slice().reverse().map(a => x[a.k] ? `<i class="a-${a.k}" style="flex:${x[a.k]}"></i>` : '').join('')}</div><span class="ov-bl">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}${x.m.slice(0, 4) !== String(new Date().getFullYear()) ? ' ' + x.m.slice(2, 4) : ''}</span></div>`).join('') : '<div class="empty">Nessun dato con data</div>';
+    $('#ov-bars').innerHTML = byM.length ? byM.map((x, i) => `<div class="ov-b${x.m === ovP ? ' on' : ''}" data-ovm="${x.m}" title="${esc(mLabel(x.m))}: ${esc(eur(x.t))}\n${AREAS.filter(a => x[a.k]).map(a => `${ovShort[a.k]}: ${eur(x[a.k])}`).join('\n')}"><span class="ov-bv">${esc(eur0(x.t))}</span><div class="ov-bc" style="height:${Math.max(1.5, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${AREAS.slice().reverse().map(a => x[a.k] > 0 ? `<i class="a-${a.k}" style="flex:${x[a.k]}"></i>` : '').join('')}</div><span class="ov-bl">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}${x.m.slice(0, 4) !== String(new Date().getFullYear()) ? ' ' + x.m.slice(2, 4) : ''}</span></div>`).join('') : '<div class="empty">Nessun dato con data</div>';
 
     // ultimi movimenti
+    const lyFeed = [...groupBy(P.ly, r => String(r.fattura))].map(([id, v]) => ({ a: 'ly', d: v[0].data, t: `Fattura Lyreco ${id}`, s: [...new Set(v.map(r => lyName(r.cdc || LY_NONE)))].slice(0, 2).join(', '), v: lySum(v), go: 'lyreco' }));
     const feed = [
       ...P.att.filter(r => validD(r.data)).map(r => ({ a: 'att', d: r.data, t: r.descrizione, s: r.centro, v: tot(r), go: 'movimenti' })),
       ...P.gls.map(r => ({ a: 'gls', d: r.data, t: `${r.destinatario}`, s: `${r.citta} (${r.prov})`, v: num(r.totale) * gMul(), go: 'gls' })),
-      ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' }))
+      ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' })),
+      ...lyFeed,
+      ...P.am.map(o => ({ a: 'am', d: o.data, t: String(o.articoli || 'Ordine Amazon').split(/\s*\|\s*/)[0], s: lyName(o.cdc || LY_NONE), v: amV(o), go: 'amazon' }))
     ].sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
-    $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi a-${x.a}"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
+    $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr a-${x.a}" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
 
     renderOvAI(() => ovSummary(P, V, byM, CK));
     // classifiche
     const top5 = (arr, kf, vf, lf) => [...groupBy(arr, kf)].map(([k, v]) => ({ k, v: vf(v), n: v.length, l: lf ? lf(v) : '' })).filter(x => x.k && x.k !== '—').sort((a, b) => b.v - a.v).slice(0, 5);
     const T1 = top5(P.att, r => r.centro || '—', sumT), T2 = top5(P.gls, r => r.citta + ' (' + r.prov + ')', v => gTot(v) * gMul(), v => String(v[0].destinatario || '').toUpperCase()), T3 = top5(P.gas, r => plate(r.targa), v => noPrice ? gSum(v, 'litri') : gCost(v) * gMul(), v => gasName(v[0].targa) || (v.map(r => gasNorm(r.uso)).filter(Boolean)[0] || ''));
-    const box = (title, link, list, fmt, nm) => { const m = Math.max(...list.map(x => x.v), 1); return `<div class="card"><div class="card-h"><h3>${title}</h3><a class="link" href="#${link}">Tutti</a></div>${list.length ? `<div class="ov-top">${list.map((x, i) => `<div class="ov-tr" style="--d:${200 + i * 60}ms"><span class="ov-tn">${i + 1}</span><span class="ov-tm"><b>${esc(nm ? nm(x.k) : x.k)}</b><small>${x.l ? esc(x.l) + ' · ' : ''}${x.n} ${link === 'gasolio' ? 'pieni' : link === 'gls' ? 'sped.' : 'righe'}</small><span class="gd-b"><i style="width:${(x.v / m * 100).toFixed(1)}%"></i></span></span><b>${fmt(x.v)}</b></div>`).join('')}</div>` : '<div class="empty">Nessun dato</div>'}</div>`; };
-    $('#ov-tops').innerHTML = box('Centri più costosi · attrezzatura', 'attrezzatura', T1, eur0) + box('Destinazioni GLS', 'gls', T2, eur0) + box(noPrice ? 'Mezzi · litri' : 'Mezzi · gasolio', 'gasolio', T3, noPrice ? v => fmtNum(v, 0) + ' L' : eur0, plateFmt);
-  }
-
-  // grafica: anello della composizione con orbite e impulsi
-  function ovArt(fr) {
-    const cx = 520, cy = 130, R = 78, C = ['#ffffff', '#7ee0b5', '#ffc15e'];
-    let acc = 0;
-    const segs = fr.map((f, i) => { const s = `<circle class="ov-rs" r="${R}" cx="${cx}" cy="${cy}" pathLength="1" stroke="${C[i]}" style="stroke-dasharray:${Math.max(0, f - .012).toFixed(4)} 1;stroke-dashoffset:${(-acc).toFixed(4)};--d:${300 + i * 220}ms"/>`; acc += f; return s; }).join('');
-    return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg ov-svg">
-      <defs><pattern id="ovdots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern></defs>
-      <rect x="300" width="340" height="260" fill="url(#ovdots)"/>
-      <g class="ov-orb" transform="translate(${cx} ${cy})"><circle r="${R + 30}"/><circle r="${R + 58}"/></g>
-      <g class="ov-sat" style="--r:${R + 30}px;--t:14s"><circle cx="${cx + R + 30}" cy="${cy}" r="3.2"/></g>
-      <g class="ov-sat" style="--r:${R + 58}px;--t:22s;--o:180deg"><circle cx="${cx + R + 58}" cy="${cy}" r="2.4"/></g>
-      <g transform="rotate(-90 ${cx} ${cy})"><circle class="ov-rb" r="${R}" cx="${cx}" cy="${cy}"/>${segs}</g>
-      <circle class="ov-rp" r="${R - 20}" cx="${cx}" cy="${cy}"/>
-      ${[0, 1, 2, 3, 4].map(i => `<line class="ov-tick" x1="${cx}" y1="${cy - R - 12}" x2="${cx}" y2="${cy - R - 6}" transform="rotate(${i * 72} ${cx} ${cy})"/>`).join('')}
-    </svg>`;
+    const T4 = [...groupBy(amA, a => a.cat)].map(([k, v]) => ({ k, v: v.reduce((s, a) => s + a.val, 0), n: v.length, l: 'Amazon' }));
+    [...groupBy(P.ly, r => r.categoria || 'Altro')].forEach(([k, v]) => T4.push({ k, v: lySum(v), n: v.length, l: 'Lyreco' }));
+    const T4s = T4.sort((a, b) => b.v - a.v).slice(0, 5);
+    const box = (title, link, list, fmt, unit, nm, cls) => { const m = Math.max(...list.map(x => x.v), 1); return `<div class="card ${cls || ''}"><div class="card-h"><h3>${title}</h3><a class="link" href="#${link}">Apri</a></div>${list.length ? `<div class="ov-top">${list.map((x, i) => `<div class="ov-tr" style="--d:${200 + i * 60}ms"><span class="ov-tn">${i + 1}</span><span class="ov-tm"><b>${esc(nm ? nm(x.k) : x.k)}</b><small>${x.l ? esc(x.l) + ' · ' : ''}${x.n} ${unit}</small><span class="gd-b"><i style="width:${(x.v / m * 100).toFixed(1)}%"></i></span></span><b>${fmt(x.v)}</b></div>`).join('')}</div>` : '<div class="empty">Nessun dato</div>'}</div>`; };
+    $('#ov-tops').innerHTML = box('Centri · attrezzatura', 'attrezzatura', T1, eur0, 'righe', null, 'a-att') + box('Destinazioni GLS', 'gls', T2, eur0, 'sped.', null, 'a-gls') + box(noPrice ? 'Mezzi · litri' : 'Mezzi · gasolio', 'gasolio', T3, noPrice ? v => fmtNum(v, 0) + ' L' : eur0, 'pieni', plateFmt, 'a-gas') + box('Categorie · forniture', T4s[0] && T4s[0].l === 'Lyreco' ? 'lyreco' : 'amazon', T4s, eur0, 'righe', null, 'a-am');
   }
 
   /* =========================================================
@@ -4450,7 +4499,7 @@
   function allChecks(P, per) {
     const tag = (a, go) => x => ({ ...x, a, go: x.go || go });
     const gV = gasVehicles(gasRows());
-    const out = [...attChecks(P.att).map(tag('att', 'movimenti')), ...glsChecks(P.gls).map(tag('gls', 'gls')), ...gasChecks(P.gas, gV).map(tag('gas', 'gasolio')), ...faChecks(P.fat).map(tag('fat', 'fatture'))];
+    const out = [...attChecks(P.att).map(tag('att', 'movimenti')), ...glsChecks(P.gls).map(tag('gls', 'gls')), ...gasChecks(P.gas, gV).map(tag('gas', 'gasolio')), ...faChecks(P.fat).map(tag('fat', 'fatture')), ...(P.ly && P.ly.length ? lyChecks(P.ly, lyDocList(P.ly)).map(tag('ly', 'lyreco')) : []), ...(P.am && P.am.length ? amChecks(P.am, amArts(P.am)).map(tag('am', 'amazon')) : [])];
     if (P.gas.length && !P.gas.some(r => gPrezzo(r) > 0)) out.push({ a: 'gas', t: 'info', h: 'Prezzo del gasolio non impostato', d: `${fmtNum(gSum(P.gas, 'litri'), 0)} litri senza costo: il totale comprende solo i noleggi.`, v: '—', go: 'gasprice' });
     const merged = [...groupBy(out, x => x.a + '|' + x.h)].map(([, v]) => v.length === 1 ? v[0] : { ...v[0], h: `${v[0].h} · ${v.length} casi`, d: `${v[0].d} E altri ${v.length - 1} casi simili.`, v: v.length + ' casi' });
     return merged.sort((a, b) => (a.t === 'warn' ? 0 : 1) - (b.t === 'warn' ? 0 : 1));
@@ -4462,8 +4511,8 @@
       const gV = gasVehicles(gasRows()), R = gasRent();
       return {
         periodo: ovP ? mLabel(ovP) : 'tutto il periodo', importi: 'IVA esclusa',
-        totali: { attrezzatura: r2(V.att), gls: r2(V.gls), gasolioENoleggi: r2(V.gas), fattureFornitori: r2(P.fat.reduce((a, r) => a + num(r.imponibile), 0)) },
-        meseperMese: byM.map(x => ({ mese: x.m, attrezzatura: r2(x.att), gls: r2(x.gls), gasolio: r2(x.gas) })),
+        totali: { attrezzatura: r2(V.att), gls: r2(V.gls), gasolioENoleggi: r2(V.gas), lyreco: r2(V.ly || 0), amazon: r2(V.am || 0), fattureFornitori: r2(P.fat.reduce((a, r) => a + num(r.imponibile), 0)) },
+        meseperMese: byM.map(x => ({ mese: x.m, attrezzatura: r2(x.att), gls: r2(x.gls), gasolio: r2(x.gas), lyreco: r2(x.ly || 0), amazon: r2(x.am || 0) })),
         attrezzatura: { ...summary0(P.att), articoliPiuCostosi: undefined },
         gls: { spedizioni: P.gls.length, costo: r2(gTot(P.gls)), kgTassabili: r2(gSum(P.gls, 'kgTass')), perContratto: ['C1', 'C2'].map(c => { const v = P.gls.filter(r => r.contratto === c); return { contratto: c, spedizioni: v.length, costo: r2(gTot(v)) }; }), destinazioniTop: [...groupBy(P.gls, r => r.citta + ' (' + r.prov + ')')].map(([k, v]) => ({ k, costo: r2(gTot(v)), n: v.length })).sort((a, b) => b.costo - a.costo).slice(0, 8) },
         gasolio: { litri: r2(gSum(P.gas, 'litri')), rifornimenti: P.gas.length, prezzoLitro: gasPrice() || null, noleggiMensili: R, mezzi: [...groupBy(P.gas, r => plate(r.targa))].map(([p, v]) => { const x = gV.get(p); let k = 0, kl = 0; if (x) x.seg.forEach((d, id) => { const z = v.find(r => r.id === id); if (z) { k += d; kl += num(z.litri); } }); return { targa: p, nome: gasName(p) || undefined, litri: r2(gSum(v, 'litri')), km: k, kmPerLitro: kl ? r2(k / kl) : null }; }).sort((a, b) => b.litri - a.litri).slice(0, 10) },
@@ -4482,7 +4531,7 @@
     const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', lyreco: 'Lyreco', amazon: 'Amazon', generale: 'Generale' };
     if (!db.ai) {
       el.innerHTML = `<div class="card-h"><h3 class="ai-title">${IC.spark}Intelligenza artificiale</h3></div>
-        <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, fatture), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
+        <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, Lyreco, Amazon, fatture), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
         <div class="ov-key"><input id="ov-key" type="password" placeholder="Incolla la chiave API di Gemini" autocomplete="off"><button class="btn primary sm" id="ov-key-go" type="button">Collega</button></div>`;
       return;
     }
@@ -4545,7 +4594,8 @@
       const ovm = t.closest('[data-ovm]'); if (ovm) { ovP = ovP === ovm.dataset.ovm ? '' : ovm.dataset.ovm; ovAnim = true; renderOverview(); return; }
       if (t.closest('#ov-prev') || t.closest('#ov-next')) { const o = [...$('#ov-per').options].map(x => x.value), i = o.indexOf(ovP) + (t.closest('#ov-prev') ? 1 : -1); if (i >= 0 && i < o.length) { ovP = o[i]; ovAnim = true; renderOverview(); } return; }
       const ovg = t.closest('[data-ovgo]'); if (ovg) { const g = ovg.dataset.ovgo; if (g === 'gls') { gMonth = ovP || 'tutto'; gKeep = true; } if (g === 'gasolio') gasP = ovP; if (g === 'fatture') faP = ovP; if (g === 'movzero') { Object.assign(f, { q: '', cat: '', per: 'zero', centro: '' }); mLimit = 150; location.hash = 'movimenti'; } else if (g === 'gasprice') { location.hash = 'gasolio'; setTimeout(formGasPrice, 300); } else location.hash = g; return; }
-      const ckf = t.closest('[data-ckf]'); if (ckf) { const k = ckf.dataset.ckf; $$('.ov-cf').forEach(b => b.classList.toggle('on', b === ckf)); $$('.ov-ci').forEach(b => { b.hidden = !!k && b.dataset.cka !== k; }); return; }
+      const ckf = t.closest('[data-ckf]'); if (ckf) { const k = ckf.dataset.ckf; $$('.ov-cf').forEach(b => b.classList.toggle('on', b === ckf)); $$('.ov-ci').forEach(b => { b.hidden = !!k && b.dataset.cka !== k; }); const c = $('#ov-ck'); if (c) c.classList.toggle('all', !!k || c.classList.contains('open')); const mb = $('#ov-ckmore'); if (mb) mb.hidden = !!k || c.classList.contains('open'); return; }
+      if (t.closest('#ov-ckmore')) { const c = $('#ov-ck'); c.classList.add('all', 'open'); t.closest('#ov-ckmore').hidden = true; return; }
       if (t.closest('#ov-ai-go')) { ovAnalyze(); return; }
       if (t.closest('#ov-key-go')) { const k = $('#ov-key').value.trim(); if (!k) return; (async () => { try { busy('Collego Gemini…'); await api('setKey', { key: k }); db.ai = true; save(); toast('Gemini collegato'); render(); } catch (er) { if (!(er instanceof AuthError)) toast(er.message); } finally { busy(); } })(); return; }
       if (t.closest('#fa-ai')) { readFatAI(); return; }
