@@ -4226,7 +4226,7 @@
     const body = $('#am-body'); body.classList.toggle('cc-anim', anim);
     const warn = amOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati Amazon.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.7 (Code.gs nuovo).</span></div>`;
     if (!O.length) {
-      body.innerHTML = warn + `<div class="gl-hero am-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${amArt()}</div><div class="gh-main"><span class="gh-lbl">Ordini Amazon</span><h3>Nessun ordine caricato</h3><p>Importa il file «Ordini Amazon» (fogli Ordini e Articoli): l'app assegna ogni ordine al piazzale in base alla località di consegna.</p><div class="tr-hb ly-hb"><button class="btn sm" id="am-imp2" type="button">Importa il file Excel</button></div></div></div></div>`;
+      body.innerHTML = warn + `<div class="gl-hero am-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${amArt()}</div><div class="gh-main"><span class="gh-lbl">Ordini Amazon</span><h3>Nessun ordine caricato</h3><p>Scarica il report «Articoli» da Amazon Business (Business Analytics) e importalo così com'è: l'app assegna ogni ordine al piazzale in base alla località di consegna.</p><div class="tr-hb ly-hb"><button class="btn sm" id="am-how" type="button">Come aggiornare da Amazon</button><button class="btn sm" id="am-imp2" type="button">Importa il report</button></div></div></div></div>`;
       return;
     }
     const A = amArts(O), PL = amPlist(O);
@@ -4246,7 +4246,9 @@
       ['Imponibile stimato', amSumN(est), eur0, `${est.length} ordini senza IVA`],
       ['Venditori', vend, int, `Amazon diretto ${T ? fmtNum(pct(amzS, T), 0) : 0}%`]
     ];
-    body.innerHTML = warn + `
+    const LI = cfg('amLastImport'), lastD = String((amOrd().map(o => o.data).sort().pop()) || ''), age = lastD ? Math.round((parseD(today()) - parseD(lastD)) / 864e5) : 0;
+    const upd = `<div class="am-upd${age > 20 ? ' old' : ''}"><span class="am-ud"></span><span class="am-ut"><b>${lastD ? `Ordini fino al ${esc(shortDate(lastD))}` : 'Nessun ordine'}</b><small>${LI && LI.data ? `ultimo aggiornamento il ${esc(shortDate(LI.data))}${LI.nuovi != null ? ` · ${LI.nuovi} ordini nuovi` : ''}` : 'aggiorna scaricando il report da Amazon Business'}${age > 20 ? ` · sono passati ${age} giorni dall'ultimo ordine` : ''}</small></span><button class="btn sm" id="am-how" type="button">Come si aggiorna</button><button class="btn sm primary" id="am-imp3" type="button">Aggiorna da Amazon</button></div>`;
+    body.innerHTML = warn + upd + `
       <div class="gl-hero am-hero">
         <div class="gh-top"><div class="gh-art">${amArt()}</div>
         <div class="gh-main"><span class="gh-lbl">Ordini Amazon · ${esc(per)}</span><div class="gh-big k-am">0 €</div>
@@ -4437,19 +4439,142 @@
     orders.filter(o => !withArt.has(o.id)).forEach(o => arts.push({ id: o.id + '-01', ordine: o.id, data: o.data, quantita: o.pezzi || 1, descrizione: o.articoli, prezzo: r2(o.totale / (o.pezzi || 1)), importo: o.totale, venditore: o.venditore, condizione: '', spedito: '', localita: o.localita, categoria: amCatOf(o.articoli) }));
     return { orders, arts, cdcs };
   }
+  /* ---------- report originale di Amazon Business (Business Analytics, CSV o Excel) ---------- */
+  // legge un CSV con separatore automatico (, ; tab) e campi tra virgolette
+  function amCsv(text) {
+    text = String(text || '').replace(/^﻿/, '');
+    const first = text.split(/\r?\n/).find(l => l.trim()) || '';
+    const cnt = ch => (first.match(new RegExp(ch === '\t' ? '\t' : '\\' + ch, 'g')) || []).length;
+    const sep = [',', ';', '\t', '|'].sort((a, b) => cnt(b) - cnt(a))[0];
+    const rows = []; let row = [], f = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; continue; }
+      if (c === '"') q = true; else if (c === sep) { row.push(f); f = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; } else f += c;
+    }
+    if (f !== '' || row.length) { row.push(f); rows.push(row); }
+    return rows.filter(r => r.some(x => String(x).trim() !== ''));
+  }
+  // importi sia in formato italiano (1.234,56) sia inglese (1,234.56), con € o EUR
+  const amNum = v => {
+    if (typeof v === 'number') return v;
+    let s = String(v ?? '').replace(/[€\s]|EUR/gi, '').replace(/[^\d,.\-()]/g, '');
+    if (!s) return 0;
+    const neg = /^\(.*\)$/.test(s) || s.startsWith('-'); s = s.replace(/[()\-]/g, '');
+    const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+    if (lc >= 0 && ld >= 0) s = lc > ld ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+    else if (lc >= 0) s = /^\d{1,3}(,\d{3})+$/.test(s) && !/,\d{1,2}$/.test(s) ? s.replace(/,/g, '') : s.replace(/,/g, '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    const n = parseFloat(s); return isNaN(n) ? 0 : neg ? -n : n;
+  };
+  function amBizParse(aoa) {
+    const hi = aoa.findIndex(r => r.some(c => /^(orderid|idordine|numeroordine|nordine|ordine|numerodellordine|iddellordine)$/.test(nh(c))) && r.some(c => /data|date/.test(nh(c))));
+    if (hi < 0) throw new Error('Non riconosco il file: serve il report «Ordini» o «Articoli» scaricato da Amazon Business (Business Analytics) oppure il file «Ordini Amazon» dell\'app');
+    const H = aoa[hi].map(nh), col = (...res) => { for (const re of res) { const i = H.findIndex(h => re.test(h)); if (i >= 0) return i; } return -1; };
+    const C = {
+      id: col(/^(orderid|idordine|numeroordine|nordine|ordine|numerodellordine|iddellordine)$/),
+      d: col(/^orderdate$|^dataordine$|^datadellordine$|^data$/, /orderdate|dataordine|datadellordine/),
+      st: col(/^orderstatus$|^statoordine$|^statodellordine$/, /orderstatus|statoordine|statodellordine/),
+      su: col(/^(ordersubtotal|subtotaleordine|subtotaledellordine)$/),
+      sh: col(/^ordershipping|spedizioneegestioneordine|spedizioneegestionedellordine|costidispedizioneordine|ordinespedizione/),
+      pr: col(/^orderpromotion|promozioneordine|promozionedellordine|scontoordine/),
+      tx: col(/^ordertax$|impostaordine|impostadellordine|ivaordine|ivadellordine/),
+      to: col(/^(ordernettotal|totalenettoordine|totalenettodellordine)$/, /^(ordertotal|totaleordine|totaledellordine)$/),
+      ti: col(/^title$|^titolo$|^titoloprodotto$|^nomeprodotto$|^productname$|^descrizione/),
+      as: col(/^asin$/),
+      q: col(/^itemquantity$|quantitaarticolo|quantitadellarticolo/, /^quantity$|^quantita$/),
+      ppu: col(/^purchaseppu$|prezzounitariodiacquisto|prezzodiacquistounitario|prezzounitarioacquisto/, /ppu|prezzounitario/),
+      isu: col(/^(itemsubtotal|subtotalearticolo|subtotaledellarticolo)$/),
+      itx: col(/^itemtax$|impostaarticolo|impostadellarticolo|ivaarticolo/),
+      ito: col(/^(itemnettotal|totalenettoarticolo|totalenettodellarticolo)$/),
+      se: col(/^sellername$|nomevenditore|nomedelvenditore|^venditore$|^seller$/),
+      co: col(/^itemcondition$|^condition$|condizione/),
+      sd: col(/^shipmentdate$|datadispedizione|datadellaspedizione/),
+      nm: col(/shiptoname|nomedestinatario|^destinatario$|nomedellindirizzodispedizione/),
+      us: col(/^accountuser$|^utente$|utentedellaccount|^acquirente$|^buyername$/),
+      pt: col(/paymentinstrumenttype|tipodistrumentodipagamento|metododipagamento|strumentodipagamento/),
+      pi: col(/^paymentidentifier$|identificativodipagamento|identificativodelpagamento/)
+    };
+    // indirizzo: tutte le colonne di indirizzo/città/CAP
+    const AD = H.map((h, i) => /shippingaddress|shipto(address|street|city|postal|zip|state)|indirizzodispedizione|indirizzodiconsegna|cittadispedizione|capdispedizione|^citta$|^cap$|^city$|postalcode|zipcode/.test(h) ? i : -1).filter(i => i >= 0);
+    const g = (r, i) => i >= 0 && r[i] != null ? String(r[i]).trim() : '';
+    const body = aoa.slice(hi + 1).filter(r => /\d{3}-\d{5,}-\d{5,}/.test(g(r, C.id)));
+    if (!body.length) throw new Error('Il report non contiene ordini');
+    // formato delle date: giorno/mese o mese/giorno
+    let dm = true;
+    body.forEach(r => { const m = g(r, C.d).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-]\d{2,4}/); if (m) { if (+m[2] > 12) dm = false; } });
+    const date = v => { const s = String(v || '').trim(), m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/); if (m) { const [a, b] = dm ? [m[1], m[2]] : [m[2], m[1]]; return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(b)}-${pad(a)}`; } const iso = s.match(/^(\d{4})-(\d\d)-(\d\d)/); return iso ? iso.slice(1).join('-') : lyDate(v); };
+    let cdcs = lyCdcMerge(lyCdcList());
+    const cdcOf = loc => { const L = amNorm(loc); const x = cdcs.find(z => String(z.loc || '').split('|').map(amNorm).filter(Boolean).some(k => L.includes(k))); return x ? x.cod : LY_NONE; };
+    const oldO = new Map(amOrd().map(o => [String(o.id), o])), oldA = new Map(amArtAll().map(a => [String(a.id), a]));
+    const byO = groupBy(body, r => g(r, C.id));
+    const orders = [], arts = []; let skipped = 0;
+    byO.forEach((rs, id) => {
+      const r0 = rs[0];
+      if (/cancel|annull/i.test(g(r0, C.st))) { skipped++; return; }
+      const items = C.ti >= 0 ? rs.filter(r => g(r, C.ti)) : [];
+      const sumI = i => r2(items.reduce((a, r) => a + amNum(g(r, i)), 0));
+      const sub = C.su >= 0 ? amNum(g(r0, C.su)) : C.isu >= 0 ? sumI(C.isu) : 0;
+      const ship = amNum(g(r0, C.sh)), promo = Math.abs(amNum(g(r0, C.pr)));
+      const hasTax = C.tx >= 0 || C.itx >= 0, tax = C.tx >= 0 ? amNum(g(r0, C.tx)) : C.itx >= 0 ? sumI(C.itx) : 0;
+      const net = C.to >= 0 ? amNum(g(r0, C.to)) : C.ito >= 0 ? sumI(C.ito) : r2(sub + ship - promo + tax);
+      let tot, imp;
+      if (!hasTax) { tot = net; imp = r2(net / 1.22); }
+      else if (tax > 0 && Math.abs(net - (sub + ship - promo)) < .05) { imp = net; tot = r2(net + tax); } // il totale netto è senza IVA
+      else { tot = net; imp = r2(net - tax); }
+      const ex = oldO.get(id);
+      let ivaTipo = hasTax ? 'amazon' : 'stimata', iva = r2(tot - imp);
+      if (ex && ex.ivaTipo === 'fattura') { imp = num(ex.imponibile); iva = num(ex.iva); ivaTipo = 'fattura'; }
+      const loc = [...new Set(AD.map(i => g(r0, i)).filter(Boolean))].join(', ');
+      let cdc = cdcOf(loc);
+      if (ex && ex.cdc && ex.cdc !== LY_NONE) cdc = ex.cdc; // l'attribuzione fatta nell'app vince
+      const titles = items.map(r => g(r, C.ti)), sellers = [...new Set(items.map(r => g(r, C.se)).filter(Boolean))];
+      const pz = items.length ? items.reduce((a, r) => a + (amNum(g(r, C.q)) || 1), 0) : amNum(g(r0, C.q)) || 1;
+      orders.push({ id, data: date(g(r0, C.d)), articoli: titles.length ? titles.join(' | ') : (ex ? ex.articoli : ''), pezzi: pz, venditore: sellers.join(', ') || (ex ? ex.venditore : ''), destinatario: g(r0, C.nm) || g(r0, C.us) || (ex ? ex.destinatario : ''), localita: loc || (ex ? ex.localita : ''), pagamento: [g(r0, C.pt), g(r0, C.pi)].filter(Boolean).join(' ') || (ex ? ex.pagamento : ''), subtotale: sub, spedizione: ship, sconti: promo, imponibile: imp, iva, totale: tot, ivaTipo, cdc, note: ex ? ex.note || '' : '', pdf: ex ? ex.pdf || '' : '' });
+      items.forEach((r, k) => {
+        const aid = `${id}-${String(k + 1).padStart(2, '0')}`, q = amNum(g(r, C.q)) || 1, de = g(r, C.ti), exA = oldA.get(aid);
+        const lineNet = C.ito >= 0 ? amNum(g(r, C.ito)) : r2(amNum(g(r, C.isu)) + amNum(g(r, C.itx)));
+        const imp0 = lineNet || r2(q * amNum(g(r, C.ppu)));
+        arts.push({ id: aid, ordine: id, data: date(g(r0, C.d)), quantita: q, descrizione: de, prezzo: r2(imp0 / q), importo: imp0, venditore: g(r, C.se), condizione: g(r, C.co), spedito: date(g(r, C.sd)), localita: loc, categoria: (exA && amNorm(exA.descrizione).slice(0, 30) === amNorm(de).slice(0, 30) && exA.categoria) || amCatOf(de) });
+      });
+      if (!items.length && !(ex && amArtAll().some(a => String(a.ordine) === id))) arts.push({ id: id + '-01', ordine: id, data: date(g(r0, C.d)), quantita: pz, descrizione: (ex && ex.articoli) || 'Ordine Amazon', prezzo: r2(tot / pz), importo: tot, venditore: '', condizione: '', spedito: '', localita: loc, categoria: amCatOf(ex && ex.articoli) });
+    });
+    if (!orders.length) throw new Error('Nessun ordine valido nel report (tutti annullati?)');
+    return { orders, arts, cdcs, skipped, biz: true, items: C.ti >= 0 };
+  }
+  function amHow() {
+    const st = [
+      ['Apri Amazon Business', 'Entra in <b>amazon.it</b> con l\'account aziendale.'],
+      ['Vai su Business Analytics', 'In alto a destra passa sul tuo nome (<b>Account per …</b>) e scegli <b>Business Analytics</b> (o <b>Analisi aziendale</b>).'],
+      ['Scegli il report «Articoli»', 'Tra i tipi di report scegli <b>Articoli</b> (Items): contiene ordini, prodotti, venditori, indirizzo di consegna e IVA. Il report «Ordini» va bene lo stesso, ma senza i prodotti.'],
+      ['Imposta il periodo', 'Scegli le date, per esempio <b>dall\'inizio dell\'anno a oggi</b>. Puoi riscaricare anche periodi già importati: l\'app riconosce gli ordini che ha già e non li doppia.'],
+      ['Scarica il file', 'Premi <b>Scarica</b> / <b>Download CSV</b> e salva il file.'],
+      ['Importalo qui', 'Premi <b>Aggiorna da Amazon</b> e scegli il file: l\'app assegna ogni ordine al piazzale, calcola l\'imponibile e mette le categorie. I centri di costo, le categorie e le correzioni IVA fatte da te restano.']
+    ];
+    openSheet('Aggiornare Amazon', `<div class="am-how">${st.map(([h, d], i) => `<div class="am-hs"><span>${i + 1}</span><div><b>${h}</b><p>${d}</p></div></div>`).join('')}<p class="muted small" style="margin:6px 0 0">Consiglio: fallo una volta alla settimana o a fine mese. Vanno bene sia il CSV sia l'Excel di Amazon, in italiano o in inglese.</p></div>`, () => { setTimeout(importAm, 250); return true; }, null, 'Scegli il file');
+  }
   async function importAm() {
     if (!amOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.7)');
-    let file; try { file = await pickFile('.xlsx,.xls'); } catch { return; }
+    let file; try { file = await pickFile('.csv,.txt,.xlsx,.xls'); } catch { return; }
     try {
-      busy('Leggo il file Amazon…'); await loadXlsx();
-      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-      const P = amParse(wb); busy();
+      busy('Leggo il file Amazon…');
+      let P;
+      if (/\.(csv|txt)$/i.test(file.name)) P = amBizParse(amCsv(await file.text()));
+      else {
+        await loadXlsx();
+        const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+        try { P = amParse(wb); }
+        catch (e1) { if (!/Non trovo il foglio/.test(e1.message)) throw e1; const ws = wb.Sheets[wb.SheetNames[0]]; P = amBizParse(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })); }
+      }
+      busy();
       const ids = new Set(amOrd().map(o => String(o.id))), nuovi = P.orders.filter(o => !ids.has(o.id)).length;
       const est = P.orders.filter(o => o.ivaTipo === 'stimata').length, na = P.orders.filter(o => o.cdc === LY_NONE).length;
-      if (!confirm(`${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo e correzioni IVA).\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
-      const keep = new Set(P.orders.map(o => o.id)), stale = amArtAll().filter(a => keep.has(String(a.ordine)) && !P.arts.some(x => x.id === a.id));
-      write([...P.orders.map(row => ({ action: 'upsert', sheet: 'Amazon', row })), ...P.arts.map(row => ({ action: 'upsert', sheet: 'AmazonArticoli', row })), ...stale.map(a => ({ action: 'delete', sheet: 'AmazonArticoli', id: a.id })), { action: 'upsert', sheet: 'Config', row: { chiave: 'lyCdc', valore: JSON.stringify(P.cdcs) } }]);
-      amP = ''; amAnim = true; render(); toast(`Amazon: ${P.orders.length} ordini importati`);
+      const dd = P.orders.map(o => o.data).filter(Boolean).sort();
+      if (!confirm(`${P.biz ? 'Report Amazon Business' : 'File Ordini Amazon'}${dd.length ? ` · dal ${dd[0].split('-').reverse().join('/')} al ${dd[dd.length - 1].split('-').reverse().join('/')}` : ''}\n${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo, categorie e correzioni IVA).${P.skipped ? `\n${P.skipped} ordini annullati non importati.` : ''}${P.biz && !P.items ? '\nIl report non ha gli articoli: per avere anche le categorie scarica il report «Articoli».' : ''}\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
+      const keep = new Set(P.orders.map(o => o.id)), newA = new Set(P.arts.map(a => a.id));
+      const stale = P.biz && !P.items ? [] : amArtAll().filter(a => keep.has(String(a.ordine)) && !newA.has(String(a.id)));
+      write([...P.orders.map(row => ({ action: 'upsert', sheet: 'Amazon', row })), ...P.arts.map(row => ({ action: 'upsert', sheet: 'AmazonArticoli', row })), ...stale.map(a => ({ action: 'delete', sheet: 'AmazonArticoli', id: a.id })), { action: 'upsert', sheet: 'Config', row: { chiave: 'lyCdc', valore: JSON.stringify(P.cdcs) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'amLastImport', valore: JSON.stringify({ data: today(), file: file.name, fino: dd[dd.length - 1] || '', n: P.orders.length, nuovi }) } }]);
+      amP = ''; amAnim = true; render(); toast(`Amazon: ${nuovi} ordini nuovi, ${P.orders.length - nuovi} aggiornati`);
     } catch (e) { busy(); toast(e.message); }
   }
   async function exportAm() {
@@ -4608,7 +4733,8 @@
       const faq = t.closest('[data-faq]'); if (faq) { const ids = faq.dataset.faq.split(' '); faF.q = ''; faF.forn = ''; faF.stato = ''; renderFatList(null, faRows().filter(r => ids.includes(r.id))); $('#fa-cnt').textContent += ' · filtro controllo'; $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const faf = t.closest('[data-faforn]'); if (faf) { faF.forn = faf.dataset.faforn; $('#fa-ff').value = faF.forn; renderFatList(); $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const fat = t.closest('[data-fat]'); if (fat) { faDetail(fat.dataset.fat); return; }
-      if (t.closest('#am-imp') || t.closest('#am-imp2')) { importAm(); return; }
+      if (t.closest('#am-imp') || t.closest('#am-imp2') || t.closest('#am-imp3')) { importAm(); return; }
+      if (t.closest('#am-how')) { amHow(); return; }
       if (t.closest('#am-xls')) { exportAm(); return; }
       if (t.closest('#am-ai')) { amClassifyAI(); return; }
       if (t.closest('#am-cdc') || t.closest('#am-cdc2')) { lyCdcForm(); return; }

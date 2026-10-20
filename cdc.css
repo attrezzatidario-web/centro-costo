@@ -1529,3 +1529,13 @@ body.has-sel .fab { display: none; }
   .db-hero { padding: 22px 18px 16px; }
   .db-hr { padding: 12px 14px; }
 }
+
+/* ===== Amazon: aggiornamento dal report di Amazon Business — v39 ===== */
+.am-upd { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 14px; }
+.am-ud { width: 10px; height: 10px; border-radius: 50%; background: #1baf7a; box-shadow: 0 0 0 4px color-mix(in srgb, #1baf7a 18%, transparent); flex: none; }
+.am-upd.old .am-ud { background: #eda100; box-shadow: 0 0 0 4px color-mix(in srgb, #eda100 20%, transparent); }
+.am-ut { display: grid; flex: 1; min-width: 200px; } .am-ut b { font-size: 14px; } .am-ut small { font-size: 12px; color: var(--muted); }
+.am-how { display: grid; gap: 4px; }
+.am-hs { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.am-hs > span { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.am-hs b { font-size: 14px; } .am-hs p { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
