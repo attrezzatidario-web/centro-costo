@@ -1572,3 +1572,4 @@ body.has-sel .fab { display: none; }
   .am-er select { grid-column: 1 / 4; }
   .am-er .am-ed-t { text-align: right; } .am-er .am-ed-t b { justify-content: flex-end; }
 }
+.am-canbtn { color: var(--danger) !important; }

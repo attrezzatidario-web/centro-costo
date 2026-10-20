@@ -4160,7 +4160,9 @@
   const amCatOf = d => { const t = String(d || '').toUpperCase(); const c = AM_CAT.find(([, re]) => re.test(t)); return c ? c[0] : 'Altro'; };
   const AM_CHECK = /SMART TV|OLED|AIRPODS|APPLE TV|SHIELD TV|OSMO|TOP GUN|BLU-?RAY|POCHETTE|FOULARD|FAZZOLETTO DA TASCHINO|PIUMONE|CUSCINI LETTO/;
   let amP = '', amAnim = true, amF = { q: '', cdc: '', cat: '', vend: '' }, amLimit = 40, amOrdLimit = 12, amOrdF = '', amArtQ = '';
-  const amOrd = () => db.amazon || [];
+  const amOrdAll = () => db.amazon || [];
+  const amCancel = () => { const c = cfg('amAnnullati'); return c && typeof c === 'object' ? c : {}; };
+  const amOrd = () => { const c = amCancel(); return amOrdAll().filter(o => !c[String(o.id)]); }; // senza gli ordini annullati
   const amArtAll = () => db.amazonart || [];
   const amOk = () => isLocal() || !db.v || db.v >= 'cdc-1.7';
   const amNet = o => o.imponibile !== '' && o.imponibile != null && num(o.imponibile) ? num(o.imponibile) : r2(num(o.totale) / 1.22);
@@ -4266,7 +4268,7 @@
         <div class="card"><div class="card-h"><h3>Mese per mese</h3><span class="muted small">per centro di costo</span></div><div class="ly-mb" id="am-mm"></div><div class="ly-leg" id="am-leg"></div></div>
       </div>
       <div class="card"><div class="card-h"><h3>Centri di costo × categorie</h3><span class="muted small">${ivaLbl()} · spedizione e sconti ripartiti sugli articoli</span></div><div class="mx-wrap" id="am-mx"></div></div>
-      <div class="card" id="am-ord-card"><div class="card-h"><h3>Ordini</h3><span class="muted small" id="am-ocnt"></span><div class="tr-seg ly-dseg">${[['', 'Tutti'], ['est', 'IVA stimata'], ['na', 'Da attribuire']].map(([k, l]) => `<button type="button" data-amof="${k}" class="${amOrdF === k ? 'on' : ''}">${l}</button>`).join('')}</div></div><div id="am-ords"></div></div>
+      <div class="card" id="am-ord-card"><div class="card-h"><h3>Ordini</h3><span class="muted small" id="am-ocnt"></span><div class="tr-seg ly-dseg">${[['', 'Tutti'], ['est', 'IVA stimata'], ['na', 'Da attribuire'], ...(Object.keys(amCancel()).length ? [['ann', `Annullati ${Object.keys(amCancel()).length}`]] : [])].map(([k, l]) => `<button type="button" data-amof="${k}" class="${amOrdF === k ? 'on' : ''}">${l}</button>`).join('')}</div></div><div id="am-ords"></div></div>
       <div class="gl-2">
         <div class="card"><div class="card-h"><h3>Articoli più costosi</h3><input id="am-aq" type="search" class="ly-aq" placeholder="Cerca articolo…" value="${esc(amArtQ)}"></div><div id="am-art"></div></div>
         <div class="card"><div class="card-h"><h3>Venditori</h3><span class="muted small">${vend} venditori · ${ivaLbl()}</span></div><div id="am-vend"></div></div>
@@ -4321,8 +4323,9 @@
   }
   function renderAmOrds(O) {
     O = O || amOrd().filter(amIn);
-    const L = O.filter(o => !amOrdF || (amOrdF === 'est' && amEst(o)) || (amOrdF === 'na' && (o.cdc || LY_NONE) === LY_NONE) || (amOrdF === 'ids' && (renderAmOrds.ids || []).includes(String(o.id)))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
-    $('#am-ocnt').textContent = `${L.length} ordini · ${eur(amSum(L))}`;
+    if (amOrdF === 'ann') { const c = amCancel(); O = amOrdAll().filter(o => c[String(o.id)]); }
+    const L = O.filter(o => !amOrdF || amOrdF === 'ann' || (amOrdF === 'est' && amEst(o)) || (amOrdF === 'na' && (o.cdc || LY_NONE) === LY_NONE) || (amOrdF === 'ids' && (renderAmOrds.ids || []).includes(String(o.id)))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    $('#am-ocnt').textContent = amOrdF === 'ann' ? `${L.length} ordini annullati · non contano nei totali` : `${L.length} ordini · ${eur(amSum(L))}`;
     if (!L.length) { $('#am-ords').innerHTML = '<div class="empty">Nessun ordine</div>'; return; }
     const sh = L.slice(0, amOrdLimit), more = L.length > amOrdLimit ? `<div class="more-row"><button class="btn sm" id="am-omore">Mostra tutti (${L.length})</button></div>` : '';
     const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
@@ -4357,7 +4360,7 @@
 
   /* ---------- ordine: dettaglio, centro di costo, IVA dalla fattura ---------- */
   function amOrdDetail(id) {
-    const o = amOrd().find(x => String(x.id) === String(id)); if (!o) return;
+    const o = amOrdAll().find(x => String(x.id) === String(id)); if (!o) return;
     const arts = amArtAll().filter(a => String(a.ordine) === String(id)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
     const C = lyCdcList(), cats = [...new Set([...AM_CAT.map(c => c[0]), 'Altro', ...amArtAll().map(a => a.categoria).filter(Boolean)])];
     // copia di lavoro degli articoli (modificabili)
@@ -4372,7 +4375,8 @@
         <button type="button" class="am-ed-x" data-del="${i}" title="Togli l'articolo" aria-label="Togli l'articolo"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>`).join('');
     const sumHtml = () => { const sm = r2(W.reduce((x, w) => x + w.q * w.p, 0)), d = r2(tot - sm), ok = Math.abs(d) < .02; return `<div class="am-es ${ok ? 'ok' : 'ko'}"><span><b>Somma articoli ${esc(eur(sm))}</b><small>${ok ? 'coincide con il totale pagato' : `totale pagato ${esc(eur(tot))} · ${d > 0 ? 'mancano' : 'in più'} ${esc(eur(Math.abs(d)))}`}</small></span>${!ok && sm > 0 ? '<button type="button" class="btn sm" id="am-fit">Adatta i prezzi al totale</button>' : ''}</div>`; };
-    openSheet(`Ordine ${o.id}`, `
+    const isCan = !!amCancel()[String(o.id)];
+    openSheet(`Ordine ${o.id}${isCan ? ' · annullato' : ''}`, `${isCan ? `<div class="fa-chk ko" style="margin:0 0 12px"><b>Ordine annullato</b><span>Segnato come annullato il ${esc(shortDate(amCancel()[String(o.id)]))}: non conta nei totali, nei grafici e nei report.</span></div>` : ''}
       <div class="kv">${[['Data', validD(o.data) ? shortDate(o.data) : '—'], ['Venditore', o.venditore || '—'], ['Destinatario', o.destinatario || '—'], ['Consegna', o.localita || '—'], ['Pagamento', o.pagamento || '—']].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
       <div class="iva-sum" style="margin-top:14px">${num(o.spedizione) ? `<div><span>Spedizione</span><b>${esc(eur(num(o.spedizione)))}</b></div>` : ''}${num(o.sconti) ? `<div><span>Sconti</span><b>${esc(eur(num(o.sconti)))}</b></div>` : ''}<div><span>Imponibile${amEst(o) ? ' (stimato al 22%)' : ''}</span><b>${esc(eur(amNet(o)))}</b></div><div><span>IVA</span><b>${esc(eur(num(o.totale) - amNet(o)))}</b></div><div class="t"><span>Totale pagato</span><b>${esc(eur(num(o.totale)))}</b></div></div>
       ${amEst(o) ? `<div class="fa-chk ko"><b>IVA non riportata da Amazon</b><span>Se hai la fattura, scrivi qui sotto l'imponibile vero: l'ordine non sarà più stimato.</span></div>` : ''}
@@ -4384,7 +4388,7 @@
         <div id="am-es">${sumHtml()}</div>
       </div>
       <label class="f" style="margin-top:12px"><span>Note</span><input name="note" value="${esc(o.note || '')}"></label>
-      <div class="row-btns" style="margin-top:6px">${o.pdf ? '<button type="button" class="btn sm" id="am-open">Apri fattura</button>' : ''}${!isLocal() ? `<button type="button" class="btn sm" id="am-doc">${o.pdf ? 'Sostituisci fattura' : 'Allega fattura (PDF)'}</button>` : ''}</div>`,
+      <div class="row-btns" style="margin-top:6px">${o.pdf ? '<button type="button" class="btn sm" id="am-open">Apri fattura</button>' : ''}${!isLocal() ? `<button type="button" class="btn sm" id="am-doc">${o.pdf ? 'Sostituisci fattura' : 'Allega fattura (PDF)'}</button>` : ''}<button type="button" class="btn sm ${isCan ? '' : 'am-canbtn'}" id="am-can">${isCan ? 'Ripristina l\'ordine' : 'Segna come annullato'}</button></div>`,
       fd => {
         const ops = [], imp = String(fd.get('imp') || '').trim();
         if (W.some(w => !w.d.trim())) { toast('Scrivi la descrizione di ogni articolo (o toglilo)'); return false; }
@@ -4425,6 +4429,13 @@
       if (e.target.closest('#am-add')) { W.push({ id: '', d: '', q: 1, p: 0, c: 'Altro', src: null }); redraw(); const ins = $$('#am-er .am-ed-d'); if (ins.length) ins[ins.length - 1].focus(); return; }
       if (e.target.closest('#am-fit')) { const sm = W.reduce((s2, w) => s2 + w.q * w.p, 0); if (sm > 0) { const k = tot / sm; W.forEach(w => { w.p = r2(w.p * k); }); const d = r2(tot - W.reduce((s2, w) => s2 + w.q * w.p, 0)); const last = W.slice().reverse().find(w => w.q === 1); if (last && Math.abs(d) < 1) last.p = r2(last.p + d); redraw(); toast('Prezzi adattati al totale pagato: controllali'); } }
     });
+    $('#am-can').onclick = () => {
+      const c = { ...amCancel() };
+      if (isCan) delete c[String(o.id)];
+      else { if (!confirm(`Segnare l'ordine ${o.id} (${eur(num(o.totale))}) come annullato?\nNon conterà più nei totali, nei grafici e nei report. Puoi ripristinarlo quando vuoi da «Ordini → Annullati».`)) return; c[String(o.id)] = today(); }
+      write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'amAnnullati', valore: JSON.stringify(c) } }]);
+      closeSheet(); toast(isCan ? 'Ordine ripristinato' : 'Ordine segnato come annullato');
+    };
     const op = $('#am-open'); if (op) op.onclick = () => openDoc(o.pdf, `Amazon ${o.id}`);
     const up = $('#am-doc'); if (up) up.onclick = async () => {
       if (!amOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.7)');
@@ -4455,7 +4466,7 @@
     const C = { d: c(/^data/), id: c(/^nordine/), ar: c(/^articoli/), pz: c(/^pezzi/), ve: c(/^venditore/), de: c(/^destinatario/), lo: c(/^localita/), pa: c(/^pagamento/), su: c(/^subtotale/), sp: c(/^spedizione/), sc: c(/^sconti/), im: c(/^imponibile/), iv: c(/^iva$/), to: c(/^totale/), no: c(/^note/), cdc: c(/^cdc$|^centro/) };
     const g = (r, i) => i >= 0 ? r[i] : '';
     let cdcs = lyCdcMerge(lyCdcList());
-    const oldO = new Map(amOrd().map(o => [String(o.id), o]));
+    const oldO = new Map(amOrdAll().map(o => [String(o.id), o]));
     const cdcOf = loc => { const L = amNorm(loc); const x = cdcs.find(z => String(z.loc || '').split('|').map(amNorm).filter(Boolean).some(k => L.includes(k))); return x ? x.cod : LY_NONE; };
     const orders = [];
     os.a.slice(os.hi + 1).forEach(r => {
@@ -4524,7 +4535,7 @@
     const C = {
       id: col(/^(orderid|idordine|numeroordine|nordine|ordine|numerodellordine|iddellordine)$/),
       d: col(/^orderdate$|^dataordine$|^datadellordine$|^data$/, /orderdate|dataordine|datadellordine/),
-      st: col(/^orderstatus$|^statoordine$|^statodellordine$/, /orderstatus|statoordine|statodellordine/),
+      st: col(/^orderstatus$|^statoordine$|^statodellordine$/, /orderstatus|statoordine|statodellordine/, /^(status|stato)$/),
       su: col(/^(ordersubtotal|subtotaleordine|subtotaledellordine)$/),
       sh: col(/^ordershipping|spedizioneegestioneordine|spedizioneegestionedellordine|costidispedizioneordine|ordinespedizione/),
       pr: col(/^orderpromotion|promozioneordine|promozionedellordine|scontoordine/),
@@ -4543,7 +4554,8 @@
       nm: col(/shiptoname|nomedestinatario|^destinatario$|nomedellindirizzodispedizione/),
       us: col(/^accountuser$|^utente$|utentedellaccount|^acquirente$|^buyername$/),
       pt: col(/paymentinstrumenttype|tipodistrumentodipagamento|metododipagamento|strumentodipagamento/),
-      pi: col(/^paymentidentifier$|identificativodipagamento|identificativodelpagamento/)
+      pi: col(/^paymentidentifier$|identificativodipagamento|identificativodelpagamento/),
+      ist: col(/^itemstatus$|^statoarticolo$|^statodellarticolo$|^shipmentstatus$|^statospedizione$|^statodellaspedizione$/)
     };
     // indirizzo: tutte le colonne di indirizzo/città/CAP
     const AD = H.map((h, i) => /shippingaddress|shipto(address|street|city|postal|zip|state)|indirizzodispedizione|indirizzodiconsegna|cittadispedizione|capdispedizione|^citta$|^cap$|^city$|postalcode|zipcode/.test(h) ? i : -1).filter(i => i >= 0);
@@ -4556,12 +4568,13 @@
     const date = v => { const s = String(v || '').trim(), m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/); if (m) { const [a, b] = dm ? [m[1], m[2]] : [m[2], m[1]]; return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(b)}-${pad(a)}`; } const iso = s.match(/^(\d{4})-(\d\d)-(\d\d)/); return iso ? iso.slice(1).join('-') : lyDate(v); };
     let cdcs = lyCdcMerge(lyCdcList());
     const cdcOf = loc => { const L = amNorm(loc); const x = cdcs.find(z => String(z.loc || '').split('|').map(amNorm).filter(Boolean).some(k => L.includes(k))); return x ? x.cod : LY_NONE; };
-    const oldO = new Map(amOrd().map(o => [String(o.id), o])), oldA = new Map(amArtAll().map(a => [String(a.id), a]));
+    const oldO = new Map(amOrdAll().map(o => [String(o.id), o])), oldA = new Map(amArtAll().map(a => [String(a.id), a]));
     const byO = groupBy(body, r => g(r, C.id));
     const orders = [], arts = []; let skipped = 0;
     byO.forEach((rs, id) => {
       const r0 = rs[0];
-      if (/cancel|annull/i.test(g(r0, C.st))) { skipped++; return; }
+      if (/cancel|annull/i.test(g(r0, C.st)) || (C.st >= 0 && rs.every(r => /cancel|annull/i.test(g(r, C.st))))) { skipped++; return; }
+      if (C.ist >= 0 && rs.every(r => /cancel|annull/i.test(g(r, C.ist)))) { skipped++; return; }
       const items = C.ti >= 0 ? rs.filter(r => g(r, C.ti)) : [];
       const sumI = i => r2(items.reduce((a, r) => a + amNum(g(r, i)), 0));
       const sub = C.su >= 0 ? amNum(g(r0, C.su)) : C.isu >= 0 ? sumI(C.isu) : 0;
@@ -4618,13 +4631,13 @@
       }
       busy();
       // gli articoli corretti a mano nell'app non vengono sovrascritti
-      const FIX = cfg('amArtFix') || {}, exO = new Map(amOrd().map(o => [String(o.id), o]));
+      const FIX = cfg('amArtFix') || {}, exO = new Map(amOrdAll().map(o => [String(o.id), o])), CAN = amCancel();
       const nFix = P.orders.filter(o => FIX[o.id] && exO.has(o.id)).length;
       if (nFix) { P.arts = P.arts.filter(a => !(FIX[a.ordine] && exO.has(String(a.ordine)))); P.orders.forEach(o => { const ex = exO.get(o.id); if (FIX[o.id] && ex) { o.articoli = ex.articoli; o.pezzi = ex.pezzi; } }); }
-      const ids = new Set(amOrd().map(o => String(o.id))), nuovi = P.orders.filter(o => !ids.has(o.id)).length;
+      const ids = new Set(amOrdAll().map(o => String(o.id))), nuovi = P.orders.filter(o => !ids.has(o.id)).length, nCan = P.orders.filter(o => CAN[o.id]).length;
       const est = P.orders.filter(o => o.ivaTipo === 'stimata').length, na = P.orders.filter(o => o.cdc === LY_NONE).length;
       const dd = P.orders.map(o => o.data).filter(Boolean).sort();
-      if (!confirm(`${P.biz ? 'Report Amazon Business' : 'File Ordini Amazon'}${dd.length ? ` · dal ${dd[0].split('-').reverse().join('/')} al ${dd[dd.length - 1].split('-').reverse().join('/')}` : ''}\n${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo, categorie e correzioni IVA).${P.skipped ? `\n${P.skipped} ordini annullati non importati.` : ''}${nFix ? `\n${nFix} ordini con articoli corretti a mano: i tuoi prezzi restano.` : ''}${P.biz && !P.items ? '\nIl report non ha gli articoli: per avere anche le categorie scarica il report «Articoli».' : ''}\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
+      if (!confirm(`${P.biz ? 'Report Amazon Business' : 'File Ordini Amazon'}${dd.length ? ` · dal ${dd[0].split('-').reverse().join('/')} al ${dd[dd.length - 1].split('-').reverse().join('/')}` : ''}\n${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo, categorie e correzioni IVA).${P.skipped ? `\n${P.skipped} ordini annullati non importati.` : ''}${nFix ? `\n${nFix} ordini con articoli corretti a mano: i tuoi prezzi restano.` : ''}${nCan ? `\n${nCan} ordini che hai segnato come annullati restano esclusi.` : ''}${P.biz && !P.items ? '\nIl report non ha gli articoli: per avere anche le categorie scarica il report «Articoli».' : ''}\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
       const keep = new Set(P.orders.map(o => o.id)), newA = new Set(P.arts.map(a => a.id));
       const stale = P.biz && !P.items ? [] : amArtAll().filter(a => keep.has(String(a.ordine)) && !newA.has(String(a.id)) && !(FIX[a.ordine] && exO.has(String(a.ordine))));
       write([...P.orders.map(row => ({ action: 'upsert', sheet: 'Amazon', row })), ...P.arts.map(row => ({ action: 'upsert', sheet: 'AmazonArticoli', row })), ...stale.map(a => ({ action: 'delete', sheet: 'AmazonArticoli', id: a.id })), { action: 'upsert', sheet: 'Config', row: { chiave: 'lyCdc', valore: JSON.stringify(P.cdcs) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'amLastImport', valore: JSON.stringify({ data: today(), file: file.name, fino: dd[dd.length - 1] || '', n: P.orders.length, nuovi }) } }]);
