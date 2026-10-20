@@ -148,7 +148,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -193,7 +193,7 @@
   async function api(action, extra) { return (await post(action, extra)).result; }
   function lockApp(msg) {
     tok = ''; LS.set('cdc_tok', '');
-    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [] };
+    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [] };
     try { localStorage.removeItem('cdc_data'); } catch {}
     showLogin(msg);
   }
@@ -236,7 +236,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []) };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []) };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -271,7 +271,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', impostazioni: 'Impostazioni' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -283,13 +283,14 @@
     if (view === 'gasolio') gasAnim = true;
     if (view === 'fatture') faAnim = true;
     if (view === 'torental') trAnim = true;
+    if (view === 'lyreco') lyAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental';
-    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' ? 'hidden' : '';
+    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco';
+    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -318,7 +319,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, impostazioni: renderSettings }[view];
+    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -3283,6 +3284,407 @@
     </svg>`;
   }
 
+  /* =========================================================
+     LYRECO · fatture e merce ripartite per centro di costo (piazzale)
+     ========================================================= */
+  const LY_CDC_DEF = [
+    { cod: 'CDC01', n: 'Sede Roma', tipo: 'Sede', ind: 'Viale L. Schiavonetti 278 – Roma (sede legale)', key: 'SOLUZIONE VEICOLARE VIALE L. SCHIAVONETT ROMA', citta: 'Roma', prov: 'RM', geo: [12.612, 41.857] },
+    { cod: 'CDC02', n: 'San Cesareo', tipo: 'Sede operativa', ind: 'Via dell\'Enopolio snc – San Cesareo (RM)', key: 'SOLUZIONE VEICOLARE VIA DELLENOPOLIO SN SAN CESAREO', citta: 'San Cesareo', prov: 'RM', geo: [12.80, 41.82] },
+    { cod: 'CDC03', n: 'Magazzino Gorgonzola', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Gorgonzola (MI)', key: 'MAGAZZINO GORGONZOL C/O VENETA LOGISTIC VIA GIUSEPPE P', citta: 'Gorgonzola', prov: 'MI', geo: [9.405, 45.532] },
+    { cod: 'CDC04', n: 'Magazzino Venezia', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Via Abbate Tommaso – Venezia', key: 'MAGAZZINO VENEZIA C/O VENETA LOGISTIC VIA ABBATE TOMMA', citta: 'Venezia', prov: 'VE', geo: [12.245, 45.488] },
+    { cod: 'CDC05', n: 'Magazzino Pisa', tipo: 'Magazzino', ind: 'c/o RL2 – Via Cocchi snc – Pisa', key: 'MAGAZZINO PISA C/O RL2 VIA COCCHI SNC PISA', citta: 'Pisa', prov: 'PI', geo: [10.43, 43.687] },
+    { cod: 'CDC06', n: 'Magazzino Rimini', tipo: 'Magazzino', ind: 'c/o RL2 – Via Chitarrara 1103 – Taverna (Rimini)', key: 'MAGAZZINO RIMINI C/O RL2 VIA CHITARRARA 1103 TAVERNA D', citta: 'Taverna', prov: 'RN', geo: [12.53, 43.948] },
+    { cod: 'CDC07', n: 'Magazzino Mondo (RTL2)', tipo: 'Magazzino', ind: 'RTL2 Logistica c/o Magazzino Mondo – Via Alessandro Manzoni', key: 'RTL2 LOGISTICA C/O MAGAZZINO MONDO VIA ALESSANDRO MANZ', citta: '', prov: '', geo: null },
+    { cod: 'CDC99', n: 'Da attribuire', tipo: 'Sospeso', ind: 'Sede di consegna non indicata in fattura', key: '', citta: '', prov: '', geo: null }
+  ];
+  const LY_NONE = 'CDC99';
+  const LY_LBL = { CDC01: [-30, 22, 'end'], CDC02: [34, -22, 'start'], CDC03: [-12, -26, 'end'], CDC04: [16, -22, 'start'], CDC05: [-24, 16, 'end'], CDC06: [26, -4, 'start'] };
+  const LY_COL = ['#3362ab', '#eb6834', '#1baf7a', '#eda100', '#8b5cf6', '#e87ba4', '#0ea5b7', '#94a3b8'];
+  let lyP = '', lyAnim = true, lyF = { q: '', cdc: '', cat: '', doc: '' }, lyLimit = 40, lyDocLimit = 12, lyDocF = '', lyArtQ = '';
+  const lyRows = () => db.lyreco || [];
+  const lyDocs = () => db.lyfatture || [];
+  const lyOk = () => isLocal() || !db.v || db.v >= 'cdc-1.6';
+  const lyCdcList = () => { const c = cfg('lyCdc'); return Array.isArray(c) && c.length ? c : LY_CDC_DEF; };
+  const lyCdc = cod => lyCdcList().find(x => x.cod === cod) || { cod, n: cod || '—', tipo: '' };
+  const lyName = cod => lyCdc(cod || LY_NONE).n;
+  const lyMulR = r => ivaOn ? 1 + num(r.iva) : 1;
+  const lyV = r => r2(num(r.importo) * lyMulR(r));
+  const lySum = arr => r2(arr.reduce((a, r) => a + lyV(r), 0));
+  const lySumN = arr => r2(arr.reduce((a, r) => a + num(r.importo), 0));
+  const lyMonths = () => [...new Set(lyRows().map(r => String(r.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+  const lyIn = r => !lyP || String(r.data).slice(0, 7) === lyP;
+  const lyIsShip = r => /spese di trasporto/i.test(r.categoria || '') || /TRASP/i.test(r.descrizione || '');
+  const lyIsEnv = r => /contribut/i.test(r.categoria || '');
+  const lyIsNC = d => /TD04/i.test(d.tipo || '') || /nota di credito/i.test(d.descrizione || '');
+  const lyTipoLbl = t => /TD04/.test(t) ? 'Nota di credito' : /TD25/.test(t) ? 'Triangolare' : /TD24/.test(t) ? 'Differita' : (t || 'Fattura');
+  const lyGeo = c => { if (Array.isArray(c.geo) && c.geo.length === 2 && num(c.geo[0])) return c.geo; const G = window.GLS_GEO || { CITY: {}, PROV: {} }, pr = String(c.prov || '').trim().toUpperCase(), ci = String(c.citta || '').trim().toUpperCase(); const hit = G.CITY[`${ci}|${pr}`]; if (hit) return [hit[1], hit[0]]; const p = G.PROV[pr]; return p ? [p[1], p[0]] : null; };
+  const lyDocRows = id => lyRows().filter(r => String(r.fattura) === String(id));
+  const lyDocCdc = rows => { const by = groupBy(rows, r => r.cdc || LY_NONE); return [...by].sort((a, b) => b[1].length - a[1].length).map(x => x[0]); };
+  function lyDocList(rows) {
+    const byD = groupBy(rows, r => String(r.fattura));
+    const meta = new Map(lyDocs().map(d => [String(d.id), d]));
+    return [...byD].map(([id, v]) => {
+      const d = meta.get(id) || {}, cdcs = lyDocCdc(v), sumN = lySumN(v);
+      const imp = d.imponibile !== '' && d.imponibile != null ? num(d.imponibile) : sumN;
+      const tot = d.totale !== '' && d.totale != null && num(d.totale) ? num(d.totale) : r2(v.reduce((a, r) => a + num(r.importo) * (1 + num(r.iva)), 0));
+      return { id, d, rows: v, tipo: d.tipo || v[0].tipo || '', data: d.data || v[0].data || '', cdc: cdcs[0], mixed: cdcs.length > 1, sumN, imp, tot, diff: r2(imp - sumN), v: lySum(v), ordini: [...new Set(v.map(r => r.ordine).filter(Boolean))], ddt: [...new Set(v.map(r => r.ddt).filter(Boolean))] };
+    }).sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.id).localeCompare(String(a.id)));
+  }
+
+  /* ---------- controlli ---------- */
+  function lyChecks(rows, docs) {
+    const A = [];
+    const na = rows.filter(r => (r.cdc || LY_NONE) === LY_NONE), nad = docs.filter(d => d.cdc === LY_NONE);
+    if (na.length) A.push({ t: 'warn', h: 'Merce da attribuire a un piazzale', d: `${nad.length} fatture (${na.length} righe) non indicano la sede di consegna. Apri la fattura e scegli il centro di costo: tutte le righe si aggiornano insieme.`, v: eur(lySum(na)), act: 'lyna' });
+    const bad = docs.filter(d => Math.abs(d.diff) > .009);
+    if (bad.length) A.push({ t: 'warn', h: 'Fatture che non quadrano', d: bad.slice(0, 3).map(d => `n. ${esc(d.id)}: fattura ${eur(d.imp)}, righe ${eur(d.sumN)}`).join(' · ') + (bad.length > 3 ? ' …' : ''), v: eur(bad.reduce((a, d) => a + Math.abs(d.diff), 0)), ids: bad.map(d => d.id) });
+    const ship = rows.filter(lyIsShip), minOrd = ship.filter(r => /MINIMO/i.test(r.descrizione || ''));
+    if (ship.length) A.push({ t: 'info', h: 'Spese di trasporto', d: `${eur(lySum(ship))} di trasporto su ${new Set(ship.map(r => r.ordine || r.fattura)).size} ordini${minOrd.length ? `, di cui ${minOrd.length} supplementi per ordine sotto il minimo (${eur(lySum(minOrd))}): raggruppando gli ordini si risparmiano` : ''}.`, v: fmtNum(pct(lySum(ship), lySum(rows)), 1) + '% della spesa', cat: 'Spese di trasporto' });
+    const art = [...groupBy(rows.filter(r => r.codice && num(r.prezzo) > 0 && !lyIsShip(r) && !lyIsEnv(r) && num(r.importo) > 0), r => String(r.codice))].map(([k, v]) => { const p = v.map(r => num(r.prezzo)); return { k, d: v[0].descrizione, min: Math.min(...p), max: Math.max(...p), q: v.reduce((a, r) => a + num(r.quantita), 0) }; }).filter(x => x.max / x.min > 1.05).sort((a, b) => (b.max - b.min) * b.q - (a.max - a.min) * a.q);
+    if (art.length) A.push({ t: 'info', h: 'Stesso articolo pagato a prezzi diversi', d: art.slice(0, 3).map(x => `${esc(String(x.d).slice(0, 42))}: da ${eurP(x.min)} a ${eurP(x.max)}`).join(' · ') + (art.length > 3 ? ` e altri ${art.length - 3}` : ''), v: art.length + ' articoli', q: art[0] ? art[0].k : '' });
+    const nc = docs.filter(d => lyIsNC(d));
+    if (nc.length) A.push({ t: 'info', h: 'Note di credito', d: `${nc.length} note di credito già scalate dai totali (resi o correzioni di Lyreco).`, v: eur(nc.reduce((a, d) => a + d.v, 0)), ids: nc.map(d => d.id) });
+    const rc = rows.filter(r => num(r.iva) === 0 && num(r.importo) > 0);
+    if (rc.length) { const ds = [...new Set(rc.map(r => r.fattura))]; A.push({ t: 'info', h: 'Fatture senza IVA (inversione contabile)', d: `${ds.length === 1 ? 'La fattura' : 'Le fatture'} ${ds.map(esc).join(', ')} ${ds.length === 1 ? 'è' : 'sono'} in reverse charge: l'IVA va integrata da voi in contabilità.`, v: eur(lySumN(rc)), ids: ds }); }
+    const zero = rows.filter(r => num(r.quantita) && !num(r.importo));
+    if (zero.length) A.push({ t: 'info', h: 'Articoli in omaggio', d: `${zero.length} righe a costo zero (${zero.slice(0, 2).map(r => esc(String(r.descrizione).slice(0, 36))).join(', ')}).`, v: zero.length + ' righe', ids: [...new Set(zero.map(r => r.fattura))] });
+    return A;
+  }
+
+  /* ---------- pagina ---------- */
+  function lyPlist(rows) {
+    const by = groupBy(rows, r => r.cdc || LY_NONE);
+    const list = lyCdcList().map(c => ({ ...c, rows: by.get(c.cod) || [] }));
+    [...by.keys()].filter(k => !list.some(c => c.cod === k)).forEach(k => list.push({ cod: k, n: k, tipo: '', rows: by.get(k) }));
+    list.forEach(x => { x.t = lySum(x.rows); x.docs = new Set(x.rows.map(r => r.fattura)).size; });
+    return list;
+  }
+  function renderLy() {
+    const months = lyMonths();
+    if (lyP && !months.includes(lyP)) lyP = '';
+    $('#ly-per').innerHTML = `<option value=""${lyP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === lyP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(lyP);
+    $('#ly-prev').disabled = ix >= opts.length - 1; $('#ly-next').disabled = ix <= 0;
+    sub(`${ivaLbl()} · forniture Lyreco per centro di costo`);
+    const all = lyRows(), rows = all.filter(lyIn);
+    const anim = lyAnim && !reduced(); lyAnim = false;
+    const body = $('#ly-body'); body.classList.toggle('cc-anim', anim);
+    const warn = lyOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati Lyreco.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.6 (Code.gs nuovo).</span></div>`;
+    if (!rows.length) {
+      body.innerHTML = warn + `<div class="gl-hero ly-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${lyArt()}</div><div class="gh-main"><span class="gh-lbl">Forniture Lyreco</span><h3>Nessuna fattura caricata</h3><p>Importa il file «Centro di costo Lyreco» (fogli Dettaglio righe, Controllo fatture e Anagrafica CdC): l'app ripartisce fatture e merce su ogni piazzale.</p><div class="tr-hb ly-hb"><button class="btn sm" id="ly-imp2" type="button">Importa il file Excel</button></div></div></div></div>`;
+      return;
+    }
+    const D = lyDocList(rows), PL = lyPlist(rows);
+    const T = lySum(rows), TN = lySumN(rows);
+    const nc = D.filter(d => lyIsNC(d)), fat = D.filter(d => !lyIsNC(d));
+    const na = PL.find(x => x.cod === LY_NONE) || { t: 0, rows: [], docs: 0 };
+    const ship = rows.filter(lyIsShip), shipT = lySum(ship);
+    const docTot = D.reduce((a, d) => a + d.tot, 0), docImp = D.reduce((a, d) => a + d.imp, 0);
+    const act = PL.filter(x => x.cod !== LY_NONE && x.rows.length);
+    const per = lyP ? mLabel(lyP) : months.length > 1 ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : months.length ? mLabel(months[0]) : '';
+    const prevK = lyP ? months[months.indexOf(lyP) - 1] : null, PT = prevK ? lySum(all.filter(r => String(r.data).slice(0, 7) === prevK)) : 0;
+    const int = v => fmtNum(Math.round(v), 0);
+    const K = [
+      ['Fatture', fat.length, int, nc.length ? `+ ${nc.length} note di credito` : 'nessuna nota di credito'],
+      ['IVA', docTot - docImp, eur0, `totale documenti ${eur0(docTot)}`],
+      ['Centri serviti', act.length, int, `su ${lyCdcList().filter(c => c.cod !== LY_NONE).length} centri di costo`],
+      ['Da attribuire', na.t, eur0, T ? `${fmtNum(pct(na.t, T), 1)}% · ${na.docs} fatture` : '—'],
+      ['Trasporto', shipT, eur0, T ? `${fmtNum(pct(shipT, T), 1)}% della spesa` : '—'],
+      ['Note di credito', nc.reduce((a, d) => a + d.v, 0), eur0, nc.length ? `${nc.length} documenti` : '—']
+    ];
+    body.innerHTML = warn + `
+      <div class="gl-hero ly-hero">
+        <div class="gh-top"><div class="gh-art">${lyArt()}</div>
+        <div class="gh-main"><span class="gh-lbl">Forniture Lyreco · ${esc(per)}</span><div class="gh-big k-ly">0 €</div>
+          <div class="gh-sub"><span>${D.length} documenti</span><span>${fmtNum(rows.length, 0)} righe</span><span>${act.length} centri di costo</span>${PT ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs((T / PT - 1) * 100), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div></div></div>
+        <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k${i === 3 && na.t ? ' ly-kwarn' : ''}"><span>${l}</span><b data-lyk="${i}">0</b><small>${esc(s)}</small></div>`).join('')}</div>
+      </div>
+      <div class="card" id="ly-anom"></div>
+      <div class="card ly-mapcard"><div class="card-h"><h3>Spesa per piazzale</h3><span class="muted small">${ivaLbl()} · tocca per filtrare</span><button class="btn sm" id="ly-cdc" type="button">Centri di costo</button></div>
+        <div class="tr-dash ly-dash"><div class="cc-map" id="ly-map"></div><div class="tr-rank" id="ly-rank"></div></div></div>
+      <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>Per categoria</h3><span class="muted small">${ivaLbl()}</span></div><div class="bars" id="ly-cat"></div></div>
+        <div class="card"><div class="card-h"><h3>Mese per mese</h3><span class="muted small">per centro di costo</span></div><div class="ly-mb" id="ly-mm"></div><div class="ly-leg" id="ly-leg"></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Centri di costo × categorie</h3><span class="muted small">come il foglio «Riepilogo CdC» · ${ivaLbl()}</span></div><div class="mx-wrap" id="ly-mx"></div></div>
+      <div class="card" id="ly-docs-card"><div class="card-h"><h3>Fatture e note di credito</h3><span class="muted small" id="ly-dcnt"></span><div class="tr-seg ly-dseg">${[['', 'Tutte'], ['na', 'Da attribuire'], ['nc', 'Note di credito']].map(([k, l]) => `<button type="button" data-lydf="${k}" class="${lyDocF === k ? 'on' : ''}">${l}</button>`).join('')}</div></div><div id="ly-docs"></div></div>
+      <div class="card"><div class="card-h"><h3>Articoli più acquistati</h3><span class="muted small">per spesa · trasporto e contributi esclusi</span><input id="ly-aq" type="search" class="ly-aq" placeholder="Cerca articolo o codice…" value="${esc(lyArtQ)}"></div><div id="ly-art"></div></div>
+      <div class="card gl-list"><div class="card-h"><h3>Tutte le righe</h3><span class="muted small" id="ly-cnt"></span></div>
+        <div class="filters f4 gl-f"><input id="ly-q" type="search" placeholder="Cerca descrizione, codice, fattura, ordine…" value="${esc(lyF.q)}"><select id="ly-fc"></select><select id="ly-fk"></select><select id="ly-fd"></select></div>
+        <div id="ly-list"></div></div>`;
+    countTo($('.k-ly', body), T, eur0);
+    $$('[data-lyk]', body).forEach(el => { const i = +el.dataset.lyk; el._v = 0; countTo(el, K[i][1], K[i][2]); });
+    // controlli
+    const A = lyChecks(rows, D), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
+    const okDocs = D.filter(d => Math.abs(d.diff) <= .009).length;
+    $('#ly-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${okDocs}/${D.length} fatture quadrano con le righe · ${A.length} punti</span></div>` + (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"${x.act ? ` data-lyact="${x.act}"` : ''}${x.ids ? ` data-lyids="${esc(x.ids.join(' '))}"` : ''}${x.cat ? ` data-lycat="${esc(x.cat)}"` : ''}${x.q ? ` data-lyartq="${esc(x.q)}"` : ''}><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
+    lyMap(PL, rows, anim);
+    // categorie
+    const byC = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => ({ k, v: lySum(v), n: v.length })).sort((a, b) => b.v - a.v), mc = Math.max(1, ...byC.map(x => x.v));
+    $('#ly-cat').innerHTML = byC.map((x, i) => `<div class="bar-row gl-anim-row click" style="--d:${200 + i * 45}ms" data-lycat="${esc(x.k)}"><div class="bar-top"><span>${esc(x.k)}<em>${fmtNum(pct(x.v, T), 1)}%</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(Math.max(0, x.v) / mc * 100).toFixed(2)}%"></div></div></div>`).join('');
+    // mesi (impilati per centro di costo)
+    const top = PL.filter(x => x.rows.length).sort((a, b) => b.t - a.t), colOf = new Map(top.map((x, i) => [x.cod, x.cod === LY_NONE ? '#b6bac3' : LY_COL[Math.min(i, LY_COL.length - 1)]]));
+    const mm = (lyP ? [lyP] : months).map(k => { const v = all.filter(r => String(r.data).slice(0, 7) === k); const parts = top.map(c => ({ c: c.cod, v: lySum(v.filter(r => (r.cdc || LY_NONE) === c.cod)) })).filter(p => p.v > 0); return { k, t: lySum(v), parts }; });
+    const mx = Math.max(1, ...mm.map(x => x.t));
+    $('#ly-mm').innerHTML = mm.map((x, i) => `<div class="ly-b" data-lyper="${x.k}" title="${esc(mLabel(x.k))}: ${esc(eur(x.t))}"><span class="ly-bv">${esc(eur0(x.t))}</span><div class="ly-bc" style="height:${Math.max(2, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${x.parts.slice().reverse().map(p => `<i style="flex:${p.v};background:${colOf.get(p.c)}" title="${esc(lyName(p.c))}: ${esc(eur(p.v))}"></i>`).join('')}</div><span class="ly-bl">${esc(MESI[Number(x.k.slice(5)) - 1].slice(0, 3))}</span></div>`).join('');
+    $('#ly-leg').innerHTML = top.map(c => `<span><i style="background:${colOf.get(c.cod)}"></i>${esc(c.n)}</span>`).join('');
+    lyMatrix(rows, PL, anim);
+    renderLyDocs(D);
+    renderLyArt(rows);
+    // filtri righe
+    const cats = byC.map(x => x.k);
+    if (lyF.cdc && !PL.some(x => x.cod === lyF.cdc && x.rows.length)) lyF.cdc = '';
+    if (lyF.cat && !cats.includes(lyF.cat)) lyF.cat = '';
+    if (lyF.doc && !D.some(d => d.id === lyF.doc)) lyF.doc = '';
+    $('#ly-fc').innerHTML = `<option value="">Tutti i centri di costo</option>` + PL.filter(x => x.rows.length).map(x => `<option value="${esc(x.cod)}"${lyF.cdc === x.cod ? ' selected' : ''}>${esc(x.n)}</option>`).join('');
+    $('#ly-fk').innerHTML = `<option value="">Tutte le categorie</option>` + cats.map(c => `<option${lyF.cat === c ? ' selected' : ''}>${esc(c)}</option>`).join('');
+    $('#ly-fd').innerHTML = `<option value="">Tutte le fatture</option>` + D.map(d => `<option value="${esc(d.id)}"${lyF.doc === d.id ? ' selected' : ''}>${esc(d.id)} · ${esc(shortDate(d.data))}</option>`).join('');
+    renderLyList(rows);
+  }
+
+  function lyMap(PL, rows, anim) {
+    const pts = PL.filter(x => x.cod !== LY_NONE && lyGeo(x)), mx = Math.max(1, ...pts.map(x => x.t)), T = pts.reduce((a, x) => a + x.t, 0);
+    const pins = pts.map((x, i) => { const [px, py] = proj(lyGeo(x)); return { ...x, px, py, r: x.rows.length ? 4.5 + 10 * Math.sqrt(Math.max(0, x.t) / mx) : 3, i }; });
+    const lab = p => {
+      const [dx, dy, an] = LY_LBL[p.cod] || [p.r + 12, -6, 'start'];
+      const lx = p.px + dx, ly = p.py + dy, ex = lx + (an === 'end' ? 4 : an === 'start' ? -4 : 0);
+      return `<g class="cm-lbl" data-lycdc="${esc(p.cod)}" style="--d:${800 + p.i * 80}ms"><path class="cm-lead" d="M${p.px.toFixed(1)} ${p.py.toFixed(1)} L${ex.toFixed(1)} ${(ly - 4).toFixed(1)}"/>
+        <text x="${lx.toFixed(1)}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n">${esc(String(p.n).replace(/^Magazzino\s+/i, '').toUpperCase())}</text>
+        <text x="${lx.toFixed(1)}" y="${(ly + 9).toFixed(1)}" text-anchor="${an}" class="cm-v">${eur0(p.t)} · ${fmtNum(pct(p.t, T), 0)}%</text></g>`;
+    };
+    // solo i piazzali: nessun punto di partenza e nessun collegamento
+    $('#ly-map').innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei centri di costo Lyreco">
+      <path class="cm-land" pathLength="1" d="${IT_PATH}"/>
+      ${pins.slice().sort((a, b) => b.r - a.r).map(p => `<g class="cm-pin tr-pin${p.rows.length ? ' act' : ''}${lyF.cdc === p.cod ? ' on' : ''}" data-lycdc="${esc(p.cod)}" style="--d:${450 + p.i * 80}ms" transform="translate(${p.px.toFixed(1)} ${p.py.toFixed(1)})"><title>${esc(p.n)}: ${esc(eur(p.t))} · ${p.docs} fatture</title><circle class="cm-hit" r="${(p.r + 8).toFixed(1)}"/><circle class="cm-c" r="${p.r.toFixed(1)}"/></g>`).join('')}
+      ${pins.filter(p => p.rows.length).map(lab).join('')}
+    </svg>`;
+    const rk = PL.filter(x => x.rows.length).sort((a, b) => (a.cod === LY_NONE) - (b.cod === LY_NONE) || b.t - a.t), all = rk.reduce((a, x) => a + x.t, 0), mxr = Math.max(1, ...rk.map(x => x.t));
+    const noGeo = PL.filter(x => x.cod !== LY_NONE && x.rows.length && !lyGeo(x));
+    $('#ly-rank').innerHTML = rk.map((x, i) => `<button type="button" class="cr-row${lyF.cdc === x.cod ? ' on' : ''}${x.cod === LY_NONE ? ' ly-na' : ''}" data-lycdc="${esc(x.cod)}" style="--d:${200 + i * 60}ms">
+        <span class="cr-n">${x.cod === LY_NONE ? '?' : i + 1}</span>
+        <span class="cr-main"><span class="cr-top"><b>${esc(x.n)}</b><span><em>${fmtNum(pct(x.t, all), 1)}%</em><strong>${eur0(x.t)}</strong></span></span>
+        <span class="cr-track"><i style="width:${(Math.max(0, x.t) / mxr * 100).toFixed(2)}%"></i></span>
+        <span class="cr-sub">${esc(x.cod)} · ${x.docs} fatture · ${x.rows.length} righe${x.cod === LY_NONE ? ' · da assegnare' : x.tipo ? ' · ' + esc(x.tipo) : ''}</span></span>
+      </button>`).join('') + (noGeo.length ? `<div class="muted small tr-none">Non in mappa (manca la città): ${noGeo.map(x => esc(x.n)).join(', ')}. <button type="button" class="link ly-link" id="ly-cdc2">Imposta la città</button></div>` : '');
+  }
+  function lyMatrix(rows, PL, anim) {
+    const cs = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => [k, lySum(v)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    const P = PL.filter(x => x.rows.length);
+    const cell = {}; rows.forEach(r => { const k = (r.cdc || LY_NONE) + '|' + (r.categoria || 'Altro'); cell[k] = (cell[k] || 0) + lyV(r); });
+    const mxv = Math.max(1, ...Object.values(cell));
+    const heat = v => !v ? 'h0' : v / mxv > .45 ? 'h3' : v / mxv > .15 ? 'h2' : v / mxv > .03 ? 'h1' : '';
+    $('#ly-mx').innerHTML = `<table class="mx ly-mxt${anim ? ' mx-anim' : ''}"><thead><tr><th>Centro di costo</th>${cs.map(c => `<th title="${esc(c)}">${esc(c)}</th>`).join('')}<th>Totale</th></tr></thead><tbody>
+      ${P.map((p, r) => `<tr data-lycdc="${esc(p.cod)}"${p.cod === LY_NONE ? ' class="ly-na"' : ''}><td title="${esc(p.n)}">${esc(p.n)}</td>${cs.map((c, j) => { const v = cell[p.cod + '|' + c] || 0; return `<td class="${heat(v)}" style="--d:${(r + j) * 25}ms">${v ? eur0(v) : '—'}</td>`; }).join('')}<td><b>${eur0(p.t)}</b></td></tr>`).join('')}
+      <tr class="tot"><td>Totale</td>${cs.map(c => `<td>${eur0(P.reduce((a, p) => a + (cell[p.cod + '|' + c] || 0), 0))}</td>`).join('')}<td>${eur0(lySum(rows))}</td></tr></tbody></table>`;
+  }
+  function renderLyDocs(D) {
+    D = D || lyDocList(lyRows().filter(lyIn));
+    const L = D.filter(d => !lyDocF || (lyDocF === 'na' && d.cdc === LY_NONE) || (lyDocF === 'nc' && lyIsNC(d)) || (lyDocF === 'ids' && (renderLyDocs.ids || []).includes(d.id)));
+    $('#ly-dcnt').textContent = `${L.length} documenti · ${eur(L.reduce((a, d) => a + d.v, 0))}`;
+    if (!L.length) { $('#ly-docs').innerHTML = '<div class="empty">Nessun documento</div>'; return; }
+    const sh = L.slice(0, lyDocLimit), more = L.length > lyDocLimit ? `<div class="more-row"><button class="btn sm" id="ly-dmore">Mostra tutti (${L.length})</button></div>` : '';
+    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+    const q = d => Math.abs(d.diff) <= .009 ? '<span class="chip paid ly-q">Quadra</span>' : `<span class="chip late ly-q">${d.diff > 0 ? '+' : ''}${esc(eur(d.diff))}</span>`;
+    const tp = d => `<span class="chip ly-tp${lyIsNC(d) ? ' nc' : ''}">${esc(lyTipoLbl(d.tipo))}</span>`;
+    const cc = d => d.cdc === LY_NONE ? '<span class="chip late">Da attribuire</span>' : `<span class="ly-cc">${esc(lyName(d.cdc))}${d.mixed ? ' +' : ''}</span>`;
+    if (isDesk()) $('#ly-docs').innerHTML = `<div class="tr-tw"><table class="tbl gl-st ly-dt"><thead><tr><th>Data</th><th>Numero</th><th>Tipo</th><th>Centro di costo</th><th class="r">Righe</th><th class="r">Imponibile</th><th class="r">Totale</th><th>Quadratura</th><th></th></tr></thead><tbody>
+      ${sh.map(d => `<tr data-lydoc="${esc(d.id)}"${d.cdc === LY_NONE ? ' class="ly-na"' : ''}><td class="d">${dd(d.data)}</td><td><b>${esc(d.id)}</b>${d.ordini.length ? `<small class="tr-nt">ordine ${esc(d.ordini.slice(0, 2).join(', '))}${d.ordini.length > 2 ? '…' : ''}</small>` : ''}</td><td>${tp(d)}</td><td>${cc(d)}</td><td class="num">${d.rows.length}</td><td class="num">${eur(d.imp)}</td><td class="num amt">${eur(d.tot)}</td><td>${q(d)}</td><td>${d.d.pdf ? '<span class="fa-clip" title="PDF salvato"><svg viewBox="0 0 24 24"><path d="M21 12.5 12.7 20.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></span>' : ''}</td></tr>`).join('')}</tbody></table></div>${more}`;
+    else $('#ly-docs').innerHTML = `<div class="list">${sh.map(d => `<div class="item" data-lydoc="${esc(d.id)}"><span class="ic ly-ic${d.cdc === LY_NONE ? ' na' : ''}"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><div class="main"><div class="t">n. ${esc(d.id)} · ${esc(lyTipoLbl(d.tipo))}</div><div class="s">${dd(d.data)} · ${esc(d.cdc === LY_NONE ? 'da attribuire' : lyName(d.cdc))} · ${d.rows.length} righe</div></div><div class="amt">${eur(d.v)}</div></div>`).join('')}</div>${more}`;
+  }
+  function renderLyArt(rows) {
+    rows = rows || lyRows().filter(lyIn);
+    const q = lyArtQ.trim().toLowerCase();
+    const A = [...groupBy(rows.filter(r => !lyIsShip(r) && !lyIsEnv(r)), r => String(r.codice || r.descrizione))].map(([k, v]) => { const p = v.filter(r => num(r.prezzo) > 0).map(r => num(r.prezzo)); return { k, d: v[0].descrizione, cat: v[0].categoria, q: v.reduce((a, r) => a + num(r.quantita), 0), um: v[0].um, t: lySum(v), n: v.length, min: p.length ? Math.min(...p) : 0, max: p.length ? Math.max(...p) : 0, cdc: new Set(v.map(r => r.cdc || LY_NONE)).size }; })
+      .filter(x => !q || `${x.k} ${x.d}`.toLowerCase().includes(q)).sort((a, b) => b.t - a.t);
+    const sh = A.slice(0, q ? 60 : 12), mt = Math.max(1, ...sh.map(x => x.t));
+    $('#ly-art').innerHTML = sh.length ? `<div class="ly-arts">${sh.map((x, i) => `<div class="ly-ar" data-lyart="${esc(x.k)}" style="--d:${150 + i * 35}ms"><span class="ly-am"><b>${esc(x.d)}</b><small>${esc(x.k)} · ${esc(x.cat || '')} · ${fmtNum(x.q, 0)} ${esc(String(x.um || '').toLowerCase())} · ${x.cdc} ${x.cdc === 1 ? 'centro' : 'centri'}</small><span class="gd-b"><i style="width:${(Math.max(0, x.t) / mt * 100).toFixed(1)}%"></i></span></span><span class="ly-ap">${x.min && x.max / x.min > 1.05 ? `<span class="chip soon" title="Prezzo variato">${esc(eurP(x.min))} → ${esc(eurP(x.max))}</span>` : x.min ? `<small>${esc(eurP(x.min))} cad.</small>` : ''}<b>${esc(eur(x.t))}</b></span></div>`).join('')}</div>${!q && A.length > 12 ? `<div class="muted small" style="margin-top:8px">Primi 12 di ${A.length} articoli: usa la ricerca per trovarne altri.</div>` : ''}` : '<div class="empty">Nessun articolo</div>';
+  }
+  function renderLyList(rows, only) {
+    rows = rows || lyRows().filter(lyIn);
+    const q = lyF.q.trim().toLowerCase();
+    const Ls = (only || rows).filter(r => (!lyF.cdc || (r.cdc || LY_NONE) === lyF.cdc) && (!lyF.cat || (r.categoria || 'Altro') === lyF.cat) && (!lyF.doc || String(r.fattura) === lyF.doc)
+      && (!q || `${r.descrizione} ${r.codice} ${r.fattura} ${r.ordine} ${r.ddt} ${r.richiedente} ${r.note}`.toLowerCase().includes(q)))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(a.id).localeCompare(String(b.id)));
+    $('#ly-cnt').textContent = `${Ls.length} righe · ${eur(lySum(Ls))}`;
+    if (!Ls.length) { $('#ly-list').innerHTML = '<div class="empty">Nessuna riga</div>'; return; }
+    const sh = Ls.slice(0, lyLimit), more = Ls.length > lyLimit ? `<div class="more-row"><button class="btn sm" id="ly-more">Mostra tutte (${Ls.length})</button></div>` : '';
+    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+    if (isDesk()) $('#ly-list').innerHTML = `<div class="tr-tw"><table class="tbl gl-st tr-tbl ly-rt"><thead><tr><th>Data</th><th>Fattura</th><th>Descrizione</th><th>Categoria</th><th>Centro di costo</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">Importo</th></tr></thead><tbody>
+      ${sh.map(r => `<tr data-lyrow="${esc(r.id)}"${(r.cdc || LY_NONE) === LY_NONE ? ' class="ly-na"' : ''}><td class="d">${dd(r.data)}</td><td class="m2">${esc(r.fattura)}</td><td><b>${esc(r.descrizione)}</b><small class="tr-nt">${esc([r.codice, r.ordine ? 'ordine ' + r.ordine : '', r.richiedente].filter(Boolean).join(' · '))}</small></td><td class="m2">${esc(r.categoria || '—')}</td><td>${(r.cdc || LY_NONE) === LY_NONE ? '<span class="chip late">Da attribuire</span>' : esc(lyName(r.cdc))}</td><td class="num">${qtyFmt(num(r.quantita))} <small class="muted">${esc(String(r.um || '').toLowerCase())}</small></td><td class="num">${eurP(num(r.prezzo) * lyMulR(r))}</td><td class="num amt${num(r.importo) < 0 ? ' ly-neg' : ''}">${eur(lyV(r))}</td></tr>`).join('')}</tbody></table></div>${more}`;
+    else $('#ly-list').innerHTML = `<div class="list">${sh.map(r => `<div class="item" data-lyrow="${esc(r.id)}"><span class="ic ly-ic${(r.cdc || LY_NONE) === LY_NONE ? ' na' : ''}"><svg viewBox="0 0 24 24">${LY_IC}</svg></span><div class="main"><div class="t">${esc(r.descrizione)}</div><div class="s">${esc(lyName(r.cdc))} · ${qtyFmt(num(r.quantita))} ${esc(String(r.um || '').toLowerCase())} · ${dd(r.data)}</div></div><div class="amt${num(r.importo) < 0 ? ' ly-neg' : ''}">${eur(lyV(r))}</div></div>`).join('')}</div>${more}`;
+  }
+  const LY_IC = '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>';
+
+  /* ---------- fattura: dettaglio e attribuzione ai centri di costo ---------- */
+  function lyDocDetail(id) {
+    const D = lyDocList(lyDocRows(id))[0]; if (!D) return;
+    const C = lyCdcList(), ccOpt = sel => C.map(c => `<option value="${esc(c.cod)}"${c.cod === sel ? ' selected' : ''}>${esc(c.n)}${c.cod === LY_NONE ? '' : ' · ' + esc(c.cod)}</option>`).join('');
+    const rows = D.rows.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    openSheet(`${lyTipoLbl(D.tipo)} n. ${D.id}`, `
+      <div class="kv">${[['Data', validD(D.data) ? shortDate(D.data) : '—'], ['Tipo', `${D.tipo || '—'} · ${D.d.descrizione || lyTipoLbl(D.tipo)}`], ['Ordini Lyreco', D.ordini.join(', ') || '—'], ['DDT', D.ddt.join(', ') || '—'], ['Sede di consegna in fattura', rows.find(r => r.sede) ? rows.find(r => r.sede).sede : 'non indicata']].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
+      <div class="iva-sum" style="margin-top:14px"><div><span>Imponibile</span><b>${esc(eur(D.imp))}</b></div><div><span>IVA</span><b>${esc(eur(D.tot - D.imp))}</b></div><div class="t"><span>Totale documento</span><b>${esc(eur(D.tot))}</b></div></div>
+      <div class="fa-chk ${Math.abs(D.diff) <= .009 ? 'ok' : 'ko'}"><b>${Math.abs(D.diff) <= .009 ? 'Le righe quadrano con la fattura' : 'Le righe non quadrano con la fattura'}</b><span>${rows.length} ${rows.length === 1 ? 'riga' : 'righe'} per ${esc(eur(D.sumN))}${Math.abs(D.diff) > .009 ? ` · differenza ${esc(eur(D.diff))}` : ''}</span></div>
+      <div class="ly-all"><label class="f"><span>Centro di costo per tutta la fattura</span><select id="ly-all">${ccOpt(D.mixed ? '' : D.cdc)}${D.mixed ? '<option value="" selected>— righe su più centri —</option>' : ''}</select></label><button type="button" class="btn sm" id="ly-allgo">Applica a tutte le righe</button></div>
+      <div class="ly-rows"><div class="ly-rh"><span>Articolo</span><span>Importo</span><span>Centro di costo</span></div>
+        ${rows.map(r => `<div class="ly-rr"><span><b>${esc(r.descrizione)}</b><small>${esc(r.codice || '')} · ${qtyFmt(num(r.quantita))} ${esc(String(r.um || '').toLowerCase())} × ${esc(eurP(num(r.prezzo)))} · ${esc(r.categoria || '')}</small></span><span class="${num(r.importo) < 0 ? 'ly-neg' : ''}">${esc(eur(num(r.importo)))}</span><select data-lyr="${esc(r.id)}">${ccOpt(r.cdc || LY_NONE)}</select></div>`).join('')}</div>
+      <label class="f" style="margin-top:12px"><span>Note sulla fattura</span><input id="ly-dnote" value="${esc(D.d.note || '')}" placeholder="facoltative"></label>
+      <div class="row-btns" style="margin-top:6px">${D.d.pdf ? '<button type="button" class="btn sm" id="ly-dopen">Apri PDF</button>' : ''}${!isLocal() ? `<button type="button" class="btn sm" id="ly-dpdf">${D.d.pdf ? 'Sostituisci PDF' : 'Allega PDF della fattura'}</button>` : ''}</div>`,
+      () => {
+        const ops = [];
+        $$('#sheet-body [data-lyr]').forEach(s => { const r = rows.find(x => x.id === s.dataset.lyr); if (r && (r.cdc || LY_NONE) !== s.value) ops.push({ action: 'upsert', sheet: 'Lyreco', row: { ...r, cdc: s.value } }); });
+        const note = $('#ly-dnote').value.trim();
+        if (note !== String(D.d.note || '')) ops.push({ action: 'upsert', sheet: 'LyrecoFatture', row: { ...lyDocMeta(D), note } });
+        if (!ops.length) return true;
+        write(ops); toast(`Fattura aggiornata${ops.filter(o => o.sheet === 'Lyreco').length ? ` · ${ops.filter(o => o.sheet === 'Lyreco').length} righe riassegnate` : ''}`); return true;
+      }, null, 'Salva');
+    $('#ly-allgo').onclick = () => { const v = $('#ly-all').value; if (!v) return; $$('#sheet-body [data-lyr]').forEach(s => { s.value = v; }); toast(`Tutte le righe su ${lyName(v)}: premi Salva`); };
+    $('#ly-all').onchange = () => $('#ly-allgo').click();
+    const op = $('#ly-dopen'); if (op) op.onclick = () => openDoc(D.d.pdf, `Lyreco ${D.id}`);
+    const up = $('#ly-dpdf'); if (up) up.onclick = async () => {
+      if (!lyOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.6)');
+      let file; try { file = await pickDoc(); } catch (e) { if (e.message !== 'annullato') toast(e.message); return; }
+      try { busy('Salvo il PDF nel tuo Drive…'); const pdf = await api('uploadDoc', { name: `Lyreco ${D.id} ${D.data}.${file.ext}`, mime: file.mime, data: file.data }); busy(); write([{ action: 'upsert', sheet: 'LyrecoFatture', row: { ...lyDocMeta(D), pdf } }]); closeSheet(); toast('PDF allegato alla fattura'); }
+      catch (e) { busy(); if (!(e instanceof AuthError)) toast('PDF non salvato: ' + e.message); }
+    };
+  }
+  const lyDocMeta = D => ({ id: D.id, tipo: D.tipo, data: D.data, descrizione: D.d.descrizione || lyTipoLbl(D.tipo), imponibile: D.d.imponibile !== '' && D.d.imponibile != null ? D.d.imponibile : D.imp, totale: D.d.totale !== '' && D.d.totale != null ? D.d.totale : D.tot, stato: D.d.stato || '', pagata: D.d.pagata || '', pdf: D.d.pdf || '', note: D.d.note || '' });
+  function lyRowForm(r) {
+    const C = lyCdcList();
+    openSheet('Riga fattura ' + r.fattura, `
+      <div class="kv">${[['Articolo', r.descrizione], ['Codice', r.codice || '—'], ['Categoria', r.categoria || '—'], ['Quantità', `${qtyFmt(num(r.quantita))} ${r.um || ''}`], ['Prezzo unitario', eurP(num(r.prezzo))], ['Importo', eur(num(r.importo))], ['Ordine / DDT', [r.ordine, r.ddt].filter(Boolean).join(' · ') || '—'], ['Richiedente', r.richiedente || '—']].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
+      <div class="f-row" style="margin-top:14px"><label class="f"><span>Centro di costo</span><select name="cdc">${C.map(c => `<option value="${esc(c.cod)}"${c.cod === (r.cdc || LY_NONE) ? ' selected' : ''}>${esc(c.n)}</option>`).join('')}</select></label><label class="f"><span>Categoria</span><input name="categoria" value="${esc(r.categoria || '')}" list="ly-catl"></label></div>
+      <datalist id="ly-catl">${[...new Set(lyRows().map(x => x.categoria).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <label class="f"><span>Note</span><input name="note" value="${esc(r.note || '')}"></label>
+      <div class="row-btns"><button type="button" class="btn sm" data-lydoc="${esc(r.fattura)}">Apri tutta la fattura</button></div>`,
+      fd => { write([{ action: 'upsert', sheet: 'Lyreco', row: { ...r, cdc: String(fd.get('cdc')), categoria: String(fd.get('categoria') || '').trim(), note: String(fd.get('note') || '').trim() } }]); toast('Riga aggiornata'); return true; });
+  }
+
+  /* ---------- anagrafica centri di costo ---------- */
+  function lyCdcForm() {
+    const L = JSON.parse(JSON.stringify(lyCdcList()));
+    const used = cod => lyRows().filter(r => (r.cdc || LY_NONE) === cod).length;
+    const provs = Object.keys((window.GLS_GEO || { PROV: {} }).PROV).sort();
+    const row = (c, i) => `<div class="ly-cr" data-i="${i}"><input data-c="cod" value="${esc(c.cod || '')}" placeholder="CDC08"${c.cod === LY_NONE ? ' readonly' : ''}><input data-c="n" value="${esc(c.n || '')}" placeholder="Nome"><input data-c="tipo" value="${esc(c.tipo || '')}" placeholder="Tipologia" list="ly-tipl"><input data-c="citta" value="${esc(c.citta || '')}" placeholder="Città"><select data-c="prov"><option value="">Prov.</option>${provs.map(p => `<option${p === String(c.prov || '').toUpperCase() ? ' selected' : ''}>${p}</option>`).join('')}</select><input data-c="key" value="${esc(c.key || '')}" placeholder="Testo sede in fattura (per l'importazione)" class="ly-ck">${c.cod === LY_NONE || used(c.cod) ? `<small class="ly-cu">${used(c.cod) ? used(c.cod) + ' righe' : 'fisso'}</small>` : '<button type="button" class="icon-btn tr-lx" data-cdel aria-label="Togli">×</button>'}</div>`;
+    openSheet('Centri di costo Lyreco', `<p class="muted small" style="margin:0 0 12px">La città e la provincia servono a mettere il piazzale sulla mappa. Il «testo sede in fattura» è la sede di consegna come la scrive Lyreco: serve all'importazione per riconoscere il centro di costo.</p>
+      <div class="ly-ch"><span>Codice</span><span>Nome</span><span>Tipologia</span><span>Città</span><span>Prov.</span></div>
+      <div id="ly-cl">${L.map(row).join('')}</div>
+      <button type="button" class="btn sm" id="ly-cadd" style="margin-top:10px">+ Centro di costo</button>
+      <datalist id="ly-tipl"><option value="Sede"><option value="Sede operativa"><option value="Magazzino"><option value="Piazzale"></datalist>`,
+      () => {
+        const out = []; let err = '';
+        $$('#ly-cl .ly-cr').forEach(el => {
+          const g = k => $(`[data-c="${k}"]`, el).value.trim(), cod = g('cod').toUpperCase(); if (!cod) return;
+          if (out.some(x => x.cod === cod)) { err = `Codice ${cod} ripetuto`; return; }
+          const o = L[+el.dataset.i] || {}, citta = g('citta'), prov = g('prov');
+          const geo = o.geo && citta === (o.citta || '') && prov === (o.prov || '') ? o.geo : null;
+          out.push({ cod, n: g('n') || cod, tipo: g('tipo'), ind: o.ind || '', key: g('key'), citta, prov, geo });
+        });
+        if (err) return toast(err);
+        if (!out.some(x => x.cod === LY_NONE)) out.push(LY_CDC_DEF.find(x => x.cod === LY_NONE));
+        setConfig('lyCdc', out); lyAnim = true; toast('Centri di costo salvati'); return true;
+      }, null, 'Salva');
+    $('#sheet-form').classList.add('wide', 'xwide');
+    $('#ly-cadd').onclick = () => { L.push({ cod: '', n: '', tipo: 'Magazzino', citta: '', prov: '', key: '' }); $('#ly-cl').insertAdjacentHTML('beforeend', row(L[L.length - 1], L.length - 1)); const l = $$('#ly-cl [data-c="cod"]'); l[l.length - 1].focus(); };
+    $('#ly-cl').onclick = e => { const x = e.target.closest('[data-cdel]'); if (x) x.closest('.ly-cr').remove(); };
+  }
+
+  /* ---------- importazione / esportazione ---------- */
+  const lyDate = v => v instanceof Date ? ymd(new Date(v.getTime() + 12 * 36e5)) : typeof v === 'number' && v > 20000 ? ymd(new Date(Math.round((v - 25569) * 864e5))) : (() => { const m = String(v || '').trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[2])}-${pad(m[1])}` : validD(v) ? String(v).slice(0, 10) : ''; })();
+  const lyIva = v => { const s = String(v ?? '').trim(); if (/N6|rev|esent|N\d/i.test(s)) return 0; const n = num(s); return n > 1 ? n / 100 : n || (s === '' ? .22 : 0); };
+  const lyTxt = v => v == null ? '' : v instanceof Date ? ymd(v) : String(v).trim();
+  function lyParse(wb) {
+    const U = XLSX.utils, sheets = wb.SheetNames.map(n => ({ n, a: U.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }) }));
+    const find = (test) => { for (const s of sheets) { const hi = s.a.findIndex(test); if (hi >= 0) return { ...s, hi }; } return null; };
+    const det = find(r => r.some(c => /^fattura/.test(nh(c))) && r.some(c => /^imponibile$/.test(nh(c)) || nh(c) === 'importo') && r.some(c => /^descrizione/.test(nh(c))));
+    if (!det) throw new Error('Non trovo il foglio «Dettaglio righe» (colonne Fattura n., Descrizione, Imponibile)');
+    const H = det.a[det.hi].map(nh), col = (...re) => { for (const x of re) { const i = H.findIndex(h => x.test(h)); if (i >= 0) return i; } return -1; };
+    const C = { f: col(/^fattura/), t: col(/^tipodoc/), dt: col(/^descrtipo/), d: col(/^datafattura/, /^data$/), o: col(/^nordine/, /^ordine/), ddt: col(/^ddt/), dd: col(/^dataddt/), ri: col(/^richiedente/), co: col(/^codarticolo/, /^codice$/), de: col(/^descrizione/), ca: col(/^categoria/), q: col(/^qta/, /^quantita/), um: col(/^um$/), p: col(/^prezzo/), im: col(/^imponibile$/, /^importo/), iva: col(/^iva$/), se: col(/^sede/), cdc: col(/^cdc$/), no: col(/^note/) };
+    const g = (r, i) => i >= 0 ? r[i] : '';
+    // anagrafica
+    const an = find(r => r.some(c => /^codicecdc$/.test(nh(c))));
+    let cdcs = JSON.parse(JSON.stringify(lyCdcList()));
+    if (an) {
+      const AH = an.a[an.hi].map(nh), ai = re => AH.findIndex(h => re.test(h));
+      const c = { cod: ai(/^codicecdc/), n: ai(/^centrodicosto/), t: ai(/^tipologia/), ind: ai(/^indirizzo/), key: ai(/^testo/) };
+      an.a.slice(an.hi + 1).forEach(r => { const cod = String(r[c.cod] ?? '').trim().toUpperCase(); if (!/^[A-Z0-9]{2,}$/.test(cod)) return; const ex = cdcs.find(x => x.cod === cod), def = LY_CDC_DEF.find(x => x.cod === cod) || {}; const o = { ...def, ...(ex || {}), cod, n: String(r[c.n] ?? '').trim() || (ex || def).n || cod, tipo: String(r[c.t] ?? '').trim() || (ex || def).tipo || '', ind: String(r[c.ind] ?? '').trim() || (ex || def).ind || '', key: String(r[c.key] ?? '').replace(/^\(.*\)$/, '').trim() || (ex || def).key || '' }; if (ex) Object.assign(ex, o); else cdcs.push(o); });
+    }
+    const byKey = s => { const k = String(s || '').trim().toUpperCase(); if (!k) return ''; const c = cdcs.find(x => x.key && (k === x.key.toUpperCase() || k.startsWith(x.key.toUpperCase()) || x.key.toUpperCase().startsWith(k))); return c ? c.cod : ''; };
+    const old = new Map(lyRows().map(r => [r.id, r])), seq = {}, rows = [];
+    det.a.slice(det.hi + 1).forEach(r => {
+      const f = lyTxt(g(r, C.f)); if (!f || !/\d/.test(f) || /^totale/i.test(f)) return;
+      const de = lyTxt(g(r, C.de)); if (!de && !num(g(r, C.im))) return;
+      seq[f] = (seq[f] || 0) + 1;
+      const id = `${f}-${String(seq[f]).padStart(3, '0')}`, sede = lyTxt(g(r, C.se));
+      let cdc = String(lyTxt(g(r, C.cdc))).toUpperCase() || byKey(sede) || LY_NONE;
+      const ex = old.get(id); if (ex && cdc === LY_NONE && ex.cdc && ex.cdc !== LY_NONE) cdc = ex.cdc; // non perdere le attribuzioni fatte nell'app
+      const ivaS = lyTxt(g(r, C.iva));
+      rows.push({ id, fattura: f, tipo: lyTxt(g(r, C.t)), data: lyDate(g(r, C.d)), ddt: lyTxt(g(r, C.ddt)), dataDdt: lyDate(g(r, C.dd)) || lyTxt(g(r, C.dd)), ordine: lyTxt(g(r, C.o)), richiedente: lyTxt(g(r, C.ri)), codice: lyTxt(g(r, C.co)), descrizione: de, categoria: lyTxt(g(r, C.ca)), quantita: num(g(r, C.q)), um: lyTxt(g(r, C.um)), prezzo: num(g(r, C.p)), importo: num(g(r, C.im)), iva: lyIva(ivaS), sede, cdc, note: [lyTxt(g(r, C.no)), /N6|rev/i.test(ivaS) ? 'inversione contabile (N6.6)' : ''].filter(Boolean).join(' · ') || (ex ? ex.note || '' : '') });
+    });
+    if (!rows.length) throw new Error('Nessuna riga trovata nel foglio di dettaglio');
+    // documenti (quadratura)
+    const docs = new Map(), oldD = new Map(lyDocs().map(d => [String(d.id), d]));
+    const cf = find(r => r.some(c => /^fattura/.test(nh(c))) && r.some(c => /^imponibiledapdf|^imponibile/.test(nh(c))) && r.some(c => /^totaledocumento/.test(nh(c))));
+    if (cf) {
+      const FH = cf.a[cf.hi].map(nh), fi = re => FH.findIndex(h => re.test(h));
+      const c = { f: fi(/^fattura/), t: fi(/^tipodoc/), d: fi(/^data$/), de: fi(/^descrtipo/), imp: fi(/^imponibile/), tot: fi(/^totaledocumento/) };
+      cf.a.slice(cf.hi + 1).forEach(r => { const f = lyTxt(r[c.f]); if (!f || !/^\d/.test(f)) return; const o = oldD.get(f) || {}; docs.set(f, { ...o, id: f, tipo: lyTxt(r[c.t]), data: lyDate(r[c.d]), descrizione: lyTxt(r[c.de]), imponibile: num(r[c.imp]), totale: num(r[c.tot]), stato: o.stato || '', pagata: o.pagata || '', pdf: o.pdf || '', note: o.note || '' }); });
+    }
+    [...groupBy(rows, r => r.fattura)].forEach(([f, v]) => { if (docs.has(f)) return; const o = oldD.get(f) || {}; docs.set(f, { ...o, id: f, tipo: v[0].tipo, data: v[0].data, descrizione: o.descrizione || lyTipoLbl(v[0].tipo), imponibile: r2(v.reduce((a, r) => a + r.importo, 0)), totale: r2(v.reduce((a, r) => a + r.importo * (1 + r.iva), 0)), stato: o.stato || '', pagata: o.pagata || '', pdf: o.pdf || '', note: o.note || '' }); });
+    return { rows, docs: [...docs.values()], cdcs };
+  }
+  async function importLy() {
+    if (!lyOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.6)');
+    let file; try { file = await pickFile('.xlsx,.xls'); } catch { return; }
+    try {
+      busy('Leggo il file Lyreco…'); await loadXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+      const P = lyParse(wb); busy();
+      const ids = new Set(lyRows().map(r => r.id)), nuove = P.rows.filter(r => !ids.has(r.id)).length;
+      const na = P.rows.filter(r => r.cdc === LY_NONE).length, tot = P.rows.reduce((a, r) => a + r.importo, 0);
+      if (!confirm(`${P.docs.length} documenti · ${P.rows.length} righe · ${eur(tot)} di imponibile.\n${nuove} righe nuove, ${P.rows.length - nuove} già presenti (aggiornate, senza perdere i centri di costo assegnati nell'app).\n${na ? na + ' righe senza sede di consegna: le trovi in «Da attribuire».' : 'Tutte le righe hanno un centro di costo.'}\nImportare?`)) return;
+      const keep = new Set(P.rows.map(r => r.fattura)), stale = lyRows().filter(r => keep.has(String(r.fattura)) && !P.rows.some(x => x.id === r.id));
+      write([...P.rows.map(row => ({ action: 'upsert', sheet: 'Lyreco', row })), ...stale.map(r => ({ action: 'delete', sheet: 'Lyreco', id: r.id })), ...P.docs.map(row => ({ action: 'upsert', sheet: 'LyrecoFatture', row })), { action: 'upsert', sheet: 'Config', row: { chiave: 'lyCdc', valore: JSON.stringify(P.cdcs) } }]);
+      lyP = ''; lyAnim = true; render(); toast(`Lyreco: ${P.rows.length} righe importate`);
+    } catch (e) { busy(); toast(e.message); }
+  }
+  async function exportLy() {
+    const rows = lyRows().filter(lyIn).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)) || String(a.id).localeCompare(String(b.id)));
+    if (!rows.length) return toast('Nessun dato da esportare');
+    try {
+      busy('Preparo il file Excel…'); await loadXlsx();
+      const U = XLSX.utils, wb = U.book_new(), E = '#,##0.00 "€"', PL = lyPlist(rows).filter(x => x.rows.length);
+      const cats = [...new Set(rows.map(r => r.categoria || 'Altro'))];
+      const s1 = [['Codice', 'Centro di costo', ...cats, 'Totale €', '% sul totale', 'N. righe'], ...PL.map(p => [p.cod, p.n, ...cats.map(c => r2(lySumN(p.rows.filter(r => (r.categoria || 'Altro') === c)))), lySumN(p.rows), lySumN(rows) ? lySumN(p.rows) / lySumN(rows) : 0, p.rows.length]), ['', 'TOTALE', ...cats.map(c => lySumN(rows.filter(r => (r.categoria || 'Altro') === c))), lySumN(rows), 1, rows.length]];
+      const w1 = U.aoa_to_sheet(s1); for (let R = 2; R <= s1.length; R++) { for (let c = 2; c < cats.length + 3; c++) { const x = w1[xlC(c) + R]; if (x) x.z = E; } const p = w1[xlC(cats.length + 3) + R]; if (p) p.z = '0.0%'; }
+      w1['!cols'] = [9, 24, ...cats.map(() => 15), 13, 10, 8].map(w => ({ wch: w })); U.book_append_sheet(wb, w1, 'Riepilogo CdC');
+      const months = [...new Set(rows.map(r => String(r.data).slice(0, 7)))].sort();
+      const s2 = [['Codice', 'Centro di costo', ...months.map(m => mLabel(m)), 'Totale €'], ...PL.map(p => [p.cod, p.n, ...months.map(m => lySumN(p.rows.filter(r => String(r.data).slice(0, 7) === m))), lySumN(p.rows)])];
+      const w2 = U.aoa_to_sheet(s2); for (let R = 2; R <= s2.length; R++) for (let c = 2; c < months.length + 3; c++) { const x = w2[xlC(c) + R]; if (x) x.z = E; }
+      w2['!cols'] = [9, 24, ...months.map(() => 13), 13].map(w => ({ wch: w })); U.book_append_sheet(wb, w2, 'CdC per mese');
+      const s3 = [['Fattura n.', 'Tipo doc.', 'Data fattura', 'N. ordine Lyreco', 'DDT n.', 'Data DDT', 'Richiedente (Vs.Ord.)', 'Cod. articolo', 'Descrizione', 'Categoria', 'Q.tà', 'UM', 'Prezzo unit.', 'Imponibile €', 'IVA', 'Sede consegna (da fattura)', 'CdC', 'Centro di costo', 'Note'], ...rows.map(r => [r.fattura, r.tipo, validD(r.data) ? parseD(r.data) : '', r.ordine, r.ddt, r.dataDdt, r.richiedente, r.codice, r.descrizione, r.categoria, num(r.quantita), r.um, num(r.prezzo), num(r.importo), num(r.iva) ? fmtNum(num(r.iva) * 100, 2) : 'N6.6 (rev. charge)', r.sede, r.cdc || LY_NONE, lyName(r.cdc), r.note || ''])];
+      const w3 = U.aoa_to_sheet(s3, { cellDates: true }); rows.forEach((r, i) => { const R = i + 2, d = w3['C' + R]; if (d && d.t === 'd') d.z = 'dd/mm/yyyy'; ['M', 'N'].forEach(c => { const x = w3[c + R]; if (x) x.z = E; }); });
+      w3['!cols'] = [12, 8, 11, 13, 9, 11, 14, 11, 44, 24, 6, 5, 11, 12, 10, 40, 8, 22, 24].map(w => ({ wch: w })); w3['!autofilter'] = { ref: `A1:S${s3.length}` }; U.book_append_sheet(wb, w3, 'Dettaglio righe');
+      const D = lyDocList(rows).slice().reverse();
+      const s4 = [['Fattura n.', 'Tipo doc.', 'Data', 'Descr. tipo', 'Imponibile da PDF €', 'Totale documento €', 'Somma righe €', 'Differenza €', 'CdC prevalente', 'N. righe'], ...D.map(d => [d.id, d.tipo, validD(d.data) ? parseD(d.data) : '', d.d.descrizione || lyTipoLbl(d.tipo), d.imp, d.tot, d.sumN, d.diff, d.cdc, d.rows.length])];
+      const w4 = U.aoa_to_sheet(s4, { cellDates: true }); D.forEach((d, i) => { const R = i + 2, x = w4['C' + R]; if (x && x.t === 'd') x.z = 'dd/mm/yyyy'; ['E', 'F', 'G', 'H'].forEach(c => { const y = w4[c + R]; if (y) y.z = E; }); });
+      w4['!cols'] = [12, 8, 11, 26, 16, 16, 14, 12, 12, 8].map(w => ({ wch: w })); U.book_append_sheet(wb, w4, 'Controllo fatture');
+      const s5 = [['Codice CdC', 'Centro di costo', 'Tipologia', 'Indirizzo di consegna', 'Testo in fattura (chiave di attribuzione)', 'Città', 'Provincia'], ...lyCdcList().map(c => [c.cod, c.n, c.tipo || '', c.ind || '', c.key || '', c.citta || '', c.prov || ''])];
+      const w5 = U.aoa_to_sheet(s5); w5['!cols'] = [11, 24, 14, 50, 52, 14, 9].map(w => ({ wch: w })); U.book_append_sheet(wb, w5, 'Anagrafica CdC');
+      XLSX.writeFile(wb, `Centro_di_costo_Lyreco_${lyP || 'completo'}.xlsx`); busy(); toast('Excel scaricato');
+    } catch (e) { busy(); toast(e.message); }
+  }
+  const xlC = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  function lyArt() {
+    // fogli e scatole stilizzati (cancelleria), senza mezzi disegnati
+    return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg ly-svg">
+      <defs><pattern id="lydots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern></defs>
+      <rect x="300" width="340" height="260" fill="url(#lydots)"/>
+      <g class="ly-p p1" style="--d:120ms"><rect x="470" y="40" width="118" height="150" rx="12"/></g>
+      <g class="ly-p p2" style="--d:260ms"><rect x="448" y="58" width="118" height="150" rx="12"/>${[88, 104, 120, 136].map((y, i) => `<line x1="466" x2="${i === 3 ? 520 : 546}" y1="${y}" y2="${y}"/>`).join('')}<rect class="ly-tag" x="466" y="160" width="52" height="22" rx="11"/></g>
+      <g class="ly-p p3" style="--d:420ms"><rect x="540" y="150" width="64" height="64" rx="12"/><path d="M556 178 h32 M572 162 v32"/></g>
+    </svg>`;
+  }
+
   /* ---------- Controlli di tutte le aree (dashboard) ---------- */
   function attChecks(rows) {
     const A = [];
@@ -3316,6 +3718,7 @@
         gls: { spedizioni: P.gls.length, costo: r2(gTot(P.gls)), kgTassabili: r2(gSum(P.gls, 'kgTass')), perContratto: ['C1', 'C2'].map(c => { const v = P.gls.filter(r => r.contratto === c); return { contratto: c, spedizioni: v.length, costo: r2(gTot(v)) }; }), destinazioniTop: [...groupBy(P.gls, r => r.citta + ' (' + r.prov + ')')].map(([k, v]) => ({ k, costo: r2(gTot(v)), n: v.length })).sort((a, b) => b.costo - a.costo).slice(0, 8) },
         gasolio: { litri: r2(gSum(P.gas, 'litri')), rifornimenti: P.gas.length, prezzoLitro: gasPrice() || null, noleggiMensili: R, mezzi: [...groupBy(P.gas, r => plate(r.targa))].map(([p, v]) => { const x = gV.get(p); let k = 0, kl = 0; if (x) x.seg.forEach((d, id) => { const z = v.find(r => r.id === id); if (z) { k += d; kl += num(z.litri); } }); return { targa: p, nome: gasName(p) || undefined, litri: r2(gSum(v, 'litri')), km: k, kmPerLitro: kl ? r2(k / kl) : null }; }).sort((a, b) => b.litri - a.litri).slice(0, 10) },
         fatture: { numero: P.fat.length, perFornitore: [...groupBy(P.fat, r => String(r.fornitore || '').toUpperCase())].map(([k, v]) => ({ fornitore: k, imponibile: r2(v.reduce((a, r) => a + num(r.imponibile), 0)), fatture: v.length })), daPagare: r2(P.fat.filter(r => !faPaid(r)).reduce((a, r) => a + num(r.totale), 0)), scadute: P.fat.filter(faLate).length },
+        lyreco: (() => { const R = lyRows().filter(r => !ovP || String(r.data).slice(0, 7) === ovP); if (!R.length) return undefined; return { nota: 'forniture Lyreco (cancelleria, carta, toner, pulizia, IT) ripartite per centro di costo', imponibile: lySumN(R), perCentro: lyPlist(R).filter(x => x.rows.length).map(x => ({ centro: x.n, imponibile: lySumN(x.rows), righe: x.rows.length })), perCategoria: [...groupBy(R, r => r.categoria || 'Altro')].map(([k, v]) => ({ categoria: k, imponibile: lySumN(v) })), daAttribuire: lySumN(R.filter(r => (r.cdc || LY_NONE) === LY_NONE)), trasporto: lySumN(R.filter(lyIsShip)) }; })(),
         controlli: checks.map(x => ({ area: x.a, livello: x.t === 'warn' ? 'attenzione' : 'info', titolo: x.h, dettaglio: String(x.d).replace(/<[^>]+>/g, ''), impatto: String(x.v).replace(/<[^>]+>/g, '') }))
       };
     });
@@ -3325,7 +3728,7 @@
   function renderOvAI(ctx) {
     const el = $('#ov-ai'); if (!el) return;
     if (isLocal()) { el.hidden = true; return; }
-    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', generale: 'Generale' };
+    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', lyreco: 'Lyreco', generale: 'Generale' };
     if (!db.ai) {
       el.innerHTML = `<div class="card-h"><h3 class="ai-title">${IC.spark}Intelligenza artificiale</h3></div>
         <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, fatture), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
@@ -3404,6 +3807,24 @@
       const faq = t.closest('[data-faq]'); if (faq) { const ids = faq.dataset.faq.split(' '); faF.q = ''; faF.forn = ''; faF.stato = ''; renderFatList(null, faRows().filter(r => ids.includes(r.id))); $('#fa-cnt').textContent += ' · filtro controllo'; $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const faf = t.closest('[data-faforn]'); if (faf) { faF.forn = faf.dataset.faforn; $('#fa-ff').value = faF.forn; renderFatList(); $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const fat = t.closest('[data-fat]'); if (fat) { faDetail(fat.dataset.fat); return; }
+      if (t.closest('#ly-imp') || t.closest('#ly-imp2')) { importLy(); return; }
+      if (t.closest('#ly-xls')) { exportLy(); return; }
+      if (t.closest('#ly-cdc') || t.closest('#ly-cdc2')) { lyCdcForm(); return; }
+      if (t.closest('#ly-prev') || t.closest('#ly-next')) { const o = [...$('#ly-per').options].map(x => x.value), i = o.indexOf(lyP) + (t.closest('#ly-prev') ? 1 : -1); if (i >= 0 && i < o.length) { lyP = o[i]; lyAnim = true; renderLy(); } return; }
+      const lyTo = sel => { const c = $(sel); if (c) (c.closest('.card') || c).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+      const lyDf = k => { lyDocF = k; lyDocLimit = k ? 999 : 12; $$('[data-lydf]').forEach(b => b.classList.toggle('on', b.dataset.lydf === k)); renderLyDocs(); };
+      if (t.closest('#ly-dmore')) { lyDocLimit = 999; renderLyDocs(); return; }
+      if (t.closest('#ly-more')) { lyLimit = 99999; renderLyList(); return; }
+      const lydf = t.closest('[data-lydf]'); if (lydf) { lyDf(lydf.dataset.lydf); return; }
+      const lyac = t.closest('[data-lyact]'); if (lyac) { lyDf('na'); lyTo('#ly-docs'); return; }
+      const lyid = t.closest('[data-lyids]'); if (lyid) { renderLyDocs.ids = lyid.dataset.lyids.split(' '); lyDf('ids'); $('#ly-dcnt').textContent += ' · filtro controllo'; lyTo('#ly-docs'); return; }
+      const lyaq = t.closest('[data-lyartq]'); if (lyaq) { lyArtQ = lyaq.dataset.lyartq; $('#ly-aq').value = lyArtQ; renderLyArt(); lyTo('#ly-art'); return; }
+      const lyca = t.closest('[data-lycat]'); if (lyca && !t.closest('#sheet')) { lyF.cat = lyF.cat === lyca.dataset.lycat ? '' : lyca.dataset.lycat; $('#ly-fk').value = lyF.cat; renderLyList(); if (lyF.cat) lyTo('#ly-list'); return; }
+      const lype = t.closest('[data-lyper]'); if (lype) { lyP = lyP === lype.dataset.lyper ? '' : lype.dataset.lyper; lyAnim = true; renderLy(); return; }
+      const lycd = t.closest('[data-lycdc]'); if (lycd && !t.closest('#sheet')) { const k = lycd.dataset.lycdc; lyF.cdc = lyF.cdc === k ? '' : k; $$('#ly-map .tr-pin, #ly-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.lycdc === lyF.cdc)); $('#ly-fc').value = lyF.cdc; renderLyList(); if (lyF.cdc) lyTo('#ly-list'); return; }
+      const lydo = t.closest('[data-lydoc]'); if (lydo) { const id = lydo.dataset.lydoc; if (t.closest('#sheet')) { closeSheet(); setTimeout(() => lyDocDetail(id), 250); } else lyDocDetail(id); return; }
+      const lyro = t.closest('[data-lyrow]'); if (lyro) { const r = lyRows().find(x => String(x.id) === lyro.dataset.lyrow); if (r) lyRowForm(r); return; }
+      const lyar = t.closest('[data-lyart]'); if (lyar) { lyF.q = lyar.dataset.lyart; $('#ly-q').value = lyF.q; renderLyList(); lyTo('#ly-list'); return; }
       if (t.closest('#tr-imp')) { importTor(); return; }
       if (t.closest('#tr-xls')) { exportTor(); return; }
       if (t.closest('#tr-mod')) { trForm(); return; }
@@ -3465,6 +3886,9 @@
     $('#ga-per').onchange = e => { gasP = e.target.value; gasAnim = true; renderGas(); };
     $('#ov-per').onchange = e => { ovP = e.target.value; ovAnim = true; renderOverview(); };
     $('#fa-per').onchange = e => { faP = e.target.value; faAnim = true; renderFat(); };
+    $('#ly-per').onchange = e => { lyP = e.target.value; lyAnim = true; renderLy(); };
+    document.addEventListener('input', e => { if (e.target.id === 'ly-q') { clearTimeout(qt); qt = setTimeout(() => { lyF.q = e.target.value; renderLyList(); }, 180); } if (e.target.id === 'ly-aq') { clearTimeout(qt); qt = setTimeout(() => { lyArtQ = e.target.value; renderLyArt(); }, 180); } });
+    document.addEventListener('change', e => { if (e.target.id === 'ly-fc') { lyF.cdc = e.target.value; $$('#ly-map .tr-pin, #ly-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.lycdc === lyF.cdc)); renderLyList(); } if (e.target.id === 'ly-fk') { lyF.cat = e.target.value; renderLyList(); } if (e.target.id === 'ly-fd') { lyF.doc = e.target.value; renderLyList(); } });
     ['input', 'change'].forEach(ev => document.addEventListener(ev, e => { if (e.target.closest && e.target.closest('#tr-calc') && (e.target.dataset.trq || e.target.dataset.trqs) && (ev === 'change' || e.target.type === 'number')) trQSet(e); }));
     document.addEventListener('input', e => { if (e.target.id === 'fa-q') { clearTimeout(qt); qt = setTimeout(() => { faF.q = e.target.value; renderFatList(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'fa-ff') { faF.forn = e.target.value; renderFatList(); } if (e.target.id === 'fa-fs') { faF.stato = e.target.value; renderFatList(); } });
@@ -3501,7 +3925,7 @@
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
-    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); }, 200); });
+    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); } }, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
   }
 
