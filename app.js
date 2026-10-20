@@ -271,7 +271,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -285,13 +285,14 @@
     if (view === 'torental') trAnim = true;
     if (view === 'lyreco') lyAnim = true;
     if (view === 'amazon') amAnim = true;
+    if (view === 'piazzali') pzAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -320,7 +321,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -829,9 +830,35 @@
   }
 
   /* ================= IMPOSTAZIONI ================= */
+  /* ---------- Backup dei dati (cdc-1.8) ---------- */
+  let bkInfo = null;
+  async function renderBackup(force) {
+    const el = $('#s-bk'); if (!el) return;
+    if (isLocal()) { el.innerHTML = '<p class="muted small">Disponibile con il Foglio Google collegato.</p>'; return; }
+    if (db.v && db.v < 'cdc-1.8') { el.innerHTML = `<p class="muted small" style="margin:4px 0 0">Per il backup automatico aggiorna lo script Google alla versione <b>cdc-1.8</b> (ora: ${esc(db.v)}).</p>`; return; }
+    const show = (i, err) => {
+      const last = i && i.last ? new Date(i.last) : null, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+      const st = !i ? 'wait' : !last ? 'ko' : days > 8 ? 'warn' : 'ok';
+      el.innerHTML = `<div class="bk-st ${st}"><span class="bk-d"></span><div><b>${!i ? 'Controllo i backup…' : last ? `Ultimo backup ${days === 0 ? 'oggi' : days === 1 ? 'ieri' : `${days} giorni fa`}` : 'Nessun backup ancora'}</b><small>${i ? `${last ? last.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · ' : ''}${i.copie} di ${i.max} copie salvate${i.kb ? ` · ${fmtNum(i.kb, 0)} KB` : ''}` : ''}</small></div></div>
+        ${err ? `<div class="fa-chk ko" style="margin-top:10px"><b>Serve un'autorizzazione</b><span>${esc(err)}</span></div>` : ''}
+        ${i ? `<div class="bk-auto"><span><b>Backup automatico ogni lunedì</b><small>${i.auto ? 'attivo · una copia Excel del Foglio alle 6 del mattino, restano le ultime ' + i.max : 'non attivo'}</small></span><button type="button" class="tg${i.auto ? ' on' : ''}" id="bk-tg" role="switch" aria-checked="${i.auto}"><i></i></button></div>
+        <div class="row-btns" style="margin-top:12px"><button type="button" class="btn sm primary" id="bk-now">Fai un backup adesso</button>${i.cartella ? `<a class="btn sm" href="${esc(i.cartella)}" target="_blank" rel="noopener">Apri la cartella su Drive</a>` : ''}</div>` : ''}`;
+    };
+    if (bkInfo && !force) { show(bkInfo); return; }
+    show(null);
+    try { bkInfo = await api('backupInfo'); show(bkInfo); } catch (e) { if (!(e instanceof AuthError)) show({ last: '', copie: 0, max: 12, auto: false, cartella: '' }, e.message); }
+  }
+  async function backupDo(kind) {
+    try {
+      busy(kind === 'now' ? 'Salvo una copia del Foglio su Drive…' : 'Aggiorno il backup automatico…');
+      bkInfo = kind === 'now' ? await api('backup') : await api('backupAuto', { on: !(bkInfo && bkInfo.auto) });
+      busy(); toast(kind === 'now' ? 'Backup fatto' : bkInfo.auto ? 'Backup automatico attivato' : 'Backup automatico disattivato'); renderBackup();
+    } catch (e) { busy(); if (!(e instanceof AuthError)) { toast('Non riuscito: ' + e.message); $('#s-bk').insertAdjacentHTML('beforeend', `<div class="fa-chk ko" style="margin-top:10px"><b>Serve un'autorizzazione</b><span>Apri Apps Script, scegli la funzione «attivaBackup» e premi Esegui: Google chiede il permesso una volta sola.</span></div>`); } }
+  }
   function renderSettings() {
     themeUI();
     sub('');
+    renderBackup();
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
     $('#s-conn').innerHTML = `
       <div><span>Modalità</span><strong>${isLocal() ? 'Solo su questo dispositivo' : 'Foglio Google'}</strong></div>
@@ -2536,6 +2563,191 @@
   }
 
   /* =========================================================
+     PIAZZALI — tutte le spese di ogni centro di costo
+     ========================================================= */
+  let pzP = '', pzSel = '', pzAnim = true;
+  const PZ_NC = 'NC';
+  const PZ_AREAS = [
+    { k: 'att', t: 'Attrezzatura', go: 'attrezzatura' }, { k: 'gls', t: 'Spedizioni GLS', go: 'gls' }, { k: 'gas', t: 'Gasolio e noleggi', go: 'gasolio' },
+    { k: 'ly', t: 'Lyreco', go: 'lyreco' }, { k: 'am', t: 'Amazon', go: 'amazon' }
+  ];
+  const PZ_LINKED = { att: 'Attrezzatura', gls: 'Spedizioni GLS', gas: 'Gasolio' };
+  const pzLinks = () => { const c = cfg('cdcLink'); return c && typeof c === 'object' ? c : {}; };
+  // propone il centro di costo per un nome usato in attrezzatura, GLS o gasolio
+  function pzGuess(name) {
+    const N = amNorm(name); if (!N || N === '—') return '';
+    const C = lyCdcList().filter(c => c.cod !== LY_NONE);
+    const toks = c => [pzName(c.n), c.citta, c.n, ...String(c.loc || '').split('|')].map(amNorm).filter(t => t && t.length >= 4 && !/^\d+$/.test(t));
+    const hit = C.find(c => toks(c).some(t => N === t)) || C.find(c => toks(c).some(t => N.includes(t) || (N.length >= 5 && t.includes(N))));
+    if (hit) return hit.cod;
+    const g = GEO[N]; // nomi con coordinate note: il centro più vicino entro 8 km
+    if (g) { let best = '', bd = 1e9; C.forEach(c => { const p = lyGeo(c); if (!p) return; const d = Math.hypot((p[0] - g[0]) * 83, (p[1] - g[1]) * 111); if (d < bd) { bd = d; best = c.cod; } }); if (bd < 8) return best; }
+    return '';
+  }
+  const pzLinkOf = (a, name) => { const L = pzLinks(), k = `${a}|${name}`; if (k in L) return { cod: L[k] || PZ_NC, how: 'man' }; const g = pzGuess(name); return { cod: g || PZ_NC, how: g ? 'auto' : 'none' }; };
+  const glsKey = r => String(r.cdc || '—').trim();
+  const glsLbl = r => [String(r.cdc || '').trim(), String(r.cdcNome || '').trim()].filter(Boolean).join(' · ') || '—';
+  // tutte le spese con il centro di costo risolto
+  function pzItems() {
+    const M = new Map(), res = (a, name) => { const k = a + '|' + name; if (!M.has(k)) M.set(k, pzLinkOf(a, name).cod); return M.get(k); };
+    const out = [];
+    (db.movimenti || []).forEach(r => { const nm = String(r.centro || '—').trim() || '—'; out.push({ a: 'att', cod: res('att', nm), name: nm, m: validD(r.data) ? String(r.data).slice(0, 7) : '', d: r.data, v: tot(r), t: r.descrizione, s: nm }); });
+    glsRows().forEach(r => { const nm = glsKey(r); out.push({ a: 'gls', cod: res('gls', `${nm}${r.cdcNome ? ' ' + r.cdcNome : ''}`.trim()), name: nm, m: r.mese || String(r.data || '').slice(0, 7), d: r.data, v: num(r.totale) * gMul(), t: r.destinatario, s: `${r.citta} (${r.prov})` }); });
+    const G = gasRows(), mainC = new Map();
+    [...groupBy(G, r => plate(r.targa))].forEach(([p, v]) => { const c = [...groupBy(v, r => String(r.centro || '—').trim() || '—')].sort((a, b) => b[1].length - a[1].length)[0]; mainC.set(p, c ? c[0] : '—'); });
+    G.forEach(r => { const nm = String(r.centro || '—').trim() || '—'; out.push({ a: 'gas', cod: res('gas', nm), name: nm, m: String(r.data || '').slice(0, 7), d: r.data, v: num(r.litri) * gPrezzo(r) * gMul(), t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.operatore || '' }); });
+    const RENT = gasRent();
+    rentMonths('').forEach(m => Object.entries(RENT).forEach(([p, eurM]) => { if (!num(eurM)) return; const nm = mainC.get(plate(p)) || '—'; out.push({ a: 'gas', cod: res('gas', nm), name: nm, m, d: m + '-01', v: num(eurM) * gMul(), t: `Noleggio ${plateFmt(plate(p))}`, s: 'canone mensile', rent: true }); }));
+    lyRows().forEach(r => out.push({ a: 'ly', cod: r.cdc || LY_NONE, name: r.cdc || LY_NONE, m: String(r.data || '').slice(0, 7), d: r.data, v: lyV(r), t: r.descrizione, s: `Fattura ${r.fattura}`, doc: r.fattura, cat: r.categoria || 'Altro' }));
+    const amA = amArts(amOrd()), byO = groupBy(amA, a => String(a.ordine));
+    amOrd().forEach(o => out.push({ a: 'am', cod: o.cdc || LY_NONE, name: o.cdc || LY_NONE, m: String(o.data || '').slice(0, 7), d: o.data, v: amV(o), t: String(o.articoli || '').split(/\s*\|\s*/)[0], s: `Ordine ${o.id}`, doc: o.id, cats: (byO.get(String(o.id)) || []).map(a => [a.cat, a.val]) }));
+    out.forEach(x => { if (x.cod === LY_NONE) x.cod = PZ_NC; });
+    return out;
+  }
+  // nomi usati nelle sezioni senza codice (attrezzatura, GLS, gasolio) con il collegamento attuale
+  function pzNames() {
+    const L = pzLinks(), out = [];
+    const add = (a, name, lbl, v) => { let x = out.find(z => z.a === a && z.name === name); if (!x) { const k = `${a}|${name}`, lk = pzLinkOf(a, name); x = { a, name, lbl, v: 0, n: 0, cod: lk.cod, how: lk.how, set: k in L }; out.push(x); } x.v += v; x.n++; };
+    (db.movimenti || []).forEach(r => { const nm = String(r.centro || '—').trim() || '—'; add('att', nm, nm, tot(r)); });
+    glsRows().forEach(r => { const nm = `${glsKey(r)}${r.cdcNome ? ' ' + r.cdcNome : ''}`.trim(); add('gls', nm, glsLbl(r), num(r.totale) * gMul()); });
+    gasRows().forEach(r => { const nm = String(r.centro || '—').trim() || '—'; add('gas', nm, nm, num(r.litri) * gPrezzo(r) * gMul()); });
+    return out.sort((a, b) => a.a.localeCompare(b.a) || b.v - a.v);
+  }
+  function pzLinkForm() {
+    const X = pzNames(), C = lyCdcList().filter(c => c.cod !== LY_NONE);
+    if (!X.length) return toast('Nessun nome da collegare: attrezzatura, GLS e gasolio sono vuoti');
+    openSheet('Collega i nomi ai piazzali', `<p class="muted small" style="margin:0 0 12px">Attrezzatura, GLS e gasolio usano nomi propri per i centri di costo. Qui scegli a quale piazzale corrisponde ogni nome: le spese finiscono nella scheda di quel piazzale. «Proposto» = l'app l'ha riconosciuto da sola, controlla che sia giusto.</p>
+      ${Object.entries(PZ_LINKED).map(([a, t]) => { const L = X.filter(x => x.a === a); return L.length ? `<div class="pz-lg"><h4>${t}</h4>${L.map(x => `<div class="pz-lr">
+          <span class="pz-ln"><b>${esc(x.lbl)}</b><small>${x.n} ${a === 'gls' ? 'spedizioni' : a === 'gas' ? 'rifornimenti' : 'righe'} · ${eur0(x.v)}</small></span>
+          ${x.how === 'auto' && !x.set ? '<span class="chip soon">proposto</span>' : x.cod === PZ_NC ? '<span class="chip late">da collegare</span>' : '<span class="chip paid">collegato</span>'}
+          <select data-lk="${esc(a + '|' + x.name)}"><option value="">— Non collegare</option>${C.map(c => `<option value="${esc(c.cod)}"${c.cod === x.cod ? ' selected' : ''}>${esc(c.n)} · ${esc(c.cod)}</option>`).join('')}</select>
+        </div>`).join('')}</div>` : ''; }).join('')}
+      <p class="muted small" style="margin:12px 0 0">Manca un piazzale? Aggiungilo in <button type="button" class="link" id="pz-cdc3">Centri di costo</button>.</p>`,
+      () => {
+        const L = { ...pzLinks() };
+        $$('#sheet-body [data-lk]').forEach(s => { L[s.dataset.lk] = s.value; });
+        setConfig('cdcLink', L); pzAnim = true; toast('Collegamenti salvati'); return true;
+      }, null, 'Salva');
+    $('#sheet-form').classList.add('wide');
+  }
+
+  function renderPz() {
+    const all = pzItems();
+    const months = [...new Set(all.map(x => x.m).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+    if (pzP && !months.includes(pzP)) pzP = '';
+    $('#pz-per').innerHTML = `<option value=""${pzP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === pzP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(pzP);
+    $('#pz-prev').disabled = ix >= opts.length - 1; $('#pz-next').disabled = ix <= 0;
+    sub(`${ivaLbl()} · tutte le spese di ogni piazzale`);
+    const anim = pzAnim && !reduced(); pzAnim = false;
+    const body = $('#pz-body'); body.classList.toggle('cc-anim', anim);
+    const X = pzP ? all.filter(x => x.m === pzP) : all;
+    const C = lyCdcList().filter(c => c.cod !== LY_NONE);
+    const per = pzP ? mLabel(pzP) : months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : 'nessun dato';
+    const T = X.reduce((s, x) => s + x.v, 0);
+    const byC = groupBy(X, x => x.cod);
+    const P = C.map(c => { const v = byC.get(c.cod) || []; const ar = {}; PZ_AREAS.forEach(a => { ar[a.k] = v.filter(x => x.a === a.k).reduce((s, x) => s + x.v, 0); }); return { ...c, items: v, ar, t: v.reduce((s, x) => s + x.v, 0) }; }).filter(p => p.items.length).sort((a, b) => b.t - a.t);
+    const nc = byC.get(PZ_NC) || [], ncT = nc.reduce((s, x) => s + x.v, 0);
+    const ncNames = pzNames().filter(x => x.cod === PZ_NC);
+    if (!all.length) { body.innerHTML = '<div class="card"><div class="empty">Nessuna spesa registrata</div></div>'; return; }
+    if (pzSel && !C.some(c => c.cod === pzSel)) pzSel = '';
+    const bar = ar => PZ_AREAS.map(a => ar[a.k] > 0 ? `<i class="a-${a.k}" style="flex:${ar[a.k]}" title="${esc(a.t)}: ${esc(eur(ar[a.k]))}"></i>` : '').join('');
+    const leg = `<div class="ov-leg db-leg pz-leg">${PZ_AREAS.map(a => `<span class="a-${a.k}"><i></i>${ovShort[a.k]}</span>`).join('')}</div>`;
+    const ncCard = ncT > 0.5 ? `<div class="card pz-nc"><div class="pz-nci"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div><div class="pz-ncm"><b>${eur(ncT)} non collegati a un piazzale</b><span>${PZ_AREAS.map(a => { const v = nc.filter(x => x.a === a.k).reduce((s, x) => s + x.v, 0); return v > .5 ? `${ovShort[a.k]} ${eur0(v)}` : ''; }).filter(Boolean).join(' · ')}${ncNames.length ? ` · nomi da collegare: ${ncNames.slice(0, 4).map(x => esc(x.lbl)).join(', ')}${ncNames.length > 4 ? '…' : ''}` : ''}</span></div>${ncNames.length ? '<button type="button" class="btn sm primary" id="pz-link2">Collega i nomi</button>' : ''}</div>` : '';
+
+    if (!pzSel) {
+      const mxp = Math.max(1, ...P.map(p => p.t));
+      body.innerHTML = `
+        <div class="gl-hero db-hero pz-hero">
+          <div class="db-top">
+            <div class="db-hl"><span class="gh-lbl">Spesa dei piazzali · ${esc(per)}</span><div class="gh-big k-pzt">0 €</div>
+              <div class="gh-sub"><span>${P.length} piazzali con spese</span><span>${ivaLbl()}</span>${ncT > .5 ? `<span>${eur0(ncT)} non collegati</span>` : ''}</div></div>
+            <div class="db-hr"><div class="db-mix">${PZ_AREAS.map(a => { const v = X.filter(x => x.a === a.k && x.cod !== PZ_NC).reduce((s, x) => s + x.v, 0); return v > 0 ? `<i class="h-${a.k}" style="flex:${v}"></i>` : ''; }).join('')}</div>
+              <div class="db-mixl">${P.slice(0, 5).map((p, i) => `<button type="button" class="db-mr pz-mr" data-pzcdc="${esc(p.cod)}"><i class="pz-rk">${i + 1}</i><span>${esc(p.n)}</span><b>${eur0(p.t)}</b><em>${T ? fmtNum(pct(p.t, T), 0) : 0}%</em></button>`).join('')}</div></div>
+          </div>
+        </div>
+        ${ncCard}
+        <div class="card"><div class="card-h"><h3>Spesa per piazzale</h3><span class="muted small">tutte le aree · tocca un piazzale per aprire la sua scheda</span></div>
+          <div class="tr-dash ly-dash"><div class="cc-map" id="pz-map"></div><div class="tr-rank" id="pz-rank">${P.map((p, i) => `<button type="button" class="cr-row pz-row${i >= 10 ? ' pz-more' : ''}" data-pzcdc="${esc(p.cod)}" style="--d:${200 + i * 50}ms">
+              <span class="cr-n">${i + 1}</span>
+              <span class="cr-main"><span class="cr-top"><b>${esc(p.n)}</b><span><em>${fmtNum(pct(p.t, T), 1)}%</em><strong>${eur0(p.t)}</strong></span></span>
+              <span class="pz-sb" style="width:${(p.t / mxp * 100).toFixed(1)}%">${bar(p.ar)}</span>
+              <span class="cr-sub">${esc(p.cod)}${p.citta ? ' · ' + esc(p.citta) : ''} · ${PZ_AREAS.filter(a => p.ar[a.k] > 0).map(a => ovShort[a.k]).join(', ')}</span></span>
+            </button>`).join('')}${P.length > 10 ? `<button type="button" class="db-more" id="pz-morebtn">Mostra gli altri ${P.length - 10} piazzali</button>` : ''}${leg}</div></div></div>
+        <div class="card"><div class="card-h"><h3>Piazzali × aree</h3><span class="muted small">${ivaLbl()}</span></div>
+          <div class="mx-wrap"><table class="mx pz-mx"><thead><tr><th>Piazzale</th>${PZ_AREAS.map(a => `<th>${ovShort[a.k]}</th>`).join('')}<th>Totale</th><th>%</th></tr></thead><tbody>
+            ${P.map(p => `<tr data-pzcdc="${esc(p.cod)}" class="click"><td><b>${esc(p.n)}</b> <small class="muted">${esc(p.cod)}</small></td>${PZ_AREAS.map(a => `<td>${p.ar[a.k] > .5 ? eur0(p.ar[a.k]) : '—'}</td>`).join('')}<td><b>${eur0(p.t)}</b></td><td class="muted">${fmtNum(pct(p.t, T), 1)}%</td></tr>`).join('')}
+            ${ncT > .5 ? `<tr class="ly-na"><td>Non collegati / da attribuire</td>${PZ_AREAS.map(a => { const v = nc.filter(x => x.a === a.k).reduce((s, x) => s + x.v, 0); return `<td>${v > .5 ? eur0(v) : '—'}</td>`; }).join('')}<td><b>${eur0(ncT)}</b></td><td class="muted">${fmtNum(pct(ncT, T), 1)}%</td></tr>` : ''}
+            <tr class="tot"><td>Totale</td>${PZ_AREAS.map(a => `<td>${eur0(X.filter(x => x.a === a.k).reduce((s, x) => s + x.v, 0))}</td>`).join('')}<td>${eur0(T)}</td><td>100%</td></tr></tbody></table></div></div>`;
+      countTo($('.k-pzt', body), T - ncT, eur0);
+      pzMap('#pz-map', P.filter(p => lyGeo(p)).map((p, i) => ({ cod: p.cod, n: p.n, t: p.t, rank: P.indexOf(p) + 1, sub: PZ_AREAS.filter(a => p.ar[a.k] > 0).map(a => ovShort[a.k]).join(', '), geo: lyGeo(p) })), { attr: 'pzcdc', sel: '', rankEl: '#pz-rank', anim, maxR: 1.08, label: 'Mappa della spesa per piazzale' });
+      return;
+    }
+
+    // ---- scheda del singolo piazzale ----
+    const c = C.find(x => x.cod === pzSel), p = P.find(x => x.cod === pzSel) || { ...c, items: [], ar: Object.fromEntries(PZ_AREAS.map(a => [a.k, 0])), t: 0 };
+    const mine = all.filter(x => x.cod === pzSel);
+    const prevK = pzP ? months[months.indexOf(pzP) - 1] : null, prevT = prevK ? mine.filter(x => x.m === prevK).reduce((s, x) => s + x.v, 0) : 0;
+    const rank = P.findIndex(x => x.cod === pzSel) + 1;
+    const byM = months.map(m => { const o = { m }; PZ_AREAS.forEach(a => { o[a.k] = mine.filter(x => x.m === m && x.a === a.k).reduce((s, x) => s + x.v, 0); }); o.t = PZ_AREAS.reduce((s, a) => s + o[a.k], 0); return o; });
+    const spk = k => { const vals = byM.map(x => x[k]); if (vals.length < 2 || !vals.some(Boolean)) return '<div class="db-spk0"></div>'; const mx = Math.max(...vals, 1), st = 200 / (vals.length - 1), pts = vals.map((v, j) => [j * st, 37 - (v / mx) * 32]); const d = pts.map((q, j) => `${j ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join(' '); return `<svg class="ov-spark db-spark" viewBox="-4 0 208 40" preserveAspectRatio="none" aria-hidden="true"><path class="ov-sa" d="${d} L200 40 L0 40 Z"/><path class="ov-sl" pathLength="1" d="${d}"/></svg>`; };
+    const names = { att: [...new Set(p.items.filter(x => x.a === 'att').map(x => x.name))], gls: [...new Set(p.items.filter(x => x.a === 'gls').map(x => x.name))], gas: [...new Set(p.items.filter(x => x.a === 'gas').map(x => x.name))] };
+    const stat = {
+      att: () => `${p.items.filter(x => x.a === 'att').length} righe${names.att.length ? ' · ' + names.att.slice(0, 2).map(esc).join(', ') : ''}`,
+      gls: () => `${p.items.filter(x => x.a === 'gls').length} spedizioni`,
+      gas: () => { const g = p.items.filter(x => x.a === 'gas'); return `${g.filter(x => !x.rent).length} pieni · ${eur0(g.filter(x => x.rent).reduce((s, x) => s + x.v, 0))} noleggi`; },
+      ly: () => `${new Set(p.items.filter(x => x.a === 'ly').map(x => x.doc)).size} fatture`,
+      am: () => `${p.items.filter(x => x.a === 'am').length} ordini`
+    };
+    // categorie della merce (attrezzatura + Lyreco + Amazon)
+    const cat = new Map(), addC = (k, v, src) => { const o = cat.get(k) || { k, v: 0, src: new Set() }; o.v += v; o.src.add(src); cat.set(k, o); };
+    p.items.forEach(x => { if (x.a === 'ly') addC(x.cat, x.v, 'Lyreco'); else if (x.a === 'am') (x.cats || []).forEach(([k, v]) => addC(k, v, 'Amazon')); });
+    (db.movimenti || []).filter(r => pzLinkOf('att', String(r.centro || '—').trim() || '—').cod === pzSel && (!pzP || String(r.data).slice(0, 7) === pzP)).forEach(r => addC(r.categoria || 'Altro', tot(r), 'Attrezzatura'));
+    const cats = [...cat.values()].sort((a, b) => b.v - a.v).slice(0, 8), mxc = Math.max(1, ...cats.map(x => x.v));
+    const fl = [], seenD = new Map();
+    p.items.filter(x => !x.rent && x.d).forEach(x => { if (x.a !== 'ly') { fl.push(x); return; } const k = x.doc; if (!seenD.has(k)) { const y = { ...x, t: `Fattura Lyreco ${k}`, s: '', n: 0, v: 0 }; seenD.set(k, y); fl.push(y); } const y = seenD.get(k); y.v += x.v; y.n++; });
+    fl.forEach(x => { if (x.a === 'ly') x.s = `${x.n} ${x.n === 1 ? 'riga' : 'righe'}`; });
+    const feed = fl.sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 10);
+    body.innerHTML = `
+      <div class="pz-back"><button type="button" class="btn sm" id="pz-all">‹ Tutti i piazzali</button><select id="pz-pick" aria-label="Piazzale">${P.map(x => `<option value="${esc(x.cod)}"${x.cod === pzSel ? ' selected' : ''}>${esc(x.n)}</option>`).join('')}${P.some(x => x.cod === pzSel) ? '' : `<option value="${esc(c.cod)}" selected>${esc(c.n)}</option>`}</select></div>
+      <div class="gl-hero db-hero pz-hero">
+        <div class="db-top">
+          <div class="db-hl"><span class="gh-lbl">${esc(c.cod)} · ${esc(c.tipo || 'Piazzale')} · ${esc(per)}</span><h2 class="pz-name">${esc(c.n)}</h2><div class="gh-big k-pzt">0 €</div>
+            <div class="gh-sub">${c.ind || c.citta ? `<span>${esc(c.ind || c.citta)}</span>` : ''}${rank ? `<span>${rank}° su ${P.length} piazzali · ${fmtNum(pct(p.t, T), 1)}% del totale</span>` : ''}${prevK && prevT ? `<span class="gl-d ${p.t > prevT ? 'up' : 'down'}">${p.t > prevT ? '▲' : '▼'} ${fmtNum(Math.abs((p.t / prevT - 1) * 100), 0)}% rispetto a ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div></div>
+          <div class="db-hr"><div class="db-mix">${PZ_AREAS.map(a => p.ar[a.k] > 0 ? `<i class="h-${a.k}" style="flex:${p.ar[a.k]}"></i>` : '').join('')}</div>
+            <div class="db-mixl">${PZ_AREAS.map(a => `<button type="button" class="db-mr" data-pzgo="${a.k}"><i class="h-${a.k}"></i><span>${ovShort[a.k]}</span><b>${eur0(p.ar[a.k])}</b><em>${p.t ? fmtNum(pct(p.ar[a.k], p.t), 0) : 0}%</em></button>`).join('')}</div></div>
+        </div>
+      </div>
+      <div class="db-areas">${PZ_AREAS.map((a, i) => `<button type="button" class="card db-area pz-area a-${a.k}" data-pzgo="${a.k}" style="--d:${120 + i * 60}ms">
+          <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24">${AREAS.find(z => z.k === a.k).ic}</svg></span><span class="db-at"><span class="lb-d">${a.t}</span><span class="lb-m">${ovShort[a.k]}</span></span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+          <div class="db-av"><b>${eur0(p.ar[a.k])}</b></div>
+          <div class="db-am"><span>${p.t ? fmtNum(pct(p.ar[a.k], p.t), 1) : 0}% del piazzale</span></div>
+          ${spk(a.k)}
+          <div class="db-an">${stat[a.k]()}</div>
+        </button>`).join('')}</div>
+      <div class="db-row">
+        <div class="card ov-trend"><div class="card-h"><h3>Mese per mese</h3><span class="muted small">${ivaLbl()} · tocca un mese</span></div><div class="ov-bars" id="pz-bars"></div>${leg}</div>
+        <div class="card"><div class="card-h"><h3>Cosa si compra</h3><span class="muted small">categorie · attrezzatura, Lyreco, Amazon</span></div>
+          ${cats.length ? `<div class="bars">${cats.map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 45}ms"><div class="bar-top"><span>${esc(x.k)}<em>${[...x.src].join(', ')}</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mxc * 100).toFixed(1)}%"></div></div></div>`).join('')}</div>` : '<div class="empty">Nessun acquisto di merce</div>'}</div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Ultime spese del piazzale</h3><span class="muted small">tutte le aree</span></div>
+        ${feed.length ? `<div class="ov-feed">${feed.map(x => `<button type="button" class="ov-fr a-${x.a}" data-pzgo="${x.a}"><span class="ov-fi"><svg viewBox="0 0 24 24">${AREAS.find(z => z.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t || '—')}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${esc(eur(x.v))}</b></button>`).join('')}</div>` : '<div class="empty">Nessuna spesa nel periodo</div>'}</div>
+      ${names.att.length + names.gls.length + names.gas.length ? `<div class="card pz-names"><div class="card-h"><h3>Nomi collegati a questo piazzale</h3><button type="button" class="btn sm" id="pz-link3">Modifica</button></div><div class="pz-tags">${Object.entries(names).flatMap(([a, L]) => L.map(n => `<span class="pz-tag a-${a}"><i></i>${ovShort[a]}: ${esc(n)}</span>`)).join('')}</div></div>` : ''}`;
+    countTo($('.k-pzt', body), p.t, eur0);
+    const mx = Math.max(...byM.map(x => x.t), 1);
+    $('#pz-bars').innerHTML = byM.map((x, i) => `<div class="ov-b${x.m === pzP ? ' on' : ''}" data-pzm="${x.m}" title="${esc(mLabel(x.m))}: ${esc(eur(x.t))}"><span class="ov-bv">${x.t ? esc(eur0(x.t)) : ''}</span><div class="ov-bc" style="height:${Math.max(x.t ? 1.5 : 0, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${PZ_AREAS.slice().reverse().map(a => x[a.k] > 0 ? `<i class="a-${a.k}" style="flex:${x[a.k]}"></i>` : '').join('')}</div><span class="ov-bl">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}</span></div>`).join('');
+  }
+  // apre la sezione dell'area con il filtro del piazzale
+  function pzGo(a) {
+    const cod = pzSel; if (!cod) return;
+    if (a === 'ly') { lyF.cdc = cod; lyP = pzP; location.hash = 'lyreco'; return; }
+    if (a === 'am') { amF.cdc = cod; amP = pzP; location.hash = 'amazon'; return; }
+    if (a === 'att') { const n = pzNames().find(x => x.a === 'att' && x.cod === cod); Object.assign(f, { q: '', cat: '', per: '', centro: n ? n.name : '' }); mLimit = 150; location.hash = 'movimenti'; return; }
+    if (a === 'gls') { const n = glsRows().find(r => pzLinkOf('gls', `${glsKey(r)}${r.cdcNome ? ' ' + r.cdcNome : ''}`.trim()).cod === cod); gF.cdc = n ? n.cdc : ''; gMonth = pzP || ALLM; gKeep = true; location.hash = 'gls'; return; }
+    if (a === 'gas') { gasP = pzP; location.hash = 'gasolio'; }
+  }
+
+  /* =========================================================
      FATTURE FORNITORI (es. Lyreco)
      ========================================================= */
   let faP = '', faAnim = true, faF = { q: '', forn: '', stato: '' }, faLimit = 80;
@@ -3670,6 +3882,8 @@
     { cod: 'CDC11', n: 'Magazzino Corropoli', tipo: 'Magazzino', ind: 'c/o RL2 Logistic – Corropoli (TE)', key: '', loc: 'CORROPOLI|64013', citta: 'Corropoli', prov: 'TE', geo: [13.839, 42.827] },
     { cod: 'CDC12', n: 'Magazzino Verona', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – San Bonifacio (VR)', key: '', loc: 'SAN BONIFACIO|37047', citta: 'San Bonifacio', prov: 'VR', geo: [11.274, 45.396] },
     { cod: 'CDC13', n: 'Magazzino Ravenna', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Fornace Zarattini (RA)', key: '', loc: 'FORNACE ZARATTINI|48124', citta: 'Fornace Zarattini', prov: 'RA', geo: [12.143, 44.405] },
+    { cod: 'CDC14', n: 'Piazzale Ferentino', tipo: 'Piazzale', ind: 'Ferentino (FR)', key: '', loc: 'FERENTINO|03013', citta: 'Ferentino', prov: 'FR', geo: [13.25, 41.69] },
+    { cod: 'CDC15', n: 'Piazzale Piacenza', tipo: 'Piazzale', ind: 'Piacenza (PC)', key: '', loc: 'PIACENZA|29121|29122', citta: 'Piacenza', prov: 'PC', geo: [9.69, 45.05] },
     { cod: 'CDC99', n: 'Da attribuire', tipo: 'Sospeso', ind: 'Sede di consegna non indicata', key: '', loc: '', citta: '', prov: '', geo: null }
   ];
   // aggiunge ai centri salvati quelli nuovi e le località Amazon mancanti, senza toccare le modifiche dell'utente
@@ -3838,7 +4052,7 @@
     if (!list.length) { host.innerHTML = '<div class="empty">Nessun piazzale da mostrare sulla mappa</div>'; return; }
     const w = Math.max(280, host.clientWidth || 560), wide = w >= 460;
     const rkH = o.rankEl && $(o.rankEl) && matchMedia('(min-width: 980px)').matches ? $(o.rankEl).offsetHeight : 0;
-    const th = Math.round(wide ? Math.min(w * 1.5, Math.max(w * .78, rkH - 44)) : w * 1.08);
+    const th = Math.round(wide ? Math.min(w * (o.maxR || 1.5), Math.max(w * .78, rkH - 44)) : w * 1.08);
     const T = list.reduce((a, x) => a + Math.max(0, x.t), 0) || 1, mx = Math.max(1, ...list.map(x => x.t));
     const P = list.map(x => { const [gx, gy] = proj(x.geo); return { ...x, gx, gy, rp: (wide ? 8 : 9.5) + (wide ? 15 : 10) * Math.sqrt(Math.max(0, x.t) / mx) }; });
     // inquadratura: tutti i piazzali con margine per le etichette
@@ -4021,7 +4235,7 @@
     const used = cod => lyRows().filter(r => (r.cdc || LY_NONE) === cod).length;
     const provs = Object.keys((window.GLS_GEO || { PROV: {} }).PROV).sort();
     const row = (c, i) => `<div class="ly-cr" data-i="${i}"><input data-c="cod" value="${esc(c.cod || '')}" placeholder="CDC08"${c.cod === LY_NONE ? ' readonly' : ''}><input data-c="n" value="${esc(c.n || '')}" placeholder="Nome"><input data-c="tipo" value="${esc(c.tipo || '')}" placeholder="Tipologia" list="ly-tipl"><input data-c="citta" value="${esc(c.citta || '')}" placeholder="Città"><select data-c="prov"><option value="">Prov.</option>${provs.map(p => `<option${p === String(c.prov || '').toUpperCase() ? ' selected' : ''}>${p}</option>`).join('')}</select><input data-c="key" value="${esc(c.key || '')}" placeholder="Sede in fattura Lyreco" class="ly-ck" title="Sede di consegna come la scrive Lyreco"><input data-c="loc" value="${esc(c.loc || '')}" placeholder="Località Amazon: parole o CAP separati da |" class="ly-ck ly-ck2" title="Es. CALDERARA|BARGELLINO|40012">${c.cod === LY_NONE || used(c.cod) ? `<small class="ly-cu">${used(c.cod) ? used(c.cod) + ' righe' : 'fisso'}</small>` : '<button type="button" class="icon-btn tr-lx" data-cdel aria-label="Togli">×</button>'}</div>`;
-    openSheet('Centri di costo (Lyreco e Amazon)', `<p class="muted small" style="margin:0 0 12px">Città e provincia mettono il piazzale sulla mappa. «Sede in fattura Lyreco» e «Località Amazon» servono all'importazione per riconoscere il centro di costo (per Amazon scrivi parole o CAP della località di consegna separati da |).</p>
+    openSheet('Centri di costo (piazzali)', `<p class="muted small" style="margin:0 0 12px">Città e provincia mettono il piazzale sulla mappa. «Sede in fattura Lyreco» e «Località Amazon» servono all'importazione per riconoscere il centro di costo (per Amazon scrivi parole o CAP della località di consegna separati da |).</p>
       <div class="ly-ch"><span>Codice</span><span>Nome</span><span>Tipologia</span><span>Città</span><span>Prov.</span></div>
       <div id="ly-cl">${L.map(row).join('')}</div>
       <button type="button" class="btn sm" id="ly-cadd" style="margin-top:10px">+ Centro di costo</button>
@@ -4823,6 +5037,16 @@
       if (t.closest('#ly-imp') || t.closest('#ly-imp2')) { importLy(); return; }
       if (t.closest('#ly-xls')) { exportLy(); return; }
       if (t.closest('#ly-cdc') || t.closest('#ly-cdc2')) { lyCdcForm(); return; }
+      if (t.closest('#pz-prev') || t.closest('#pz-next')) { const o = [...$('#pz-per').options].map(x => x.value), i = o.indexOf(pzP) + (t.closest('#pz-prev') ? 1 : -1); if (i >= 0 && i < o.length) { pzP = o[i]; pzAnim = true; renderPz(); } return; }
+      if (t.closest('#pz-link') || t.closest('#pz-link2') || t.closest('#pz-link3')) { pzLinkForm(); return; }
+      if (t.closest('#pz-cdc') || t.closest('#pz-cdc3')) { lyCdcForm(); return; }
+      if (t.closest('#bk-now')) { backupDo('now'); return; }
+      if (t.closest('#bk-tg')) { backupDo('auto'); return; }
+      if (t.closest('#pz-morebtn')) { $('#pz-rank').classList.add('all'); t.closest('#pz-morebtn').remove(); return; }
+      if (t.closest('#pz-all')) { pzSel = ''; pzAnim = true; renderPz(); window.scrollTo(0, 0); return; }
+      const pzc = t.closest('[data-pzcdc]'); if (pzc && view === 'piazzali' && !t.closest('#sheet')) { pzSel = pzc.dataset.pzcdc; pzAnim = true; renderPz(); window.scrollTo(0, 0); return; }
+      const pzg = t.closest('[data-pzgo]'); if (pzg) { pzGo(pzg.dataset.pzgo); return; }
+      const pzm = t.closest('[data-pzm]'); if (pzm) { pzP = pzP === pzm.dataset.pzm ? '' : pzm.dataset.pzm; pzAnim = true; renderPz(); return; }
       if (t.closest('#ly-prev') || t.closest('#ly-next')) { const o = [...$('#ly-per').options].map(x => x.value), i = o.indexOf(lyP) + (t.closest('#ly-prev') ? 1 : -1); if (i >= 0 && i < o.length) { lyP = o[i]; lyAnim = true; renderLy(); } return; }
       const lyTo = sel => { const c = $(sel); if (c) (c.closest('.card') || c).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
       const lyDf = k => { lyDocF = k; lyDocLimit = k ? 999 : 12; $$('[data-lydf]').forEach(b => b.classList.toggle('on', b.dataset.lydf === k)); renderLyDocs(); };
@@ -4902,6 +5126,8 @@
     $('#ov-per').onchange = e => { ovP = e.target.value; ovAnim = true; renderOverview(); };
     $('#fa-per').onchange = e => { faP = e.target.value; faAnim = true; renderFat(); };
     $('#ly-per').onchange = e => { lyP = e.target.value; lyAnim = true; renderLy(); };
+    $('#pz-per').onchange = e => { pzP = e.target.value; pzAnim = true; renderPz(); };
+    document.addEventListener('change', e => { if (e.target.id === 'pz-pick') { pzSel = e.target.value; pzAnim = true; renderPz(); } });
     $('#am-per').onchange = e => { amP = e.target.value; amAnim = true; renderAm(); };
     document.addEventListener('input', e => { if (e.target.id === 'am-q') { clearTimeout(qt); qt = setTimeout(() => { amF.q = e.target.value; renderAmList(); }, 180); } if (e.target.id === 'am-aq') { clearTimeout(qt); qt = setTimeout(() => { amArtQ = e.target.value; renderAmArt(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'am-fc') { amF.cdc = e.target.value; $$('#am-map .tr-pin, #am-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.amcdc === amF.cdc)); renderAmList(); } if (e.target.id === 'am-fk') { amF.cat = e.target.value; renderAmList(); } if (e.target.id === 'am-fv') { amF.vend = e.target.value; renderAmList(); } });
@@ -4943,7 +5169,7 @@
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
-    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); pzMap.redraw(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); pzMap.redraw(); } }, 200); });
+    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); pzMap.redraw(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); pzMap.redraw(); } if (view === 'piazzali') pzMap.redraw(); }, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
   }
 
