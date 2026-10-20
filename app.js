@@ -3317,7 +3317,6 @@
     return out;
   }
   const LY_NONE = 'CDC99';
-  const LY_LBL = { CDC01: [-30, 22, 'end'], CDC02: [34, -22, 'start'], CDC03: [-12, -26, 'end'], CDC04: [16, -22, 'start'], CDC05: [-24, 16, 'end'], CDC06: [26, -4, 'start'] };
   const LY_COL = ['#3362ab', '#eb6834', '#1baf7a', '#eda100', '#8b5cf6', '#e87ba4', '#0ea5b7', '#94a3b8'];
   let lyP = '', lyAnim = true, lyF = { q: '', cdc: '', cat: '', doc: '' }, lyLimit = 40, lyDocLimit = 12, lyDocF = '', lyArtQ = '';
   const lyRows = () => db.lyreco || [];
@@ -3462,22 +3461,91 @@
     renderLyList(rows);
   }
 
-  function lyMap(PL, rows, anim) {
-    const pts = PL.filter(x => x.cod !== LY_NONE && x.rows.length && lyGeo(x)), mx = Math.max(1, ...pts.map(x => x.t)), T = pts.reduce((a, x) => a + x.t, 0);
-    const pins = pts.map((x, i) => { const [px, py] = proj(lyGeo(x)); return { ...x, px, py, r: x.rows.length ? 4.5 + 10 * Math.sqrt(Math.max(0, x.t) / mx) : 3, i }; });
-    const lab = p => {
-      const [dx, dy, an] = LY_LBL[p.cod] || [p.r + 12, -6, 'start'];
-      const lx = p.px + dx, ly = p.py + dy, ex = lx + (an === 'end' ? 4 : an === 'start' ? -4 : 0);
-      return `<g class="cm-lbl" data-lycdc="${esc(p.cod)}" style="--d:${800 + p.i * 80}ms"><path class="cm-lead" d="M${p.px.toFixed(1)} ${p.py.toFixed(1)} L${ex.toFixed(1)} ${(ly - 4).toFixed(1)}"/>
-        <text x="${lx.toFixed(1)}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n">${esc(String(p.n).replace(/^Magazzino\s+/i, '').toUpperCase())}</text>
-        <text x="${lx.toFixed(1)}" y="${(ly + 9).toFixed(1)}" text-anchor="${an}" class="cm-v">${eur0(p.t)} · ${fmtNum(pct(p.t, T), 0)}%</text></g>`;
+  /* ===== Mappa dei piazzali (Lyreco, Amazon): solo i piazzali, inquadratura automatica, etichette senza sovrapposizioni ===== */
+  let pzCtx = null;
+  const pzW = (txt, px, wt) => { if (!pzCtx) pzCtx = document.createElement('canvas').getContext('2d'); pzCtx.font = `${wt} ${px}px ${getComputedStyle(document.body).fontFamily}`; return pzCtx.measureText(txt).width; };
+  const pzName = n => String(n).replace(/^(Magazzino|Piazzale|Mag\.)\s+/i, '').replace(/\s*\(.*\)$/, '');
+  function pzMap(hostSel, list, o) {
+    const host = $(hostSel); if (!host) return;
+    pzMap.last = pzMap.last || {}; pzMap.last[hostSel] = [list, { ...o, anim: false }];
+    if (!list.length) { host.innerHTML = '<div class="empty">Nessun piazzale da mostrare sulla mappa</div>'; return; }
+    const w = Math.max(280, host.clientWidth || 560), wide = w >= 460;
+    const rkH = o.rankEl && $(o.rankEl) && matchMedia('(min-width: 980px)').matches ? $(o.rankEl).offsetHeight : 0;
+    const th = Math.round(wide ? Math.min(w * 1.5, Math.max(w * .78, rkH - 44)) : w * 1.08);
+    const T = list.reduce((a, x) => a + Math.max(0, x.t), 0) || 1, mx = Math.max(1, ...list.map(x => x.t));
+    const P = list.map(x => { const [gx, gy] = proj(x.geo); return { ...x, gx, gy, rp: (wide ? 8 : 9.5) + (wide ? 15 : 10) * Math.sqrt(Math.max(0, x.t) / mx) }; });
+    // inquadratura: tutti i piazzali con margine per le etichette
+    const xs = P.map(p => p.gx), ys = P.map(p => p.gy), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const padX = wide ? Math.min(118, w * .24) : 26, padY = wide ? Math.min(70, th * .15) : 30;
+    const s = Math.max((x1 - x0) / Math.max(60, w - 2 * padX), (y1 - y0) / Math.max(60, th - 2.6 * padY), 235 / w);
+    const vw = w * s, vh = th * s, vx = (x0 + x1) / 2 - vw / 2, vy = (y0 + y1) / 2 - vh / 2 + padY * .3 * s;
+    const u = px => px * s;
+    P.forEach(p => { p.x = p.gx; p.y = p.gy; p.r = u(p.rp); });
+    // bolle vicine (es. Roma e San Cesareo): si allontanano un poco, con un filo verso il punto vero
+    for (let it = 0; it < 80; it++) {
+      let moved = false;
+      for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+        const a = P[i], b = P[j]; let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); const need = a.r + b.r + u(3);
+        if (d < need) { if (d < 1e-6) { dx = 1; dy = 0; d = 1; } const k = (need - d) / 2 / d; const wa = b.r / (a.r + b.r), wb = a.r / (a.r + b.r); a.x -= dx * k * 2 * wa; a.y -= dy * k * 2 * wa; b.x += dx * k * 2 * wb; b.y += dy * k * 2 * wb; moved = true; }
+      }
+      if (!moved) break;
+    }
+    // etichette: prima i piazzali che spendono di più, nella prima posizione libera
+    const fN = 10.5, fV = 11.5, chH = u(36), boxes = P.map(p => ({ x: p.x - p.r - u(2), y: p.y - p.r - u(2), w: 2 * p.r + u(4), h: 2 * p.r + u(4) }));
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const inside = b => b.x > vx + u(4) && b.y > vy + u(4) && b.x + b.w < vx + vw - u(4) && b.y + b.h < vy + vh - u(4);
+    if (wide) P.slice().sort((a, b) => b.t - a.t).forEach(p => {
+      const nm = pzName(p.n).toUpperCase(), val = `${eur0(p.t)} · ${fmtNum(pct(p.t, T), 0)}%`;
+      const cw = u(Math.max(pzW(nm, fN, 700) * 1.06, pzW(val, fV, 500)) + 20);
+      const cand = [];
+      [u(8), u(26), u(46)].forEach(g => {
+        const R = p.r + g;
+        [[1, 0], [-1, 0], [.75, -.75], [-.75, -.75], [.75, .75], [-.75, .75], [0, -1], [0, 1]].forEach(([ax, ay]) => {
+          const cx = p.x + ax * R, cy = p.y + ay * R;
+          cand.push({ x: ax > 0 ? cx : ax < 0 ? cx - cw : cx - cw / 2, y: ay > 0 ? cy : ay < 0 ? cy - chH : cy - chH / 2, w: cw, h: chH, far: g > u(10) });
+        });
+      });
+      const ok = cand.find(c => inside(c) && !boxes.some(b => hit(c, b)));
+      if (ok) { boxes.push(ok); p.lb = { ...ok, nm, val }; }
+    });
+    const A = o.attr, ord = P.slice().sort((a, b) => b.r - a.r);
+    const fade = vy + vh < 384 ? 1 : 0;
+    const edge = (p, b) => { // punto del bordo dell'etichetta più vicino alla bolla
+      const ex = Math.max(b.x, Math.min(p.x, b.x + b.w)), ey = Math.max(b.y, Math.min(p.y, b.y + b.h)), d = Math.hypot(ex - p.x, ey - p.y) || 1;
+      return [p.x + (ex - p.x) / d * p.r, p.y + (ey - p.y) / d * p.r, ex, ey, d - p.r];
     };
-    // solo i piazzali: nessun punto di partenza e nessun collegamento
-    $('#ly-map').innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei centri di costo Lyreco">
-      <path class="cm-land" pathLength="1" d="${IT_PATH}"/>
-      ${pins.slice().sort((a, b) => b.r - a.r).map(p => `<g class="cm-pin tr-pin${p.rows.length ? ' act' : ''}${lyF.cdc === p.cod ? ' on' : ''}" data-lycdc="${esc(p.cod)}" style="--d:${450 + p.i * 80}ms" transform="translate(${p.px.toFixed(1)} ${p.py.toFixed(1)})"><title>${esc(p.n)}: ${esc(eur(p.t))} · ${p.docs} fatture</title><circle class="cm-hit" r="${(p.r + 8).toFixed(1)}"/><circle class="cm-c" r="${p.r.toFixed(1)}"/></g>`).join('')}
-      ${pins.filter(p => p.rows.length).map(lab).join('')}
-    </svg>`;
+    host.innerHTML = `<svg viewBox="${vx.toFixed(2)} ${vy.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}" width="${w}" height="${th}" class="pz-svg${o.anim ? ' pz-anim' : ''}" role="img" aria-label="${esc(o.label || 'Mappa dei piazzali')}">
+      <defs>
+        <pattern id="pzd-${A}" width="${u(7).toFixed(3)}" height="${u(7).toFixed(3)}" patternUnits="userSpaceOnUse"><circle cx="${u(3.5).toFixed(3)}" cy="${u(3.5).toFixed(3)}" r="${u(1.05).toFixed(3)}" class="pz-dot"/></pattern>
+        <filter id="pzs-${A}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="${u(1.5).toFixed(3)}" stdDeviation="${u(3).toFixed(3)}" flood-opacity=".10"/></filter>
+        <linearGradient id="pzf-${A}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="${fade ? .86 : 1}" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="${fade ? 0 : 1}"/></linearGradient>
+        <mask id="pzm-${A}" maskUnits="userSpaceOnUse" x="${vx}" y="${vy}" width="${vw}" height="${vh}"><rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="url(#pzf-${A})"/></mask>
+      </defs>
+      <g mask="url(#pzm-${A})" class="pz-landg">
+        <path class="pz-land" d="${IT_PATH}" style="stroke-width:${u(1).toFixed(3)}"/>
+        <path class="pz-dots" d="${IT_PATH}" fill="url(#pzd-${A})"/>
+      </g>
+      ${P.filter(p => Math.hypot(p.x - p.gx, p.y - p.gy) > u(2)).map(p => `<g class="pz-true tr-pin" data-${A}="${esc(p.cod)}"><line x1="${p.gx.toFixed(2)}" y1="${p.gy.toFixed(2)}" x2="${p.x.toFixed(2)}" y2="${p.y.toFixed(2)}" style="stroke-width:${u(1).toFixed(3)}"/><circle cx="${p.gx.toFixed(2)}" cy="${p.gy.toFixed(2)}" r="${u(2.2).toFixed(3)}" style="stroke-width:${u(1.2).toFixed(3)}"/></g>`).join('')}
+      ${P.filter(p => p.lb).map(p => { const [ax, ay, ex, ey, d] = edge(p, p.lb); return d > u(10) ? `<line class="pz-lead tr-pin" data-${A}="${esc(p.cod)}" x1="${ax.toFixed(2)}" y1="${ay.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}" style="stroke-width:${u(1).toFixed(3)}"/>` : ''; }).join('')}
+      ${ord.map((p, i) => `<g class="pz-pin tr-pin${o.sel === p.cod ? ' on' : ''}" data-${A}="${esc(p.cod)}" style="--d:${350 + i * 60}ms" transform="translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})"><title>${esc(p.n)}: ${esc(eur(p.t))} · ${esc(p.sub)}</title>
+        <circle class="pz-halo" r="${(p.r + u(5)).toFixed(3)}"/><circle class="pz-c" r="${p.r.toFixed(3)}" style="stroke-width:${u(2).toFixed(3)}"/>${p.rp >= 9.5 ? `<text class="pz-num" y="${u(3.6).toFixed(3)}" style="font-size:${u(p.rp >= 14 ? 11 : 10).toFixed(3)}px">${p.rank}</text>` : ''}</g>`).join('')}
+      ${P.filter(p => p.lb).map((p, i) => { const b = p.lb; return `<g class="pz-lbl tr-pin${o.sel === p.cod ? ' on' : ''}" data-${A}="${esc(p.cod)}" style="--d:${650 + i * 50}ms">
+        <rect x="${b.x.toFixed(2)}" y="${b.y.toFixed(2)}" width="${b.w.toFixed(2)}" height="${b.h.toFixed(2)}" rx="${u(8).toFixed(3)}" filter="url(#pzs-${A})" style="stroke-width:${u(1).toFixed(3)}"/>
+        <text x="${(b.x + u(10)).toFixed(2)}" y="${(b.y + u(15)).toFixed(2)}" class="pz-n" style="font-size:${u(fN).toFixed(3)}px;letter-spacing:${u(.5).toFixed(3)}px">${esc(b.nm)}</text>
+        <text x="${(b.x + u(10)).toFixed(2)}" y="${(b.y + u(29)).toFixed(2)}" class="pz-v" style="font-size:${u(fV).toFixed(3)}px">${esc(b.val)}</text></g>`; }).join('')}
+    </svg>
+    <div class="pz-foot"><span class="pz-key"><i style="width:9px;height:9px"></i><i style="width:15px;height:15px"></i><i style="width:22px;height:22px"></i>dimensione = spesa</span><span>${list.length} ${list.length === 1 ? 'piazzale' : 'piazzali'} · ${eur0(T)}</span></div>`;
+    // evidenziazione reciproca mappa ↔ classifica
+    const card = host.closest('.card');
+    if (card && !card.dataset.pzhl) {
+      card.dataset.pzhl = 1;
+      const hl = k => card.querySelectorAll(`[data-${A}]`).forEach(x => x.classList.toggle('hl', !!k && x.dataset[A] === k));
+      card.addEventListener('mouseover', e => { const t = e.target.closest(`.pz-svg [data-${A}], .cr-row[data-${A}]`); hl(t ? t.dataset[A] : ''); });
+      card.addEventListener('mouseleave', () => hl(''));
+    }
+  }
+  pzMap.redraw = () => Object.entries(pzMap.last || {}).forEach(([k, [l, o]]) => { if ($(k) && $(k).offsetParent) pzMap(k, l, o); });
+  function lyMap(PL, rows, anim) {
     const rk = PL.filter(x => x.rows.length).sort((a, b) => (a.cod === LY_NONE) - (b.cod === LY_NONE) || b.t - a.t), all = rk.reduce((a, x) => a + x.t, 0), mxr = Math.max(1, ...rk.map(x => x.t));
     const noGeo = PL.filter(x => x.cod !== LY_NONE && x.rows.length && !lyGeo(x));
     $('#ly-rank').innerHTML = rk.map((x, i) => `<button type="button" class="cr-row${lyF.cdc === x.cod ? ' on' : ''}${x.cod === LY_NONE ? ' ly-na' : ''}" data-lycdc="${esc(x.cod)}" style="--d:${200 + i * 60}ms">
@@ -3486,6 +3554,7 @@
         <span class="cr-track"><i style="width:${(Math.max(0, x.t) / mxr * 100).toFixed(2)}%"></i></span>
         <span class="cr-sub">${esc(x.cod)} · ${x.docs} fatture · ${x.rows.length} righe${x.cod === LY_NONE ? ' · da assegnare' : x.tipo ? ' · ' + esc(x.tipo) : ''}</span></span>
       </button>`).join('') + (noGeo.length ? `<div class="muted small tr-none">Non in mappa (manca la città): ${noGeo.map(x => esc(x.n)).join(', ')}. <button type="button" class="link ly-link" id="ly-cdc2">Imposta la città</button></div>` : '');
+    pzMap('#ly-map', rk.filter(x => x.cod !== LY_NONE && lyGeo(x)).map(x => ({ cod: x.cod, n: x.n, t: x.t, rank: rk.indexOf(x) + 1, sub: `${x.docs} ${x.docs === 1 ? 'fattura' : 'fatture'}`, geo: lyGeo(x) })), { attr: 'lycdc', sel: lyF.cdc, rankEl: '#ly-rank', anim, label: 'Mappa dei centri di costo Lyreco' });
   }
   function lyMatrix(rows, PL, anim) {
     const cs = [...groupBy(rows, r => r.categoria || 'Altro')].map(([k, v]) => [k, lySum(v)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
@@ -3837,7 +3906,7 @@
     $$('[data-amk]', body).forEach(el => { const i = +el.dataset.amk; el._v = 0; countTo(el, K[i][1], K[i][2]); });
     const CK = amChecks(O, A), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
     $('#am-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${CK.length ? CK.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` + (CK.length ? `<div class="gl-an">${CK.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"${x.act ? ` data-amact="${x.act}"` : ''}${x.ids ? ` data-amids="${esc(x.ids.join(' '))}"` : ''}${x.q ? ` data-amartq="${esc(x.q)}"` : ''}><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
-    amMap(PL);
+    amMap(PL, anim);
     // categorie
     const byC = [...groupBy(A, a => a.cat)].map(([k, v]) => ({ k, v: r2(v.reduce((x, a) => x + a.val, 0)), n: v.length })).sort((a, b) => b.v - a.v), mc = Math.max(1, ...byC.map(x => x.v));
     $('#am-cat').innerHTML = byC.map((x, i) => `<div class="bar-row gl-anim-row click" style="--d:${200 + i * 45}ms" data-amcat="${esc(x.k)}"><div class="bar-top"><span>${esc(x.k)}<em>${fmtNum(pct(x.v, T), 1)}% · ${x.n} art.</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mc * 100).toFixed(2)}%"></div></div></div>`).join('');
@@ -3867,21 +3936,7 @@
     $('#am-fv').innerHTML = `<option value="">Tutti i venditori</option>` + byV.map(x => `<option${amF.vend === x.k ? ' selected' : ''}>${esc(x.k)}</option>`).join('');
     renderAmList(A);
   }
-  function amMap(PL) {
-    const pts = PL.filter(x => x.cod !== LY_NONE && x.rows.length && lyGeo(x)), mx = Math.max(1, ...pts.map(x => x.t)), T = pts.reduce((a, x) => a + x.t, 0);
-    const pins = pts.map((x, i) => { const [px, py] = proj(lyGeo(x)); return { ...x, px, py, r: 4.5 + 10 * Math.sqrt(Math.max(0, x.t) / mx), i }; });
-    const lab = p => {
-      const [dx, dy, an] = AM_LBL[p.cod] || LY_LBL[p.cod] || [p.r + 12, -6, 'start'];
-      const lx = p.px + dx, ly = p.py + dy, ex = lx + (an === 'end' ? 4 : an === 'start' ? -4 : 0);
-      return `<g class="cm-lbl" data-amcdc="${esc(p.cod)}" style="--d:${800 + p.i * 70}ms"><path class="cm-lead" d="M${p.px.toFixed(1)} ${p.py.toFixed(1)} L${ex.toFixed(1)} ${(ly - 4).toFixed(1)}"/>
-        <text x="${lx.toFixed(1)}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n">${esc(String(p.n).replace(/^(Magazzino|Piazzale)\s+/i, '').replace(/\s*\(.*\)$/, '').toUpperCase())}</text>
-        <text x="${lx.toFixed(1)}" y="${(ly + 9).toFixed(1)}" text-anchor="${an}" class="cm-v">${eur0(p.t)} · ${fmtNum(pct(p.t, T), 0)}%</text></g>`;
-    };
-    $('#am-map').innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei piazzali Amazon">
-      <path class="cm-land" pathLength="1" d="${IT_PATH}"/>
-      ${pins.slice().sort((a, b) => b.r - a.r).map(p => `<g class="cm-pin tr-pin act${amF.cdc === p.cod ? ' on' : ''}" data-amcdc="${esc(p.cod)}" style="--d:${450 + p.i * 70}ms" transform="translate(${p.px.toFixed(1)} ${p.py.toFixed(1)})"><title>${esc(p.n)}: ${esc(eur(p.t))} · ${p.docs} ordini</title><circle class="cm-hit" r="${(p.r + 8).toFixed(1)}"/><circle class="cm-c" r="${p.r.toFixed(1)}"/></g>`).join('')}
-      ${pins.map(lab).join('')}
-    </svg>`;
+  function amMap(PL, anim) {
     const rk = PL.filter(x => x.rows.length).sort((a, b) => (a.cod === LY_NONE) - (b.cod === LY_NONE) || b.t - a.t), all = rk.reduce((a, x) => a + x.t, 0), mxr = Math.max(1, ...rk.map(x => x.t));
     const noGeo = PL.filter(x => x.cod !== LY_NONE && x.rows.length && !lyGeo(x));
     $('#am-rank').innerHTML = rk.map((x, i) => `<button type="button" class="cr-row${amF.cdc === x.cod ? ' on' : ''}${x.cod === LY_NONE ? ' ly-na' : ''}" data-amcdc="${esc(x.cod)}" style="--d:${200 + i * 50}ms">
@@ -3890,8 +3945,8 @@
         <span class="cr-track"><i style="width:${(Math.max(0, x.t) / mxr * 100).toFixed(2)}%"></i></span>
         <span class="cr-sub">${esc(x.cod)} · ${x.docs} ordini${x.citta ? ' · ' + esc(x.citta) : ''}${x.cod === LY_NONE ? ' · da assegnare' : ''}</span></span>
       </button>`).join('') + (noGeo.length ? `<div class="muted small tr-none">Non in mappa (manca la città): ${noGeo.map(x => esc(x.n)).join(', ')}. <button type="button" class="link ly-link" id="am-cdc2">Imposta la città</button></div>` : '');
+    pzMap('#am-map', rk.filter(x => x.cod !== LY_NONE && lyGeo(x)).map(x => ({ cod: x.cod, n: x.n, t: x.t, rank: rk.indexOf(x) + 1, sub: `${x.docs} ${x.docs === 1 ? 'ordine' : 'ordini'}`, geo: lyGeo(x) })), { attr: 'amcdc', sel: amF.cdc, rankEl: '#am-rank', anim, label: 'Mappa dei piazzali Amazon' });
   }
-  const AM_LBL = { CDC02: [30, 24, 'start'], CDC04: [16, -22, 'start'], CDC06: [24, 8, 'start'], CDC08: [-26, -8, 'end'], CDC09: [-8, 30, 'end'], CDC10: [22, 14, 'start'], CDC11: [26, -4, 'start'], CDC12: [0, -30, 'middle'], CDC13: [22, -14, 'start'] };
   function renderAmOrds(O) {
     O = O || amOrd().filter(amIn);
     const L = O.filter(o => !amOrdF || (amOrdF === 'est' && amEst(o)) || (amOrdF === 'na' && (o.cdc || LY_NONE) === LY_NONE) || (amOrdF === 'ids' && (renderAmOrds.ids || []).includes(String(o.id)))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
@@ -4325,7 +4380,7 @@
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
-    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); } }, 200); });
+    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); pzMap.redraw(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); pzMap.redraw(); } }, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
   }
 
