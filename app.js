@@ -4200,6 +4200,9 @@
     if (used.length) C.push({ t: 'info', h: 'Articoli usati', d: `${used.length} articoli comprati usati (Amazon Seconda mano): ricorda che la garanzia è ridotta.`, v: eur(used.reduce((x, a) => x + a.val, 0)), ids: [...new Set(used.map(a => a.ordine))] });
     const pv = [...groupBy(A.filter(a => num(a.prezzo) > 0), a => amNorm(a.descrizione).slice(0, 60))].map(([k, v]) => { const p = v.map(a => num(a.prezzo)); return { k, d: v[0].descrizione, min: Math.min(...p), max: Math.max(...p), n: v.length }; }).filter(x => x.n > 1 && x.max / x.min > 1.05).sort((a, b) => (b.max - b.min) - (a.max - a.min));
     if (pv.length) C.push({ t: 'info', h: 'Stesso articolo pagato a prezzi diversi', d: pv.slice(0, 3).map(x => `${esc(String(x.d).split(/[,(]/)[0].slice(0, 40))}: da ${eurP(x.min)} a ${eurP(x.max)}`).join(' · '), v: pv.length + ' articoli', q: String(pv[0].d).split(/[,(]/)[0].slice(0, 30) });
+    const FIXc = cfg('amArtFix') || {}, aBy = groupBy(amArtAll(), a => String(a.ordine));
+    const mis = O.filter(o => { const v = aBy.get(String(o.id)); if (!v || !v.length) return false; const sm = v.reduce((x, a) => x + num(a.importo), 0), t = num(o.totale); return Math.abs(sm - t) > Math.max(1, t * .02); });
+    if (mis.length) C.push({ t: 'info', h: 'Prezzi degli articoli da controllare', d: `In ${mis.length} ordini la somma dei prezzi degli articoli non coincide con il totale pagato (nel file c'erano prezzi di listino, sconti o articoli ripetuti). Apri l'ordine e correggi i prezzi, oppure premi «Adatta i prezzi al totale».${Object.keys(FIXc).length ? ` Già corretti a mano: ${Object.keys(FIXc).length}.` : ''}`, v: mis.length + ' ordini', ids: mis.map(o => o.id) });
     const ship = O.filter(o => num(o.spedizione) > 0);
     if (ship.length) C.push({ t: 'info', h: 'Spese di spedizione', d: `${ship.length} ordini con spedizione a pagamento: con Amazon Business Prime e ordini raggruppati si evitano.`, v: eur(ship.reduce((a, o) => a + num(o.spedizione), 0)), ids: ship.map(o => o.id) });
     return C;
@@ -4357,26 +4360,73 @@
     const o = amOrd().find(x => String(x.id) === String(id)); if (!o) return;
     const arts = amArtAll().filter(a => String(a.ordine) === String(id)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
     const C = lyCdcList(), cats = [...new Set([...AM_CAT.map(c => c[0]), 'Altro', ...amArtAll().map(a => a.categoria).filter(Boolean)])];
+    // copia di lavoro degli articoli (modificabili)
+    let W = arts.map(a => ({ id: a.id, d: String(a.descrizione || ''), q: num(a.quantita) || 1, p: num(a.prezzo), c: a.categoria || amCatOf(a.descrizione), src: a }));
+    const tot = num(o.totale);
+    const rowsHtml = () => W.map((w, i) => `<div class="am-er" data-i="${i}">
+        <input class="am-ed-d" data-k="d" value="${esc(w.d)}" placeholder="Descrizione dell'articolo" aria-label="Descrizione">
+        <label class="am-ed-n"><span>Q.tà</span><input data-k="q" inputmode="decimal" value="${esc(fmtIn(w.q))}"></label>
+        <label class="am-ed-n"><span>Prezzo cad.</span><input data-k="p" inputmode="decimal" value="${esc(fmtIn(w.p))}"></label>
+        <span class="am-ed-t"><small>Totale</small><b data-t="${i}">${esc(eur(r2(w.q * w.p)))}</b></span>
+        <select data-k="c" aria-label="Categoria">${cats.map(c => `<option${c === w.c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <button type="button" class="am-ed-x" data-del="${i}" title="Togli l'articolo" aria-label="Togli l'articolo"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>`).join('');
+    const sumHtml = () => { const sm = r2(W.reduce((x, w) => x + w.q * w.p, 0)), d = r2(tot - sm), ok = Math.abs(d) < .02; return `<div class="am-es ${ok ? 'ok' : 'ko'}"><span><b>Somma articoli ${esc(eur(sm))}</b><small>${ok ? 'coincide con il totale pagato' : `totale pagato ${esc(eur(tot))} · ${d > 0 ? 'mancano' : 'in più'} ${esc(eur(Math.abs(d)))}`}</small></span>${!ok && sm > 0 ? '<button type="button" class="btn sm" id="am-fit">Adatta i prezzi al totale</button>' : ''}</div>`; };
     openSheet(`Ordine ${o.id}`, `
       <div class="kv">${[['Data', validD(o.data) ? shortDate(o.data) : '—'], ['Venditore', o.venditore || '—'], ['Destinatario', o.destinatario || '—'], ['Consegna', o.localita || '—'], ['Pagamento', o.pagamento || '—']].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
       <div class="iva-sum" style="margin-top:14px">${num(o.spedizione) ? `<div><span>Spedizione</span><b>${esc(eur(num(o.spedizione)))}</b></div>` : ''}${num(o.sconti) ? `<div><span>Sconti</span><b>${esc(eur(num(o.sconti)))}</b></div>` : ''}<div><span>Imponibile${amEst(o) ? ' (stimato al 22%)' : ''}</span><b>${esc(eur(amNet(o)))}</b></div><div><span>IVA</span><b>${esc(eur(num(o.totale) - amNet(o)))}</b></div><div class="t"><span>Totale pagato</span><b>${esc(eur(num(o.totale)))}</b></div></div>
       ${amEst(o) ? `<div class="fa-chk ko"><b>IVA non riportata da Amazon</b><span>Se hai la fattura, scrivi qui sotto l'imponibile vero: l'ordine non sarà più stimato.</span></div>` : ''}
       <div class="f-row" style="margin-top:12px"><label class="f"><span>Centro di costo</span><select name="cdc">${C.map(c => `<option value="${esc(c.cod)}"${c.cod === (o.cdc || LY_NONE) ? ' selected' : ''}>${esc(c.n)}${c.cod === LY_NONE ? '' : ' · ' + esc(c.cod)}</option>`).join('')}</select></label><label class="f"><span>Imponibile dalla fattura €</span><input name="imp" inputmode="decimal" value="${amEst(o) ? '' : esc(fmtIn(num(o.imponibile)))}" placeholder="${esc(fmtIn(amNet(o)))}"></label></div>
-      <div class="ly-rows"><div class="ly-rh am-rh"><span>Articolo</span><span>Totale</span><span>Categoria</span></div>
-        ${arts.map(a => `<div class="ly-rr"><span><b title="${esc(a.descrizione)}">${esc(a.descrizione)}</b><small>${qtyFmt(num(a.quantita))} × ${esc(eurP(num(a.prezzo)))} IVA incl.${a.condizione && !/^nuovo/i.test(a.condizione) ? ' · ' + esc(String(a.condizione).slice(0, 30)) : ''}${a.spedito ? ' · spedito ' + esc(shortDate(a.spedito)) : ''}</small></span><span>${esc(eur(num(a.importo)))}</span><select data-amc="${esc(a.id)}">${cats.map(c => `<option${c === (a.categoria || amCatOf(a.descrizione)) ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>`).join('')}</div>
+      <div class="am-ed">
+        <div class="am-eh"><b>Articoli</b><small>prezzi IVA inclusa · puoi correggere descrizione, quantità, prezzo e categoria</small></div>
+        <div id="am-er">${rowsHtml()}</div>
+        <button type="button" class="am-add" id="am-add">+ Aggiungi articolo</button>
+        <div id="am-es">${sumHtml()}</div>
+      </div>
       <label class="f" style="margin-top:12px"><span>Note</span><input name="note" value="${esc(o.note || '')}"></label>
-      <div class="row-btns" style="margin-top:6px">${o.pdf ? '<button type="button" class="btn sm" id="am-open">Apri fattura</button>' : ''}${!isLocal() ? `<button type="button" class="btn sm" id="am-pdf">${o.pdf ? 'Sostituisci fattura' : 'Allega fattura (PDF)'}</button>` : ''}</div>`,
+      <div class="row-btns" style="margin-top:6px">${o.pdf ? '<button type="button" class="btn sm" id="am-open">Apri fattura</button>' : ''}${!isLocal() ? `<button type="button" class="btn sm" id="am-doc">${o.pdf ? 'Sostituisci fattura' : 'Allega fattura (PDF)'}</button>` : ''}</div>`,
       fd => {
         const ops = [], imp = String(fd.get('imp') || '').trim();
+        if (W.some(w => !w.d.trim())) { toast('Scrivi la descrizione di ogni articolo (o toglilo)'); return false; }
         const row = { ...o, cdc: String(fd.get('cdc')), note: String(fd.get('note') || '').trim() };
         if (imp !== '' && (amEst(o) || Math.abs(num(imp) - amNet(o)) > .005)) { row.imponibile = num(imp); row.iva = r2(num(o.totale) - num(imp)); row.ivaTipo = 'fattura'; }
-        if (JSON.stringify(row) !== JSON.stringify(o)) ops.push({ action: 'upsert', sheet: 'Amazon', row });
-        $$('#sheet-body [data-amc]').forEach(s => { const a = arts.find(x => x.id === s.dataset.amc); if (a && s.value !== (a.categoria || amCatOf(a.descrizione))) ops.push({ action: 'upsert', sheet: 'AmazonArticoli', row: { ...a, categoria: s.value } }); });
+        // articoli: modificati, nuovi e tolti
+        let next = arts.reduce((m, a) => Math.max(m, Number(String(a.id).split('-').pop()) || 0), 0);
+        let artCh = false;
+        W.forEach(w => {
+          const base = w.src || { ordine: o.id, data: o.data, venditore: String(o.venditore || '').split(',')[0].trim(), condizione: '', spedito: '', localita: o.localita };
+          const r = { ...base, id: w.src ? w.src.id : `${o.id}-${String(++next).padStart(2, '0')}`, descrizione: w.d.trim(), quantita: w.q, prezzo: Math.round(w.p * 1000) / 1000, importo: r2(w.q * w.p), categoria: w.c };
+          const was = w.src && w.src.descrizione === r.descrizione && num(w.src.quantita) === r.quantita && Math.abs(num(w.src.prezzo) - r.prezzo) < .0005 && Math.abs(num(w.src.importo) - r.importo) < .005;
+          if (!w.src || !was) artCh = true;
+          if (!w.src || !was || (w.src.categoria || amCatOf(w.src.descrizione)) !== r.categoria) ops.push({ action: 'upsert', sheet: 'AmazonArticoli', row: r });
+        });
+        arts.filter(a => !W.some(w => w.src && w.src.id === a.id)).forEach(a => { artCh = true; ops.push({ action: 'delete', sheet: 'AmazonArticoli', id: a.id }); });
+        if (artCh) {
+          row.articoli = W.map(w => w.d.trim()).join(' | '); row.pezzi = W.reduce((x, w) => x + w.q, 0);
+          const fix = { ...(cfg('amArtFix') || {}) }; fix[o.id] = today();
+          ops.push({ action: 'upsert', sheet: 'Config', row: { chiave: 'amArtFix', valore: JSON.stringify(fix) } });
+        }
+        if (JSON.stringify(row) !== JSON.stringify(o)) ops.unshift({ action: 'upsert', sheet: 'Amazon', row });
         if (!ops.length) return true;
-        write(ops); toast('Ordine aggiornato'); return true;
+        write(ops); toast(artCh ? 'Ordine e articoli aggiornati' : 'Ordine aggiornato'); return true;
       }, null, 'Salva');
+    $('#sheet-form').classList.add('wide');
+    const ED = $('#sheet-body .am-ed');
+    const redraw = () => { $('#am-er').innerHTML = rowsHtml(); $('#am-es').innerHTML = sumHtml(); };
+    ED.addEventListener('input', e => {
+      const el = e.target, r = el.closest('.am-er'); if (!r || !el.dataset.k) return;
+      const w = W[+r.dataset.i], k = el.dataset.k;
+      if (k === 'd') w.d = el.value; else if (k === 'q') w.q = num(el.value) || 0; else if (k === 'p') w.p = num(el.value) || 0; else if (k === 'c') w.c = el.value;
+      if (k === 'q' || k === 'p') { r.querySelector('[data-t]').textContent = eur(r2(w.q * w.p)); $('#am-es').innerHTML = sumHtml(); }
+    });
+    ED.addEventListener('change', e => { const el = e.target, r = el.closest('.am-er'); if (r && el.dataset.k === 'c') W[+r.dataset.i].c = el.value; });
+    ED.addEventListener('click', e => {
+      const x = e.target.closest('[data-del]'); if (x) { W.splice(+x.dataset.del, 1); redraw(); return; }
+      if (e.target.closest('#am-add')) { W.push({ id: '', d: '', q: 1, p: 0, c: 'Altro', src: null }); redraw(); const ins = $$('#am-er .am-ed-d'); if (ins.length) ins[ins.length - 1].focus(); return; }
+      if (e.target.closest('#am-fit')) { const sm = W.reduce((s2, w) => s2 + w.q * w.p, 0); if (sm > 0) { const k = tot / sm; W.forEach(w => { w.p = r2(w.p * k); }); const d = r2(tot - W.reduce((s2, w) => s2 + w.q * w.p, 0)); const last = W.slice().reverse().find(w => w.q === 1); if (last && Math.abs(d) < 1) last.p = r2(last.p + d); redraw(); toast('Prezzi adattati al totale pagato: controllali'); } }
+    });
     const op = $('#am-open'); if (op) op.onclick = () => openDoc(o.pdf, `Amazon ${o.id}`);
-    const up = $('#am-pdf'); if (up) up.onclick = async () => {
+    const up = $('#am-doc'); if (up) up.onclick = async () => {
       if (!amOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.7)');
       let file; try { file = await pickDoc(); } catch (e) { if (e.message !== 'annullato') toast(e.message); return; }
       try { busy('Salvo la fattura nel tuo Drive…'); const pdf = await api('uploadDoc', { name: `Amazon ${o.id} ${o.data}.${file.ext}`, mime: file.mime, data: file.data }); busy(); write([{ action: 'upsert', sheet: 'Amazon', row: { ...o, pdf } }]); closeSheet(); toast('Fattura allegata all\'ordine'); }
@@ -4567,12 +4617,16 @@
         catch (e1) { if (!/Non trovo il foglio/.test(e1.message)) throw e1; const ws = wb.Sheets[wb.SheetNames[0]]; P = amBizParse(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })); }
       }
       busy();
+      // gli articoli corretti a mano nell'app non vengono sovrascritti
+      const FIX = cfg('amArtFix') || {}, exO = new Map(amOrd().map(o => [String(o.id), o]));
+      const nFix = P.orders.filter(o => FIX[o.id] && exO.has(o.id)).length;
+      if (nFix) { P.arts = P.arts.filter(a => !(FIX[a.ordine] && exO.has(String(a.ordine)))); P.orders.forEach(o => { const ex = exO.get(o.id); if (FIX[o.id] && ex) { o.articoli = ex.articoli; o.pezzi = ex.pezzi; } }); }
       const ids = new Set(amOrd().map(o => String(o.id))), nuovi = P.orders.filter(o => !ids.has(o.id)).length;
       const est = P.orders.filter(o => o.ivaTipo === 'stimata').length, na = P.orders.filter(o => o.cdc === LY_NONE).length;
       const dd = P.orders.map(o => o.data).filter(Boolean).sort();
-      if (!confirm(`${P.biz ? 'Report Amazon Business' : 'File Ordini Amazon'}${dd.length ? ` · dal ${dd[0].split('-').reverse().join('/')} al ${dd[dd.length - 1].split('-').reverse().join('/')}` : ''}\n${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo, categorie e correzioni IVA).${P.skipped ? `\n${P.skipped} ordini annullati non importati.` : ''}${P.biz && !P.items ? '\nIl report non ha gli articoli: per avere anche le categorie scarica il report «Articoli».' : ''}\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
+      if (!confirm(`${P.biz ? 'Report Amazon Business' : 'File Ordini Amazon'}${dd.length ? ` · dal ${dd[0].split('-').reverse().join('/')} al ${dd[dd.length - 1].split('-').reverse().join('/')}` : ''}\n${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo, categorie e correzioni IVA).${P.skipped ? `\n${P.skipped} ordini annullati non importati.` : ''}${nFix ? `\n${nFix} ordini con articoli corretti a mano: i tuoi prezzi restano.` : ''}${P.biz && !P.items ? '\nIl report non ha gli articoli: per avere anche le categorie scarica il report «Articoli».' : ''}\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
       const keep = new Set(P.orders.map(o => o.id)), newA = new Set(P.arts.map(a => a.id));
-      const stale = P.biz && !P.items ? [] : amArtAll().filter(a => keep.has(String(a.ordine)) && !newA.has(String(a.id)));
+      const stale = P.biz && !P.items ? [] : amArtAll().filter(a => keep.has(String(a.ordine)) && !newA.has(String(a.id)) && !(FIX[a.ordine] && exO.has(String(a.ordine))));
       write([...P.orders.map(row => ({ action: 'upsert', sheet: 'Amazon', row })), ...P.arts.map(row => ({ action: 'upsert', sheet: 'AmazonArticoli', row })), ...stale.map(a => ({ action: 'delete', sheet: 'AmazonArticoli', id: a.id })), { action: 'upsert', sheet: 'Config', row: { chiave: 'lyCdc', valore: JSON.stringify(P.cdcs) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'amLastImport', valore: JSON.stringify({ data: today(), file: file.name, fino: dd[dd.length - 1] || '', n: P.orders.length, nuovi }) } }]);
       amP = ''; amAnim = true; render(); toast(`Amazon: ${nuovi} ordini nuovi, ${P.orders.length - nuovi} aggiornati`);
     } catch (e) { busy(); toast(e.message); }
