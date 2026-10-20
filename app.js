@@ -148,7 +148,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -193,7 +193,7 @@
   async function api(action, extra) { return (await post(action, extra)).result; }
   function lockApp(msg) {
     tok = ''; LS.set('cdc_tok', '');
-    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [] };
+    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] };
     try { localStorage.removeItem('cdc_data'); } catch {}
     showLogin(msg);
   }
@@ -236,7 +236,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []) };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -271,7 +271,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Dashboard', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -284,13 +284,14 @@
     if (view === 'fatture') faAnim = true;
     if (view === 'torental') trAnim = true;
     if (view === 'lyreco') lyAnim = true;
+    if (view === 'amazon') amAnim = true;
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco';
-    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' ? 'hidden' : '';
+    $('#fab').hidden = view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -319,7 +320,7 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, impostazioni: renderSettings }[view];
+    const fn = { home: renderOverview, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -3287,16 +3288,34 @@
   /* =========================================================
      LYRECO · fatture e merce ripartite per centro di costo (piazzale)
      ========================================================= */
+  // anagrafica centri di costo condivisa da Lyreco e Amazon (key = sede in fattura Lyreco, loc = località di consegna Amazon)
   const LY_CDC_DEF = [
-    { cod: 'CDC01', n: 'Sede Roma', tipo: 'Sede', ind: 'Viale L. Schiavonetti 278 – Roma (sede legale)', key: 'SOLUZIONE VEICOLARE VIALE L. SCHIAVONETT ROMA', citta: 'Roma', prov: 'RM', geo: [12.612, 41.857] },
-    { cod: 'CDC02', n: 'San Cesareo', tipo: 'Sede operativa', ind: 'Via dell\'Enopolio snc – San Cesareo (RM)', key: 'SOLUZIONE VEICOLARE VIA DELLENOPOLIO SN SAN CESAREO', citta: 'San Cesareo', prov: 'RM', geo: [12.80, 41.82] },
-    { cod: 'CDC03', n: 'Magazzino Gorgonzola', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Gorgonzola (MI)', key: 'MAGAZZINO GORGONZOL C/O VENETA LOGISTIC VIA GIUSEPPE P', citta: 'Gorgonzola', prov: 'MI', geo: [9.405, 45.532] },
-    { cod: 'CDC04', n: 'Magazzino Venezia', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Via Abbate Tommaso – Venezia', key: 'MAGAZZINO VENEZIA C/O VENETA LOGISTIC VIA ABBATE TOMMA', citta: 'Venezia', prov: 'VE', geo: [12.245, 45.488] },
-    { cod: 'CDC05', n: 'Magazzino Pisa', tipo: 'Magazzino', ind: 'c/o RL2 – Via Cocchi snc – Pisa', key: 'MAGAZZINO PISA C/O RL2 VIA COCCHI SNC PISA', citta: 'Pisa', prov: 'PI', geo: [10.43, 43.687] },
-    { cod: 'CDC06', n: 'Magazzino Rimini', tipo: 'Magazzino', ind: 'c/o RL2 – Via Chitarrara 1103 – Taverna (Rimini)', key: 'MAGAZZINO RIMINI C/O RL2 VIA CHITARRARA 1103 TAVERNA D', citta: 'Taverna', prov: 'RN', geo: [12.53, 43.948] },
-    { cod: 'CDC07', n: 'Magazzino Mondo (RTL2)', tipo: 'Magazzino', ind: 'RTL2 Logistica c/o Magazzino Mondo – Via Alessandro Manzoni', key: 'RTL2 LOGISTICA C/O MAGAZZINO MONDO VIA ALESSANDRO MANZ', citta: '', prov: '', geo: null },
-    { cod: 'CDC99', n: 'Da attribuire', tipo: 'Sospeso', ind: 'Sede di consegna non indicata in fattura', key: '', citta: '', prov: '', geo: null }
+    { cod: 'CDC01', n: 'Sede Roma', tipo: 'Sede', ind: 'Viale L. Schiavonetti 278 – Roma (sede legale)', key: 'SOLUZIONE VEICOLARE VIALE L. SCHIAVONETT ROMA', loc: '00173', citta: 'Roma', prov: 'RM', geo: [12.612, 41.857] },
+    { cod: 'CDC02', n: 'San Cesareo', tipo: 'Sede operativa', ind: 'Via dell\'Enopolio snc – San Cesareo (RM)', key: 'SOLUZIONE VEICOLARE VIA DELLENOPOLIO SN SAN CESAREO', loc: 'SAN CESAREO|00030', citta: 'San Cesareo', prov: 'RM', geo: [12.80, 41.82] },
+    { cod: 'CDC03', n: 'Magazzino Gorgonzola', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Gorgonzola (MI)', key: 'MAGAZZINO GORGONZOL C/O VENETA LOGISTIC VIA GIUSEPPE P', loc: 'GORGONZOLA|20064', citta: 'Gorgonzola', prov: 'MI', geo: [9.405, 45.532] },
+    { cod: 'CDC04', n: 'Magazzino Venezia', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Via Abbate Tommaso – Quarto d\'Altino (VE)', key: 'MAGAZZINO VENEZIA C/O VENETA LOGISTIC VIA ABBATE TOMMA', loc: 'QUARTO D ALTINO|30020', citta: 'Quarto d\'Altino', prov: 'VE', geo: [12.372, 45.578] },
+    { cod: 'CDC05', n: 'Magazzino Pisa', tipo: 'Magazzino', ind: 'c/o RL2 – Via Cocchi snc – Ospedaletto (PI)', key: 'MAGAZZINO PISA C/O RL2 VIA COCCHI SNC PISA', loc: 'OSPEDALETTO|56121', citta: 'Pisa', prov: 'PI', geo: [10.43, 43.687] },
+    { cod: 'CDC06', n: 'Magazzino Rimini', tipo: 'Magazzino', ind: 'c/o RL2 – Via Chitarrara 1103 – Taverna di Monte Colombo (RN)', key: 'MAGAZZINO RIMINI C/O RL2 VIA CHITARRARA 1103 TAVERNA D', loc: 'MONTE COLOMBO|TAVERNA|47854', citta: 'Taverna', prov: 'RN', geo: [12.53, 43.948] },
+    { cod: 'CDC07', n: 'Magazzino Mondo (RTL2)', tipo: 'Magazzino', ind: 'RTL2 Logistica c/o Magazzino Mondo – Via Alessandro Manzoni', key: 'RTL2 LOGISTICA C/O MAGAZZINO MONDO VIA ALESSANDRO MANZ', loc: '', citta: '', prov: '', geo: null },
+    { cod: 'CDC08', n: 'Piazzale Bologna', tipo: 'Piazzale', ind: 'Calderara di Reno / Bargellino (BO)', key: '', loc: 'CALDERARA|BARGELLINO|40012', citta: 'Calderara di Reno', prov: 'BO', geo: [11.272, 44.565] },
+    { cod: 'CDC09', n: 'Magazzino Torino', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Volpiano (TO)', key: '', loc: 'VOLPIANO|10088', citta: 'Volpiano', prov: 'TO', geo: [7.776, 45.201] },
+    { cod: 'CDC10', n: 'Magazzino Pescara', tipo: 'Magazzino', ind: 'c/o RL2 – Città Sant\'Angelo (PE)', key: '', loc: 'CITTA SANT ANGELO|65013', citta: 'Città Sant\'Angelo', prov: 'PE', geo: [14.059, 42.518] },
+    { cod: 'CDC11', n: 'Magazzino Corropoli', tipo: 'Magazzino', ind: 'c/o RL2 Logistic – Corropoli (TE)', key: '', loc: 'CORROPOLI|64013', citta: 'Corropoli', prov: 'TE', geo: [13.839, 42.827] },
+    { cod: 'CDC12', n: 'Magazzino Verona', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – San Bonifacio (VR)', key: '', loc: 'SAN BONIFACIO|37047', citta: 'San Bonifacio', prov: 'VR', geo: [11.274, 45.396] },
+    { cod: 'CDC13', n: 'Magazzino Ravenna', tipo: 'Magazzino', ind: 'c/o Veneta Logistic – Fornace Zarattini (RA)', key: '', loc: 'FORNACE ZARATTINI|48124', citta: 'Fornace Zarattini', prov: 'RA', geo: [12.143, 44.405] },
+    { cod: 'CDC99', n: 'Da attribuire', tipo: 'Sospeso', ind: 'Sede di consegna non indicata', key: '', loc: '', citta: '', prov: '', geo: null }
   ];
+  // aggiunge ai centri salvati quelli nuovi e le località Amazon mancanti, senza toccare le modifiche dell'utente
+  function lyCdcMerge(list) {
+    const out = list.map(x => ({ ...x }));
+    LY_CDC_DEF.forEach(d => {
+      const ex = out.find(x => x.cod === d.cod);
+      if (!ex) { const i = out.findIndex(x => x.cod === 'CDC99'); out.splice(i < 0 || d.cod === 'CDC99' ? out.length : i, 0, { ...d }); return; }
+      if (ex.loc == null) ex.loc = d.loc;
+      if (ex.cod === 'CDC04' && Array.isArray(ex.geo) && ex.geo[0] === 12.245) { ex.geo = d.geo; ex.citta = d.citta; ex.ind = d.ind; }
+    });
+    return out;
+  }
   const LY_NONE = 'CDC99';
   const LY_LBL = { CDC01: [-30, 22, 'end'], CDC02: [34, -22, 'start'], CDC03: [-12, -26, 'end'], CDC04: [16, -22, 'start'], CDC05: [-24, 16, 'end'], CDC06: [26, -4, 'start'] };
   const LY_COL = ['#3362ab', '#eb6834', '#1baf7a', '#eda100', '#8b5cf6', '#e87ba4', '#0ea5b7', '#94a3b8'];
@@ -3304,7 +3323,8 @@
   const lyRows = () => db.lyreco || [];
   const lyDocs = () => db.lyfatture || [];
   const lyOk = () => isLocal() || !db.v || db.v >= 'cdc-1.6';
-  const lyCdcList = () => { const c = cfg('lyCdc'); return Array.isArray(c) && c.length ? c : LY_CDC_DEF; };
+  let lyCdcSrc, lyCdcC = null;
+  const lyCdcList = () => { const c = cfg('lyCdc'); if (c !== lyCdcSrc || !lyCdcC) { lyCdcSrc = c; lyCdcC = lyCdcMerge(Array.isArray(c) && c.length ? c : []); } return lyCdcC; };
   const lyCdc = cod => lyCdcList().find(x => x.cod === cod) || { cod, n: cod || '—', tipo: '' };
   const lyName = cod => lyCdc(cod || LY_NONE).n;
   const lyMulR = r => ivaOn ? 1 + num(r.iva) : 1;
@@ -3443,7 +3463,7 @@
   }
 
   function lyMap(PL, rows, anim) {
-    const pts = PL.filter(x => x.cod !== LY_NONE && lyGeo(x)), mx = Math.max(1, ...pts.map(x => x.t)), T = pts.reduce((a, x) => a + x.t, 0);
+    const pts = PL.filter(x => x.cod !== LY_NONE && x.rows.length && lyGeo(x)), mx = Math.max(1, ...pts.map(x => x.t)), T = pts.reduce((a, x) => a + x.t, 0);
     const pins = pts.map((x, i) => { const [px, py] = proj(lyGeo(x)); return { ...x, px, py, r: x.rows.length ? 4.5 + 10 * Math.sqrt(Math.max(0, x.t) / mx) : 3, i }; });
     const lab = p => {
       const [dx, dy, an] = LY_LBL[p.cod] || [p.r + 12, -6, 'start'];
@@ -3564,8 +3584,8 @@
     const L = JSON.parse(JSON.stringify(lyCdcList()));
     const used = cod => lyRows().filter(r => (r.cdc || LY_NONE) === cod).length;
     const provs = Object.keys((window.GLS_GEO || { PROV: {} }).PROV).sort();
-    const row = (c, i) => `<div class="ly-cr" data-i="${i}"><input data-c="cod" value="${esc(c.cod || '')}" placeholder="CDC08"${c.cod === LY_NONE ? ' readonly' : ''}><input data-c="n" value="${esc(c.n || '')}" placeholder="Nome"><input data-c="tipo" value="${esc(c.tipo || '')}" placeholder="Tipologia" list="ly-tipl"><input data-c="citta" value="${esc(c.citta || '')}" placeholder="Città"><select data-c="prov"><option value="">Prov.</option>${provs.map(p => `<option${p === String(c.prov || '').toUpperCase() ? ' selected' : ''}>${p}</option>`).join('')}</select><input data-c="key" value="${esc(c.key || '')}" placeholder="Testo sede in fattura (per l'importazione)" class="ly-ck">${c.cod === LY_NONE || used(c.cod) ? `<small class="ly-cu">${used(c.cod) ? used(c.cod) + ' righe' : 'fisso'}</small>` : '<button type="button" class="icon-btn tr-lx" data-cdel aria-label="Togli">×</button>'}</div>`;
-    openSheet('Centri di costo Lyreco', `<p class="muted small" style="margin:0 0 12px">La città e la provincia servono a mettere il piazzale sulla mappa. Il «testo sede in fattura» è la sede di consegna come la scrive Lyreco: serve all'importazione per riconoscere il centro di costo.</p>
+    const row = (c, i) => `<div class="ly-cr" data-i="${i}"><input data-c="cod" value="${esc(c.cod || '')}" placeholder="CDC08"${c.cod === LY_NONE ? ' readonly' : ''}><input data-c="n" value="${esc(c.n || '')}" placeholder="Nome"><input data-c="tipo" value="${esc(c.tipo || '')}" placeholder="Tipologia" list="ly-tipl"><input data-c="citta" value="${esc(c.citta || '')}" placeholder="Città"><select data-c="prov"><option value="">Prov.</option>${provs.map(p => `<option${p === String(c.prov || '').toUpperCase() ? ' selected' : ''}>${p}</option>`).join('')}</select><input data-c="key" value="${esc(c.key || '')}" placeholder="Sede in fattura Lyreco" class="ly-ck" title="Sede di consegna come la scrive Lyreco"><input data-c="loc" value="${esc(c.loc || '')}" placeholder="Località Amazon: parole o CAP separati da |" class="ly-ck ly-ck2" title="Es. CALDERARA|BARGELLINO|40012">${c.cod === LY_NONE || used(c.cod) ? `<small class="ly-cu">${used(c.cod) ? used(c.cod) + ' righe' : 'fisso'}</small>` : '<button type="button" class="icon-btn tr-lx" data-cdel aria-label="Togli">×</button>'}</div>`;
+    openSheet('Centri di costo (Lyreco e Amazon)', `<p class="muted small" style="margin:0 0 12px">Città e provincia mettono il piazzale sulla mappa. «Sede in fattura Lyreco» e «Località Amazon» servono all'importazione per riconoscere il centro di costo (per Amazon scrivi parole o CAP della località di consegna separati da |).</p>
       <div class="ly-ch"><span>Codice</span><span>Nome</span><span>Tipologia</span><span>Città</span><span>Prov.</span></div>
       <div id="ly-cl">${L.map(row).join('')}</div>
       <button type="button" class="btn sm" id="ly-cadd" style="margin-top:10px">+ Centro di costo</button>
@@ -3577,7 +3597,7 @@
           if (out.some(x => x.cod === cod)) { err = `Codice ${cod} ripetuto`; return; }
           const o = L[+el.dataset.i] || {}, citta = g('citta'), prov = g('prov');
           const geo = o.geo && citta === (o.citta || '') && prov === (o.prov || '') ? o.geo : null;
-          out.push({ cod, n: g('n') || cod, tipo: g('tipo'), ind: o.ind || '', key: g('key'), citta, prov, geo });
+          out.push({ cod, n: g('n') || cod, tipo: g('tipo'), ind: o.ind || '', key: g('key'), loc: g('loc'), citta, prov, geo });
         });
         if (err) return toast(err);
         if (!out.some(x => x.cod === LY_NONE)) out.push(LY_CDC_DEF.find(x => x.cod === LY_NONE));
@@ -3685,6 +3705,363 @@
     </svg>`;
   }
 
+  /* =========================================================
+     AMAZON · ordini e articoli ripartiti per centro di costo (località di consegna)
+     ========================================================= */
+  const AM_CAT = [
+    ['Pile e batterie', /DURACELL|\bPILE\b|BATTERIE \(|LITHIUM/],
+    ['TV, foto e multimedia', /SMART TV|OLED|SHIELD TV|APPLE TV|OSMO|FOTOCAMERA STABILIZZ|TOP GUN|BLU-?RAY|\bBD\b/],
+    ['Informatica e telefonia', /NOTEBOOK|LAPTOP|MONITOR|\bSSD\b|TABLET|GALAXY TAB|MOUSE|TASTIER|HDMI|DISPLAYPORT|DISPLAYLINK|\bUSB\b|HUB|ALIMENTATORE PER HP|\bUPS\b|CONTINUIT|PENDRIVE|BLUETOOTH|AURICOLAR|CUFFI|AIRPODS|EPOS|SENNHEISER|SMARTPHONE|GALAXY A\d|IPHONE|SAMSUNG|CARICA|CAVO|BARCODE|CODICI A BARRE|WALKIE|RICETRASMITT|HOME ASSISTANT|SPLITTER|ADATTATORE|ETHERNET/],
+    ['Elettrodomestici', /LAVATRICE|FRIGORIFERO|FRIGO|CUCINA A GAS|FORNO|RAFFREDDAMENTO/],
+    ['Illuminazione e videosorveglianza', /LAMPIONE|TUBI LED|\bLED\b|VIDEOCITOFONO|TELECAMERA|FARO/],
+    ['Attrezzatura e ricambi auto', /CHIAVE|TELECOMANDO|FIAT|TELE ?PASS|AUTOSTRADA PASS|TEXA|GRASSO|INDUZIONE|COMPRESSORE|PINZA|CAPICORDA|RILEVATORE GAS|CUT OFF|ISOLATORE|SPATOLA|PELLICOL|RYOBI|DUAL LOCK|VHB|BIADESIV|RACCOGLI ?CAVI|SPAZZOLA TELESCOPICA/],
+    ['DPI e sicurezza', /ANTINFORTUN|GUANTI|ELMETT|OCCHIALI PROTETT/],
+    ['Arredo e ufficio', /SEDIA|POLTRONA|BACHECA|PARAVENTO|DIVISORIO|CASSETTIER|PORTA ETICHETTE|PORTA CARTELLINI|DYMO|BUSTE|POUF|APPENDI|GRUCCE|FERMAPORTA|PORTAROTOLO|POSACENERE|BOTTIGLIE|ELASTICO|SUPPORTO DOPPIO/],
+    ['Biancheria e casa', /PIUMONE|PIUMINO|CUSCINI|GUANCIAL|TENDA DA DOCCIA|BEDDING|LENZUOL|TRAPUNTA/],
+    ['Pulizia e igiene', /PULIZIA|TAMPONI|ISOPROPIL|DEODORANTE|AIR ?WICK|BAYGON|ANTIZANZAR|ANTI MOSCHE|DETERG/],
+    ['Abbigliamento', /POCHETTE|FAZZOLETTO|FOULARD|CRAVAT|POCKET SQUARE/]
+  ];
+  const amCatOf = d => { const t = String(d || '').toUpperCase(); const c = AM_CAT.find(([, re]) => re.test(t)); return c ? c[0] : 'Altro'; };
+  const AM_CHECK = /SMART TV|OLED|AIRPODS|APPLE TV|SHIELD TV|OSMO|TOP GUN|BLU-?RAY|POCHETTE|FOULARD|FAZZOLETTO DA TASCHINO|PIUMONE|CUSCINI LETTO/;
+  let amP = '', amAnim = true, amF = { q: '', cdc: '', cat: '', vend: '' }, amLimit = 40, amOrdLimit = 12, amOrdF = '', amArtQ = '';
+  const amOrd = () => db.amazon || [];
+  const amArtAll = () => db.amazonart || [];
+  const amOk = () => isLocal() || !db.v || db.v >= 'cdc-1.7';
+  const amNet = o => o.imponibile !== '' && o.imponibile != null && num(o.imponibile) ? num(o.imponibile) : r2(num(o.totale) / 1.22);
+  const amV = o => ivaOn ? num(o.totale) : amNet(o);
+  const amSum = arr => r2(arr.reduce((a, o) => a + amV(o), 0));
+  const amSumN = arr => r2(arr.reduce((a, o) => a + amNet(o), 0));
+  const amEst = o => o.ivaTipo === 'stimata';
+  const amMonths = () => [...new Set(amOrd().map(o => String(o.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+  const amIn = o => !amP || String(o.data).slice(0, 7) === amP;
+  const amNorm = s => String(s || '').toUpperCase().replace(/[’'`]/g, ' ').replace(/\s+/g, ' ').trim();
+  const amCdcOf = loc => { const L = amNorm(loc); if (!L) return LY_NONE; const c = lyCdcList().find(x => String(x.loc || '').split('|').map(amNorm).filter(Boolean).some(k => L.includes(k))); return c ? c.cod : LY_NONE; };
+  const amPrivate = d => !/S\.?R\.?L|S\.?P\.?A|SOLUZIONE|LOGISTIC|SRL|SPA|S\.N\.C|SAS|SOCIET/i.test(String(d || ''));
+  // articoli con il valore ripartito sull'imponibile (o sul totale) dell'ordine: comprende spedizione e sconti
+  function amArts(orders) {
+    const om = new Map(orders.map(o => [String(o.id), o])), by = groupBy(amArtAll().filter(a => om.has(String(a.ordine))), a => String(a.ordine));
+    const out = [];
+    by.forEach((v, k) => { const o = om.get(k), s = v.reduce((x, a) => x + num(a.importo), 0); v.forEach(a => { const sh = s ? num(a.importo) / s : 1 / v.length; out.push({ ...a, cdc: o.cdc || LY_NONE, data: o.data, net: r2(amNet(o) * sh), val: r2(amV(o) * sh), cat: a.categoria || amCatOf(a.descrizione) }); }); });
+    return out;
+  }
+
+  /* ---------- controlli ---------- */
+  function amChecks(O, A) {
+    const C = [];
+    const na = O.filter(o => (o.cdc || LY_NONE) === LY_NONE);
+    if (na.length) C.push({ t: 'warn', h: 'Ordini senza centro di costo', d: `${na.length} ordini hanno una località di consegna che non corrisponde a nessun piazzale (${[...new Set(na.map(o => esc(o.localita)))].slice(0, 3).join(', ')}). Apri l'ordine e scegli il centro, oppure aggiungi la località in «Centri di costo».`, v: eur(amSum(na)), act: 'amna' });
+    const est = O.filter(amEst);
+    if (est.length) C.push({ t: 'warn', h: 'Imponibile stimato (IVA non riportata da Amazon)', d: `In ${est.length} ordini Amazon non indica l'IVA: l'imponibile è calcolato al 22%. Scarica le fatture da Amazon Business e correggi l'IVA nell'ordine per avere i numeri esatti.`, v: eur(est.reduce((a, o) => a + num(o.totale), 0)) + ' pagati', act: 'amest' });
+    const z = O.filter(o => !amEst(o) && o.ivaTipo !== 'fattura' && num(o.totale) > 0 && Math.abs(num(o.totale) - num(o.imponibile)) < .01);
+    if (z.length) C.push({ t: 'warn', h: 'Ordini con IVA a zero', d: `${z.length} ordini riportano IVA 0 (${z.slice(0, 2).map(o => esc(String(o.articoli).split(/[,(]/)[0].slice(0, 30)) + ' · ' + esc(String(o.venditore).split(',')[0])).join('; ')}): probabilmente l'imponibile comprende già l'IVA. Controlla la fattura e correggi l'imponibile nell'ordine.`, v: eur(z.reduce((a, o) => a + num(o.totale), 0)), ids: z.map(o => o.id) });
+    const priv = O.filter(o => amPrivate(o.destinatario));
+    if (priv.length) C.push({ t: 'info', h: 'Ordini intestati a persone', d: `${priv.length} ordini hanno come destinatario una persona (${[...new Set(priv.map(o => esc(o.destinatario)))].slice(0, 3).join(', ')}): verifica che siano acquisti aziendali.`, v: eur(amSum(priv)), ids: priv.map(o => o.id) });
+    const card = O.filter(o => /card|carta|visa|master|amex/i.test(o.pagamento || ''));
+    if (card.length) C.push({ t: 'info', h: 'Pagati con carta', d: `${card.length} ordini pagati con carta invece che sul conto corrente (${[...new Set(card.map(o => esc(o.pagamento)))].join(', ')}).`, v: eur(card.reduce((a, o) => a + num(o.totale), 0)), ids: card.map(o => o.id) });
+    const chk = A.filter(a => AM_CHECK.test(String(a.descrizione || '').toUpperCase()));
+    if (chk.length) C.push({ t: 'info', h: 'Acquisti da verificare', d: `${chk.length} articoli di elettronica di consumo o casa (${[...new Set(chk.map(a => esc(String(a.descrizione).split(/[,(]/)[0].slice(0, 32))))].slice(0, 3).join(', ')}…): controlla a quale piazzale o uso sono destinati.`, v: eur(chk.reduce((x, a) => x + a.val, 0)), ids: [...new Set(chk.map(a => a.ordine))] });
+    const used = A.filter(a => /usato/i.test(a.condizione || '') || /seconda mano/i.test(a.venditore || ''));
+    if (used.length) C.push({ t: 'info', h: 'Articoli usati', d: `${used.length} articoli comprati usati (Amazon Seconda mano): ricorda che la garanzia è ridotta.`, v: eur(used.reduce((x, a) => x + a.val, 0)), ids: [...new Set(used.map(a => a.ordine))] });
+    const pv = [...groupBy(A.filter(a => num(a.prezzo) > 0), a => amNorm(a.descrizione).slice(0, 60))].map(([k, v]) => { const p = v.map(a => num(a.prezzo)); return { k, d: v[0].descrizione, min: Math.min(...p), max: Math.max(...p), n: v.length }; }).filter(x => x.n > 1 && x.max / x.min > 1.05).sort((a, b) => (b.max - b.min) - (a.max - a.min));
+    if (pv.length) C.push({ t: 'info', h: 'Stesso articolo pagato a prezzi diversi', d: pv.slice(0, 3).map(x => `${esc(String(x.d).split(/[,(]/)[0].slice(0, 40))}: da ${eurP(x.min)} a ${eurP(x.max)}`).join(' · '), v: pv.length + ' articoli', q: String(pv[0].d).split(/[,(]/)[0].slice(0, 30) });
+    const ship = O.filter(o => num(o.spedizione) > 0);
+    if (ship.length) C.push({ t: 'info', h: 'Spese di spedizione', d: `${ship.length} ordini con spedizione a pagamento: con Amazon Business Prime e ordini raggruppati si evitano.`, v: eur(ship.reduce((a, o) => a + num(o.spedizione), 0)), ids: ship.map(o => o.id) });
+    return C;
+  }
+
+  /* ---------- pagina ---------- */
+  function amPlist(O) {
+    const by = groupBy(O, o => o.cdc || LY_NONE);
+    const list = lyCdcList().map(c => ({ ...c, rows: by.get(c.cod) || [] }));
+    [...by.keys()].filter(k => !list.some(c => c.cod === k)).forEach(k => list.push({ cod: k, n: k, tipo: '', rows: by.get(k) }));
+    list.forEach(x => { x.t = amSum(x.rows); x.docs = x.rows.length; });
+    return list;
+  }
+  function renderAm() {
+    const months = amMonths();
+    if (amP && !months.includes(amP)) amP = '';
+    $('#am-per').innerHTML = `<option value=""${amP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === amP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(amP);
+    $('#am-prev').disabled = ix >= opts.length - 1; $('#am-next').disabled = ix <= 0;
+    $('#am-ai').hidden = !aiReady();
+    sub(`${ivaOn ? 'IVA inclusa (totale pagato)' : 'IVA esclusa'} · ordini Amazon per centro di costo`);
+    const all = amOrd(), O = all.filter(amIn);
+    const anim = amAnim && !reduced(); amAnim = false;
+    const body = $('#am-body'); body.classList.toggle('cc-anim', anim);
+    const warn = amOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google per salvare i dati Amazon.</b><span>Lo script collegato è la versione ${esc(db.v || '—')}: serve la cdc-1.7 (Code.gs nuovo).</span></div>`;
+    if (!O.length) {
+      body.innerHTML = warn + `<div class="gl-hero am-hero gl-hero-empty"><div class="gh-top"><div class="gh-art">${amArt()}</div><div class="gh-main"><span class="gh-lbl">Ordini Amazon</span><h3>Nessun ordine caricato</h3><p>Importa il file «Ordini Amazon» (fogli Ordini e Articoli): l'app assegna ogni ordine al piazzale in base alla località di consegna.</p><div class="tr-hb ly-hb"><button class="btn sm" id="am-imp2" type="button">Importa il file Excel</button></div></div></div></div>`;
+      return;
+    }
+    const A = amArts(O), PL = amPlist(O);
+    const T = amSum(O), TN = amSumN(O), TT = O.reduce((a, o) => a + num(o.totale), 0);
+    const est = O.filter(amEst), na = PL.find(x => x.cod === LY_NONE) || { t: 0, rows: [] };
+    const pz = O.reduce((a, o) => a + num(o.pezzi), 0), vend = new Set(O.map(o => amNorm(o.venditore))).size;
+    const amzS = amSum(O.filter(o => /^AMAZON/i.test(String(o.venditore || '').trim())));
+    const act = PL.filter(x => x.cod !== LY_NONE && x.rows.length);
+    const per = amP ? mLabel(amP) : months.length > 1 ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : months.length ? mLabel(months[0]) : '';
+    const prevK = amP ? months[months.indexOf(amP) - 1] : null, PT = prevK ? amSum(all.filter(o => String(o.data).slice(0, 7) === prevK)) : 0;
+    const int = v => fmtNum(Math.round(v), 0);
+    const K = [
+      ['Ordini', O.length, int, `${fmtNum(pz, 0)} pezzi · ${A.length} articoli`],
+      ['Totale pagato', TT, eur0, `IVA ${eur0(TT - TN)}`],
+      ['Ordine medio', O.length ? T / O.length : 0, eur0, ivaOn ? 'IVA inclusa' : 'imponibile'],
+      ['Piazzali serviti', act.length, int, na.rows.length ? `${na.rows.length} ordini da attribuire` : 'tutti attribuiti'],
+      ['Imponibile stimato', amSumN(est), eur0, `${est.length} ordini senza IVA`],
+      ['Venditori', vend, int, `Amazon diretto ${T ? fmtNum(pct(amzS, T), 0) : 0}%`]
+    ];
+    body.innerHTML = warn + `
+      <div class="gl-hero am-hero">
+        <div class="gh-top"><div class="gh-art">${amArt()}</div>
+        <div class="gh-main"><span class="gh-lbl">Ordini Amazon · ${esc(per)}</span><div class="gh-big k-am">0 €</div>
+          <div class="gh-sub"><span>${O.length} ordini</span><span>${fmtNum(pz, 0)} pezzi</span><span>${act.length} piazzali</span>${est.length && !ivaOn ? `<span>${est.length} imponibili stimati</span>` : ''}${PT ? `<span class="gl-d ${T > PT ? 'up' : 'down'}">${T > PT ? '▲' : '▼'} ${fmtNum(Math.abs((T / PT - 1) * 100), 0)}% vs ${esc(MESI[Number(prevK.slice(5)) - 1])}</span>` : ''}</div></div></div>
+        <div class="gh-kpis">${K.map(([l, , , s], i) => `<div class="gh-k${i === 4 && est.length ? ' ly-kwarn' : ''}"><span>${l}</span><b data-amk="${i}">0</b><small>${esc(s)}</small></div>`).join('')}</div>
+      </div>
+      <div class="card" id="am-anom"></div>
+      <div class="card"><div class="card-h"><h3>Spesa per piazzale</h3><span class="muted small">${ivaLbl()} · tocca per filtrare</span><button class="btn sm" id="am-cdc" type="button">Centri di costo</button></div>
+        <div class="tr-dash ly-dash"><div class="cc-map" id="am-map"></div><div class="tr-rank" id="am-rank"></div></div></div>
+      <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>Per categoria</h3><span class="muted small">categorie automatiche · ${ivaLbl()}</span></div><div class="bars" id="am-cat"></div></div>
+        <div class="card"><div class="card-h"><h3>Mese per mese</h3><span class="muted small">per centro di costo</span></div><div class="ly-mb" id="am-mm"></div><div class="ly-leg" id="am-leg"></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Centri di costo × categorie</h3><span class="muted small">${ivaLbl()} · spedizione e sconti ripartiti sugli articoli</span></div><div class="mx-wrap" id="am-mx"></div></div>
+      <div class="card" id="am-ord-card"><div class="card-h"><h3>Ordini</h3><span class="muted small" id="am-ocnt"></span><div class="tr-seg ly-dseg">${[['', 'Tutti'], ['est', 'IVA stimata'], ['na', 'Da attribuire']].map(([k, l]) => `<button type="button" data-amof="${k}" class="${amOrdF === k ? 'on' : ''}">${l}</button>`).join('')}</div></div><div id="am-ords"></div></div>
+      <div class="gl-2">
+        <div class="card"><div class="card-h"><h3>Articoli più costosi</h3><input id="am-aq" type="search" class="ly-aq" placeholder="Cerca articolo…" value="${esc(amArtQ)}"></div><div id="am-art"></div></div>
+        <div class="card"><div class="card-h"><h3>Venditori</h3><span class="muted small">${vend} venditori · ${ivaLbl()}</span></div><div id="am-vend"></div></div>
+      </div>
+      <div class="card gl-list"><div class="card-h"><h3>Tutti gli articoli</h3><span class="muted small" id="am-cnt"></span></div>
+        <div class="filters f4 gl-f"><input id="am-q" type="search" placeholder="Cerca articolo, ordine, venditore…" value="${esc(amF.q)}"><select id="am-fc"></select><select id="am-fk"></select><select id="am-fv"></select></div>
+        <div id="am-list"></div></div>`;
+    countTo($('.k-am', body), T, eur0);
+    $$('[data-amk]', body).forEach(el => { const i = +el.dataset.amk; el._v = 0; countTo(el, K[i][1], K[i][2]); });
+    const CK = amChecks(O, A), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
+    $('#am-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${CK.length ? CK.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` + (CK.length ? `<div class="gl-an">${CK.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"${x.act ? ` data-amact="${x.act}"` : ''}${x.ids ? ` data-amids="${esc(x.ids.join(' '))}"` : ''}${x.q ? ` data-amartq="${esc(x.q)}"` : ''}><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
+    amMap(PL);
+    // categorie
+    const byC = [...groupBy(A, a => a.cat)].map(([k, v]) => ({ k, v: r2(v.reduce((x, a) => x + a.val, 0)), n: v.length })).sort((a, b) => b.v - a.v), mc = Math.max(1, ...byC.map(x => x.v));
+    $('#am-cat').innerHTML = byC.map((x, i) => `<div class="bar-row gl-anim-row click" style="--d:${200 + i * 45}ms" data-amcat="${esc(x.k)}"><div class="bar-top"><span>${esc(x.k)}<em>${fmtNum(pct(x.v, T), 1)}% · ${x.n} art.</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mc * 100).toFixed(2)}%"></div></div></div>`).join('');
+    // mesi
+    const top = PL.filter(x => x.rows.length).sort((a, b) => b.t - a.t), colOf = new Map(top.map((x, i) => [x.cod, x.cod === LY_NONE ? '#b6bac3' : LY_COL[i % LY_COL.length]]));
+    const mm = (amP ? [amP] : months).map(k => { const v = all.filter(o => String(o.data).slice(0, 7) === k); return { k, t: amSum(v), parts: top.map(c => ({ c: c.cod, v: amSum(v.filter(o => (o.cdc || LY_NONE) === c.cod)) })).filter(p => p.v > 0) }; });
+    const mx = Math.max(1, ...mm.map(x => x.t));
+    $('#am-mm').innerHTML = mm.map((x, i) => `<div class="ly-b" data-amper="${x.k}" title="${esc(mLabel(x.k))}: ${esc(eur(x.t))}"><span class="ly-bv">${esc(eur0(x.t))}</span><div class="ly-bc" style="height:${Math.max(2, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${x.parts.slice().reverse().map(p => `<i style="flex:${p.v};background:${colOf.get(p.c)}" title="${esc(lyName(p.c))}: ${esc(eur(p.v))}"></i>`).join('')}</div><span class="ly-bl">${esc(MESI[Number(x.k.slice(5)) - 1].slice(0, 3))}</span></div>`).join('');
+    $('#am-leg').innerHTML = top.map(c => `<span><i style="background:${colOf.get(c.cod)}"></i>${esc(c.n)}</span>`).join('');
+    // matrice
+    const cs = byC.map(x => x.k), P = PL.filter(x => x.rows.length), cell = {};
+    A.forEach(a => { const k = a.cdc + '|' + a.cat; cell[k] = (cell[k] || 0) + a.val; });
+    const mxv = Math.max(1, ...Object.values(cell)), heat = v => !v ? 'h0' : v / mxv > .45 ? 'h3' : v / mxv > .15 ? 'h2' : v / mxv > .03 ? 'h1' : '';
+    $('#am-mx').innerHTML = `<table class="mx ly-mxt${anim ? ' mx-anim' : ''}"><thead><tr><th>Centro di costo</th>${cs.map(c => `<th title="${esc(c)}">${esc(c)}</th>`).join('')}<th>Totale</th></tr></thead><tbody>
+      ${P.map((p, r) => `<tr data-amcdc="${esc(p.cod)}"${p.cod === LY_NONE ? ' class="ly-na"' : ''}><td title="${esc(p.n)}">${esc(p.n)}</td>${cs.map((c, j) => { const v = cell[p.cod + '|' + c] || 0; return `<td class="${heat(v)}" style="--d:${(r + j) * 25}ms">${v ? eur0(v) : '—'}</td>`; }).join('')}<td><b>${eur0(p.t)}</b></td></tr>`).join('')}
+      <tr class="tot"><td>Totale</td>${cs.map(c => `<td>${eur0(P.reduce((a, p) => a + (cell[p.cod + '|' + c] || 0), 0))}</td>`).join('')}<td>${eur0(T)}</td></tr></tbody></table>`;
+    renderAmOrds(O);
+    renderAmArt(A);
+    // venditori
+    const byV = [...groupBy(O, o => String(o.venditore || '—').split(',')[0].trim())].map(([k, v]) => ({ k, v: amSum(v), n: v.length })).sort((a, b) => b.v - a.v), mv = Math.max(1, ...byV.map(x => x.v));
+    $('#am-vend').innerHTML = byV.slice(0, 10).map((x, i) => `<div class="bar-row gl-anim-row click" style="--d:${200 + i * 45}ms" data-amvend="${esc(x.k)}"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} ${x.n === 1 ? 'ordine' : 'ordini'}</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill${/^amazon/i.test(x.k) ? ' am-amz' : ''}" style="width:${(x.v / mv * 100).toFixed(2)}%"></div></div></div>`).join('') + (byV.length > 10 ? `<div class="muted small" style="margin-top:6px">e altri ${byV.length - 10} venditori (${eur0(byV.slice(10).reduce((a, x) => a + x.v, 0))})</div>` : '');
+    // filtri
+    if (amF.cdc && !PL.some(x => x.cod === amF.cdc && x.rows.length)) amF.cdc = '';
+    if (amF.cat && !cs.includes(amF.cat)) amF.cat = '';
+    $('#am-fc').innerHTML = `<option value="">Tutti i centri di costo</option>` + PL.filter(x => x.rows.length).map(x => `<option value="${esc(x.cod)}"${amF.cdc === x.cod ? ' selected' : ''}>${esc(x.n)}</option>`).join('');
+    $('#am-fk').innerHTML = `<option value="">Tutte le categorie</option>` + cs.map(c => `<option${amF.cat === c ? ' selected' : ''}>${esc(c)}</option>`).join('');
+    $('#am-fv').innerHTML = `<option value="">Tutti i venditori</option>` + byV.map(x => `<option${amF.vend === x.k ? ' selected' : ''}>${esc(x.k)}</option>`).join('');
+    renderAmList(A);
+  }
+  function amMap(PL) {
+    const pts = PL.filter(x => x.cod !== LY_NONE && x.rows.length && lyGeo(x)), mx = Math.max(1, ...pts.map(x => x.t)), T = pts.reduce((a, x) => a + x.t, 0);
+    const pins = pts.map((x, i) => { const [px, py] = proj(lyGeo(x)); return { ...x, px, py, r: 4.5 + 10 * Math.sqrt(Math.max(0, x.t) / mx), i }; });
+    const lab = p => {
+      const [dx, dy, an] = AM_LBL[p.cod] || LY_LBL[p.cod] || [p.r + 12, -6, 'start'];
+      const lx = p.px + dx, ly = p.py + dy, ex = lx + (an === 'end' ? 4 : an === 'start' ? -4 : 0);
+      return `<g class="cm-lbl" data-amcdc="${esc(p.cod)}" style="--d:${800 + p.i * 70}ms"><path class="cm-lead" d="M${p.px.toFixed(1)} ${p.py.toFixed(1)} L${ex.toFixed(1)} ${(ly - 4).toFixed(1)}"/>
+        <text x="${lx.toFixed(1)}" y="${(ly - 6).toFixed(1)}" text-anchor="${an}" class="cm-n">${esc(String(p.n).replace(/^(Magazzino|Piazzale)\s+/i, '').replace(/\s*\(.*\)$/, '').toUpperCase())}</text>
+        <text x="${lx.toFixed(1)}" y="${(ly + 9).toFixed(1)}" text-anchor="${an}" class="cm-v">${eur0(p.t)} · ${fmtNum(pct(p.t, T), 0)}%</text></g>`;
+    };
+    $('#am-map').innerHTML = `<svg viewBox="0 0 400 440" class="cm-svg" role="img" aria-label="Mappa dei piazzali Amazon">
+      <path class="cm-land" pathLength="1" d="${IT_PATH}"/>
+      ${pins.slice().sort((a, b) => b.r - a.r).map(p => `<g class="cm-pin tr-pin act${amF.cdc === p.cod ? ' on' : ''}" data-amcdc="${esc(p.cod)}" style="--d:${450 + p.i * 70}ms" transform="translate(${p.px.toFixed(1)} ${p.py.toFixed(1)})"><title>${esc(p.n)}: ${esc(eur(p.t))} · ${p.docs} ordini</title><circle class="cm-hit" r="${(p.r + 8).toFixed(1)}"/><circle class="cm-c" r="${p.r.toFixed(1)}"/></g>`).join('')}
+      ${pins.map(lab).join('')}
+    </svg>`;
+    const rk = PL.filter(x => x.rows.length).sort((a, b) => (a.cod === LY_NONE) - (b.cod === LY_NONE) || b.t - a.t), all = rk.reduce((a, x) => a + x.t, 0), mxr = Math.max(1, ...rk.map(x => x.t));
+    const noGeo = PL.filter(x => x.cod !== LY_NONE && x.rows.length && !lyGeo(x));
+    $('#am-rank').innerHTML = rk.map((x, i) => `<button type="button" class="cr-row${amF.cdc === x.cod ? ' on' : ''}${x.cod === LY_NONE ? ' ly-na' : ''}" data-amcdc="${esc(x.cod)}" style="--d:${200 + i * 50}ms">
+        <span class="cr-n">${x.cod === LY_NONE ? '?' : i + 1}</span>
+        <span class="cr-main"><span class="cr-top"><b>${esc(x.n)}</b><span><em>${fmtNum(pct(x.t, all), 1)}%</em><strong>${eur0(x.t)}</strong></span></span>
+        <span class="cr-track"><i style="width:${(Math.max(0, x.t) / mxr * 100).toFixed(2)}%"></i></span>
+        <span class="cr-sub">${esc(x.cod)} · ${x.docs} ordini${x.citta ? ' · ' + esc(x.citta) : ''}${x.cod === LY_NONE ? ' · da assegnare' : ''}</span></span>
+      </button>`).join('') + (noGeo.length ? `<div class="muted small tr-none">Non in mappa (manca la città): ${noGeo.map(x => esc(x.n)).join(', ')}. <button type="button" class="link ly-link" id="am-cdc2">Imposta la città</button></div>` : '');
+  }
+  const AM_LBL = { CDC02: [30, 24, 'start'], CDC04: [16, -22, 'start'], CDC06: [24, 8, 'start'], CDC08: [-26, -8, 'end'], CDC09: [-8, 30, 'end'], CDC10: [22, 14, 'start'], CDC11: [26, -4, 'start'], CDC12: [0, -30, 'middle'], CDC13: [22, -14, 'start'] };
+  function renderAmOrds(O) {
+    O = O || amOrd().filter(amIn);
+    const L = O.filter(o => !amOrdF || (amOrdF === 'est' && amEst(o)) || (amOrdF === 'na' && (o.cdc || LY_NONE) === LY_NONE) || (amOrdF === 'ids' && (renderAmOrds.ids || []).includes(String(o.id)))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    $('#am-ocnt').textContent = `${L.length} ordini · ${eur(amSum(L))}`;
+    if (!L.length) { $('#am-ords').innerHTML = '<div class="empty">Nessun ordine</div>'; return; }
+    const sh = L.slice(0, amOrdLimit), more = L.length > amOrdLimit ? `<div class="more-row"><button class="btn sm" id="am-omore">Mostra tutti (${L.length})</button></div>` : '';
+    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+    const cc = o => (o.cdc || LY_NONE) === LY_NONE ? '<span class="chip late">Da attribuire</span>' : `<span class="ly-cc">${esc(lyName(o.cdc))}</span>`;
+    const iv = o => amEst(o) ? '<span class="chip soon ly-q" title="Imponibile calcolato al 22%">stimata</span>' : o.ivaTipo === 'fattura' ? '<span class="chip paid ly-q">da fattura</span>' : '';
+    if (isDesk()) $('#am-ords').innerHTML = `<div class="tr-tw"><table class="tbl gl-st ly-dt am-ot"><thead><tr><th>Data</th><th>Ordine</th><th>Articoli</th><th>Centro di costo</th><th class="r">Pezzi</th><th class="r">Imponibile</th><th class="r">IVA</th><th class="r">Totale</th><th></th></tr></thead><tbody>
+      ${sh.map(o => `<tr data-amord="${esc(o.id)}"${(o.cdc || LY_NONE) === LY_NONE ? ' class="ly-na"' : ''}><td class="d">${dd(o.data)}</td><td><b>${esc(o.id)}</b><small class="tr-nt">${esc(String(o.venditore || '').split(',')[0])}</small></td><td class="am-ad"><span>${esc(o.articoli)}</span></td><td>${cc(o)}</td><td class="num">${qtyFmt(num(o.pezzi))}</td><td class="num">${eur(amNet(o))}</td><td class="num">${eur(num(o.totale) - amNet(o))} ${iv(o)}</td><td class="num amt">${eur(num(o.totale))}</td><td>${o.pdf ? '<span class="fa-clip" title="Fattura salvata"><svg viewBox="0 0 24 24"><path d="M21 12.5 12.7 20.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></span>' : ''}</td></tr>`).join('')}</tbody></table></div>${more}`;
+    else $('#am-ords').innerHTML = `<div class="list">${sh.map(o => `<div class="item" data-amord="${esc(o.id)}"><span class="ic am-ic${(o.cdc || LY_NONE) === LY_NONE ? ' na' : ''}"><svg viewBox="0 0 24 24">${AM_IC}</svg></span><div class="main"><div class="t">${esc(String(o.articoli).slice(0, 60))}</div><div class="s">${dd(o.data)} · ${esc(lyName(o.cdc))}${amEst(o) ? ' · IVA stimata' : ''}</div></div><div class="amt">${eur(amV(o))}</div></div>`).join('')}</div>${more}`;
+  }
+  const AM_IC = '<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>';
+  function renderAmArt(A) {
+    A = A || amArts(amOrd().filter(amIn));
+    const q = amArtQ.trim().toLowerCase();
+    const G = [...groupBy(A, a => amNorm(a.descrizione).slice(0, 70))].map(([k, v]) => ({ k, d: v[0].descrizione, cat: v[0].cat, q: v.reduce((x, a) => x + num(a.quantita), 0), t: r2(v.reduce((x, a) => x + a.val, 0)), min: Math.min(...v.map(a => num(a.prezzo) || Infinity)), max: Math.max(...v.map(a => num(a.prezzo))), cdc: new Set(v.map(a => a.cdc)).size, ord: v[0].ordine }))
+      .filter(x => !q || x.d.toLowerCase().includes(q)).sort((a, b) => b.t - a.t);
+    const sh = G.slice(0, q ? 40 : 10), mt = Math.max(1, ...sh.map(x => x.t));
+    $('#am-art').innerHTML = sh.length ? `<div class="ly-arts am-arts">${sh.map((x, i) => `<div class="ly-ar" data-amartk="${esc(x.d.split(/[,(]/)[0].slice(0, 40))}" style="--d:${150 + i * 35}ms"><span class="ly-am"><b title="${esc(x.d)}">${esc(x.d)}</b><small>${esc(x.cat)} · ${fmtNum(x.q, 0)} pz · ${x.cdc} ${x.cdc === 1 ? 'centro' : 'centri'}</small><span class="gd-b"><i style="width:${(x.t / mt * 100).toFixed(1)}%"></i></span></span><span class="ly-ap">${isFinite(x.min) && x.max / x.min > 1.05 ? `<span class="chip soon">${esc(eurP(x.min))} → ${esc(eurP(x.max))}</span>` : isFinite(x.min) ? `<small>${esc(eurP(x.min))} cad. IVA incl.</small>` : ''}<b>${esc(eur(x.t))}</b></span></div>`).join('')}</div>${!q && G.length > 10 ? `<div class="muted small" style="margin-top:8px">Primi 10 di ${G.length}: usa la ricerca per gli altri.</div>` : ''}` : '<div class="empty">Nessun articolo</div>';
+  }
+  function renderAmList(A) {
+    A = A || amArts(amOrd().filter(amIn));
+    const q = amF.q.trim().toLowerCase();
+    const L = A.filter(a => (!amF.cdc || a.cdc === amF.cdc) && (!amF.cat || a.cat === amF.cat) && (!amF.vend || String(a.venditore || '').split(',')[0].trim() === amF.vend) && (!q || `${a.descrizione} ${a.ordine} ${a.venditore} ${a.localita}`.toLowerCase().includes(q)))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(a.id).localeCompare(String(b.id)));
+    $('#am-cnt').textContent = `${L.length} articoli · ${eur(L.reduce((x, a) => x + a.val, 0))}`;
+    if (!L.length) { $('#am-list').innerHTML = '<div class="empty">Nessun articolo</div>'; return; }
+    const sh = L.slice(0, amLimit), more = L.length > amLimit ? `<div class="more-row"><button class="btn sm" id="am-more">Mostra tutti (${L.length})</button></div>` : '';
+    const dd = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+    if (isDesk()) $('#am-list').innerHTML = `<div class="tr-tw"><table class="tbl gl-st tr-tbl ly-rt am-rt"><thead><tr><th>Data</th><th>Articolo</th><th>Categoria</th><th>Centro di costo</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">${ivaOn ? 'Totale' : 'Imponibile'}</th></tr></thead><tbody>
+      ${sh.map(a => `<tr data-amord="${esc(a.ordine)}"${a.cdc === LY_NONE ? ' class="ly-na"' : ''}><td class="d">${dd(a.data)}</td><td><b title="${esc(a.descrizione)}">${esc(a.descrizione)}</b><small class="tr-nt">${esc([a.ordine, String(a.venditore || '').split(',')[0], /usato/i.test(a.condizione || '') ? 'usato' : ''].filter(Boolean).join(' · '))}</small></td><td class="m2">${esc(a.cat)}</td><td>${a.cdc === LY_NONE ? '<span class="chip late">Da attribuire</span>' : esc(lyName(a.cdc))}</td><td class="num">${qtyFmt(num(a.quantita))}</td><td class="num">${eurP(num(a.prezzo))}</td><td class="num amt">${eur(a.val)}</td></tr>`).join('')}</tbody></table></div>${more}`;
+    else $('#am-list').innerHTML = `<div class="list">${sh.map(a => `<div class="item" data-amord="${esc(a.ordine)}"><span class="ic am-ic${a.cdc === LY_NONE ? ' na' : ''}"><svg viewBox="0 0 24 24">${AM_IC}</svg></span><div class="main"><div class="t">${esc(String(a.descrizione).slice(0, 70))}</div><div class="s">${esc(lyName(a.cdc))} · ${esc(a.cat)} · ${qtyFmt(num(a.quantita))} pz</div></div><div class="amt">${eur(a.val)}</div></div>`).join('')}</div>${more}`;
+  }
+
+  /* ---------- ordine: dettaglio, centro di costo, IVA dalla fattura ---------- */
+  function amOrdDetail(id) {
+    const o = amOrd().find(x => String(x.id) === String(id)); if (!o) return;
+    const arts = amArtAll().filter(a => String(a.ordine) === String(id)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const C = lyCdcList(), cats = [...new Set([...AM_CAT.map(c => c[0]), 'Altro', ...amArtAll().map(a => a.categoria).filter(Boolean)])];
+    openSheet(`Ordine ${o.id}`, `
+      <div class="kv">${[['Data', validD(o.data) ? shortDate(o.data) : '—'], ['Venditore', o.venditore || '—'], ['Destinatario', o.destinatario || '—'], ['Consegna', o.localita || '—'], ['Pagamento', o.pagamento || '—']].map(([a, b]) => `<div><span>${a}</span><strong>${esc(String(b))}</strong></div>`).join('')}</div>
+      <div class="iva-sum" style="margin-top:14px">${num(o.spedizione) ? `<div><span>Spedizione</span><b>${esc(eur(num(o.spedizione)))}</b></div>` : ''}${num(o.sconti) ? `<div><span>Sconti</span><b>${esc(eur(num(o.sconti)))}</b></div>` : ''}<div><span>Imponibile${amEst(o) ? ' (stimato al 22%)' : ''}</span><b>${esc(eur(amNet(o)))}</b></div><div><span>IVA</span><b>${esc(eur(num(o.totale) - amNet(o)))}</b></div><div class="t"><span>Totale pagato</span><b>${esc(eur(num(o.totale)))}</b></div></div>
+      ${amEst(o) ? `<div class="fa-chk ko"><b>IVA non riportata da Amazon</b><span>Se hai la fattura, scrivi qui sotto l'imponibile vero: l'ordine non sarà più stimato.</span></div>` : ''}
+      <div class="f-row" style="margin-top:12px"><label class="f"><span>Centro di costo</span><select name="cdc">${C.map(c => `<option value="${esc(c.cod)}"${c.cod === (o.cdc || LY_NONE) ? ' selected' : ''}>${esc(c.n)}${c.cod === LY_NONE ? '' : ' · ' + esc(c.cod)}</option>`).join('')}</select></label><label class="f"><span>Imponibile dalla fattura €</span><input name="imp" inputmode="decimal" value="${amEst(o) ? '' : esc(fmtIn(num(o.imponibile)))}" placeholder="${esc(fmtIn(amNet(o)))}"></label></div>
+      <div class="ly-rows"><div class="ly-rh am-rh"><span>Articolo</span><span>Totale</span><span>Categoria</span></div>
+        ${arts.map(a => `<div class="ly-rr"><span><b title="${esc(a.descrizione)}">${esc(a.descrizione)}</b><small>${qtyFmt(num(a.quantita))} × ${esc(eurP(num(a.prezzo)))} IVA incl.${a.condizione && !/^nuovo/i.test(a.condizione) ? ' · ' + esc(String(a.condizione).slice(0, 30)) : ''}${a.spedito ? ' · spedito ' + esc(shortDate(a.spedito)) : ''}</small></span><span>${esc(eur(num(a.importo)))}</span><select data-amc="${esc(a.id)}">${cats.map(c => `<option${c === (a.categoria || amCatOf(a.descrizione)) ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>`).join('')}</div>
+      <label class="f" style="margin-top:12px"><span>Note</span><input name="note" value="${esc(o.note || '')}"></label>
+      <div class="row-btns" style="margin-top:6px">${o.pdf ? '<button type="button" class="btn sm" id="am-open">Apri fattura</button>' : ''}${!isLocal() ? `<button type="button" class="btn sm" id="am-pdf">${o.pdf ? 'Sostituisci fattura' : 'Allega fattura (PDF)'}</button>` : ''}</div>`,
+      fd => {
+        const ops = [], imp = String(fd.get('imp') || '').trim();
+        const row = { ...o, cdc: String(fd.get('cdc')), note: String(fd.get('note') || '').trim() };
+        if (imp !== '' && (amEst(o) || Math.abs(num(imp) - amNet(o)) > .005)) { row.imponibile = num(imp); row.iva = r2(num(o.totale) - num(imp)); row.ivaTipo = 'fattura'; }
+        if (JSON.stringify(row) !== JSON.stringify(o)) ops.push({ action: 'upsert', sheet: 'Amazon', row });
+        $$('#sheet-body [data-amc]').forEach(s => { const a = arts.find(x => x.id === s.dataset.amc); if (a && s.value !== (a.categoria || amCatOf(a.descrizione))) ops.push({ action: 'upsert', sheet: 'AmazonArticoli', row: { ...a, categoria: s.value } }); });
+        if (!ops.length) return true;
+        write(ops); toast('Ordine aggiornato'); return true;
+      }, null, 'Salva');
+    const op = $('#am-open'); if (op) op.onclick = () => openDoc(o.pdf, `Amazon ${o.id}`);
+    const up = $('#am-pdf'); if (up) up.onclick = async () => {
+      if (!amOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.7)');
+      let file; try { file = await pickDoc(); } catch (e) { if (e.message !== 'annullato') toast(e.message); return; }
+      try { busy('Salvo la fattura nel tuo Drive…'); const pdf = await api('uploadDoc', { name: `Amazon ${o.id} ${o.data}.${file.ext}`, mime: file.mime, data: file.data }); busy(); write([{ action: 'upsert', sheet: 'Amazon', row: { ...o, pdf } }]); closeSheet(); toast('Fattura allegata all\'ordine'); }
+      catch (e) { busy(); if (!(e instanceof AuthError)) toast('Fattura non salvata: ' + e.message); }
+    };
+  }
+  async function amClassifyAI() {
+    const arts = amArtAll(); if (!arts.length) return;
+    const cats = [...AM_CAT.map(c => c[0]), 'Altro'], todo = arts.filter(a => !a.categoria || a.categoria === 'Altro');
+    if (!todo.length) return toast('Tutti gli articoli hanno già una categoria');
+    try {
+      busy(`L'IA classifica ${todo.length} articoli…`);
+      const res = await aiCall('classify', { categorie: cats, items: todo.map((a, i) => ({ i, d: String(a.descrizione).slice(0, 140) })) });
+      const ops = (Array.isArray(res) ? res : []).filter(x => todo[x.i] && cats.includes(x.c) && x.c !== 'Altro').map(x => ({ action: 'upsert', sheet: 'AmazonArticoli', row: { ...todo[x.i], categoria: x.c } }));
+      busy(); if (!ops.length) return toast('Nessuna categoria nuova'); write(ops); toast(`${ops.length} articoli classificati`);
+    } catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
+  }
+
+  /* ---------- importazione / esportazione ---------- */
+  function amParse(wb) {
+    const U = XLSX.utils, sheets = wb.SheetNames.map(n => ({ n, a: U.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }) }));
+    const find = test => { for (const s of sheets) { const hi = s.a.findIndex(test); if (hi >= 0) return { ...s, hi }; } return null; };
+    const os = find(r => r.some(c => /^nordine$/.test(nh(c))) && r.some(c => /^totale$/.test(nh(c))) && r.some(c => /^localita/.test(nh(c))));
+    if (!os) throw new Error('Non trovo il foglio «Ordini» (colonne N° ordine, Località consegna, Totale)');
+    const H = os.a[os.hi].map(nh), c = re => H.findIndex(h => re.test(h));
+    const C = { d: c(/^data/), id: c(/^nordine/), ar: c(/^articoli/), pz: c(/^pezzi/), ve: c(/^venditore/), de: c(/^destinatario/), lo: c(/^localita/), pa: c(/^pagamento/), su: c(/^subtotale/), sp: c(/^spedizione/), sc: c(/^sconti/), im: c(/^imponibile/), iv: c(/^iva$/), to: c(/^totale/), no: c(/^note/), cdc: c(/^cdc$|^centro/) };
+    const g = (r, i) => i >= 0 ? r[i] : '';
+    let cdcs = lyCdcMerge(lyCdcList());
+    const oldO = new Map(amOrd().map(o => [String(o.id), o]));
+    const cdcOf = loc => { const L = amNorm(loc); const x = cdcs.find(z => String(z.loc || '').split('|').map(amNorm).filter(Boolean).some(k => L.includes(k))); return x ? x.cod : LY_NONE; };
+    const orders = [];
+    os.a.slice(os.hi + 1).forEach(r => {
+      const id = lyTxt(g(r, C.id)); if (!id || !/\d{3}-\d{5,}/.test(id)) return;
+      const tot = num(g(r, C.to)), impS = g(r, C.im), noteF = lyTxt(g(r, C.no)), ex = oldO.get(id);
+      const hasImp = String(impS ?? '').trim() !== '' && num(impS);
+      let imp = hasImp ? num(impS) : r2(tot / 1.22), iva = hasImp ? num(g(r, C.iv)) : r2(tot - imp), tipo = hasImp ? (/stimat/i.test(noteF) ? 'stimata' : 'amazon') : 'stimata';
+      if (ex && ex.ivaTipo === 'fattura') { imp = num(ex.imponibile); iva = num(ex.iva); tipo = 'fattura'; } // non perdere le correzioni dalla fattura
+      let cdc = lyTxt(g(r, C.cdc)).toUpperCase() || cdcOf(g(r, C.lo));
+      if (ex && cdc === LY_NONE && ex.cdc && ex.cdc !== LY_NONE) cdc = ex.cdc;
+      if (ex && ex.cdc && ex.cdc !== LY_NONE) cdc = ex.cdc; // l'attribuzione fatta nell'app vince
+      orders.push({ id, data: lyDate(g(r, C.d)), articoli: lyTxt(g(r, C.ar)), pezzi: num(g(r, C.pz)), venditore: lyTxt(g(r, C.ve)), destinatario: lyTxt(g(r, C.de)), localita: lyTxt(g(r, C.lo)), pagamento: lyTxt(g(r, C.pa)), subtotale: num(g(r, C.su)), spedizione: num(g(r, C.sp)), sconti: num(g(r, C.sc)), imponibile: imp, iva, totale: tot, ivaTipo: tipo, cdc, note: ex && ex.note ? ex.note : (/non indicata/i.test(noteF) ? '' : noteF), pdf: ex ? ex.pdf || '' : '' });
+    });
+    if (!orders.length) throw new Error('Nessun ordine trovato');
+    const as = find(r => r.some(c => /^nordine$/.test(nh(c))) && r.some(c => /^descrizione/.test(nh(c))) && r.some(c => /^prezzo/.test(nh(c))));
+    const arts = [], oldA = new Map(amArtAll().map(a => [String(a.id), a]));
+    if (as) {
+      const AH = as.a[as.hi].map(nh), ac = re => AH.findIndex(h => re.test(h));
+      const X = { d: ac(/^dataordine|^data$/), id: ac(/^nordine/), q: ac(/^qta|^quantita/), de: ac(/^descrizione/), p: ac(/^prezzo/), t: ac(/^totaleriga|^totale/), ve: ac(/^venditore/), co: ac(/^condizione/), sp: ac(/^spedito/), lo: ac(/^localita/), ca: ac(/^categoria/) };
+      const seq = {};
+      as.a.slice(as.hi + 1).forEach(r => {
+        const ord = lyTxt(g(r, X.id)); if (!ord || !/\d{3}-\d{5,}/.test(ord)) return;
+        seq[ord] = (seq[ord] || 0) + 1;
+        const id = `${ord}-${String(seq[ord]).padStart(2, '0')}`, q = num(g(r, X.q)) || 1, p = num(g(r, X.p)), ex = oldA.get(id), de = lyTxt(g(r, X.de));
+        const tRaw = g(r, X.t), tot = typeof tRaw === 'number' ? tRaw : r2(q * p);
+        arts.push({ id, ordine: ord, data: lyDate(g(r, X.d)), quantita: q, descrizione: de, prezzo: p, importo: tot, venditore: lyTxt(g(r, X.ve)), condizione: lyTxt(g(r, X.co)), spedito: lyDate(g(r, X.sp)), localita: lyTxt(g(r, X.lo)), categoria: (ex && ex.categoria) || lyTxt(g(r, X.ca)) || amCatOf(de) });
+      });
+    }
+    // ordini senza righe articolo: una riga sintetica
+    const withArt = new Set(arts.map(a => a.ordine));
+    orders.filter(o => !withArt.has(o.id)).forEach(o => arts.push({ id: o.id + '-01', ordine: o.id, data: o.data, quantita: o.pezzi || 1, descrizione: o.articoli, prezzo: r2(o.totale / (o.pezzi || 1)), importo: o.totale, venditore: o.venditore, condizione: '', spedito: '', localita: o.localita, categoria: amCatOf(o.articoli) }));
+    return { orders, arts, cdcs };
+  }
+  async function importAm() {
+    if (!amOk()) return toast('Prima aggiorna lo script Google (versione cdc-1.7)');
+    let file; try { file = await pickFile('.xlsx,.xls'); } catch { return; }
+    try {
+      busy('Leggo il file Amazon…'); await loadXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+      const P = amParse(wb); busy();
+      const ids = new Set(amOrd().map(o => String(o.id))), nuovi = P.orders.filter(o => !ids.has(o.id)).length;
+      const est = P.orders.filter(o => o.ivaTipo === 'stimata').length, na = P.orders.filter(o => o.cdc === LY_NONE).length;
+      if (!confirm(`${P.orders.length} ordini · ${P.arts.length} articoli · ${eur(P.orders.reduce((a, o) => a + o.totale, 0))} pagati.\n${nuovi} ordini nuovi, ${P.orders.length - nuovi} già presenti (aggiornati senza perdere centri di costo e correzioni IVA).\n${est ? est + ' ordini senza IVA: imponibile stimato al 22%.\n' : ''}${na ? na + ' ordini con località non riconosciuta: «Da attribuire».' : 'Tutti gli ordini sono stati assegnati a un piazzale.'}\nImportare?`)) return;
+      const keep = new Set(P.orders.map(o => o.id)), stale = amArtAll().filter(a => keep.has(String(a.ordine)) && !P.arts.some(x => x.id === a.id));
+      write([...P.orders.map(row => ({ action: 'upsert', sheet: 'Amazon', row })), ...P.arts.map(row => ({ action: 'upsert', sheet: 'AmazonArticoli', row })), ...stale.map(a => ({ action: 'delete', sheet: 'AmazonArticoli', id: a.id })), { action: 'upsert', sheet: 'Config', row: { chiave: 'lyCdc', valore: JSON.stringify(P.cdcs) } }]);
+      amP = ''; amAnim = true; render(); toast(`Amazon: ${P.orders.length} ordini importati`);
+    } catch (e) { busy(); toast(e.message); }
+  }
+  async function exportAm() {
+    const O = amOrd().filter(amIn).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)));
+    if (!O.length) return toast('Nessun ordine da esportare');
+    try {
+      busy('Preparo il file Excel…'); await loadXlsx();
+      const U = XLSX.utils, wb = U.book_new(), E = '#,##0.00 "€"', A = netMode(() => amArts(O)), PL = amPlist(O).filter(x => x.rows.length);
+      const cats = [...new Set(A.map(a => a.cat))];
+      const s1 = [['Codice', 'Centro di costo', ...cats, 'Imponibile €', 'Totale pagato €', 'N. ordini'], ...PL.map(p => [p.cod, p.n, ...cats.map(c => r2(A.filter(a => a.cdc === p.cod && a.cat === c).reduce((x, a) => x + a.net, 0))), amSumN(p.rows), r2(p.rows.reduce((a, o) => a + num(o.totale), 0)), p.rows.length])];
+      const w1 = U.aoa_to_sheet(s1); for (let R = 2; R <= s1.length; R++) for (let i = 2; i < cats.length + 4; i++) { const x = w1[xlC(i) + R]; if (x) x.z = E; }
+      w1['!cols'] = [9, 26, ...cats.map(() => 15), 14, 15, 9].map(w => ({ wch: w })); U.book_append_sheet(wb, w1, 'Riepilogo CdC');
+      const s2 = [['Data', 'N° ordine', 'Articoli', 'Pezzi', 'Venditore', 'Destinatario', 'Località consegna', 'Pagamento', 'Subtotale', 'Spedizione', 'Sconti', 'Imponibile', 'IVA', 'Totale', 'IVA', 'CdC', 'Centro di costo', 'Note'], ...O.map(o => [validD(o.data) ? parseD(o.data) : '', o.id, o.articoli, num(o.pezzi), o.venditore, o.destinatario, o.localita, o.pagamento, num(o.subtotale), num(o.spedizione), num(o.sconti), amNet(o), r2(num(o.totale) - amNet(o)), num(o.totale), amEst(o) ? 'stimata 22%' : o.ivaTipo === 'fattura' ? 'da fattura' : 'da Amazon', o.cdc || LY_NONE, lyName(o.cdc), o.note || ''])];
+      const w2 = U.aoa_to_sheet(s2, { cellDates: true }); O.forEach((o, i) => { const R = i + 2, d = w2['A' + R]; if (d && d.t === 'd') d.z = 'dd/mm/yyyy'; ['I', 'J', 'K', 'L', 'M', 'N'].forEach(c => { const x = w2[c + R]; if (x) x.z = E; }); });
+      w2['!cols'] = [11, 21, 50, 6, 24, 24, 30, 18, 11, 10, 9, 11, 10, 11, 12, 8, 22, 24].map(w => ({ wch: w })); w2['!autofilter'] = { ref: `A1:R${s2.length}` }; U.book_append_sheet(wb, w2, 'Ordini');
+      const s3 = [['Data ordine', 'N° ordine', 'Q.tà', 'Descrizione', 'Prezzo unit. (IVA incl.)', 'Totale riga', 'Imponibile ripartito', 'Categoria', 'Venditore', 'Condizione', 'Spedito il', 'Località consegna', 'Centro di costo'], ...A.map(a => [validD(a.data) ? parseD(a.data) : '', a.ordine, num(a.quantita), a.descrizione, num(a.prezzo), num(a.importo), a.net, a.cat, a.venditore, a.condizione, a.spedito, a.localita, lyName(a.cdc)])];
+      const w3 = U.aoa_to_sheet(s3, { cellDates: true }); A.forEach((a, i) => { const R = i + 2, d = w3['A' + R]; if (d && d.t === 'd') d.z = 'dd/mm/yyyy'; ['E', 'F', 'G'].forEach(c => { const x = w3[c + R]; if (x) x.z = E; }); });
+      w3['!cols'] = [11, 21, 6, 60, 13, 12, 13, 26, 24, 12, 11, 30, 22].map(w => ({ wch: w })); w3['!autofilter'] = { ref: `A1:M${s3.length}` }; U.book_append_sheet(wb, w3, 'Articoli');
+      const months = [...new Set(O.map(o => String(o.data).slice(0, 7)))].sort();
+      const s4 = [['Mese', 'N° ordini', 'Imponibile', 'IVA', 'Totale'], ...months.map(m => { const v = O.filter(o => String(o.data).slice(0, 7) === m), n = amSumN(v), t = r2(v.reduce((a, o) => a + num(o.totale), 0)); return [mLabel(m), v.length, n, r2(t - n), t]; })];
+      const w4 = U.aoa_to_sheet(s4); for (let R = 2; R <= s4.length; R++) ['C', 'D', 'E'].forEach(c => { const x = w4[c + R]; if (x) x.z = E; }); w4['!cols'] = [16, 10, 13, 12, 13].map(w => ({ wch: w })); U.book_append_sheet(wb, w4, 'Riepilogo mensile');
+      XLSX.writeFile(wb, `Ordini_Amazon_${amP || 'completo'}.xlsx`); busy(); toast('Excel scaricato');
+    } catch (e) { busy(); toast(e.message); }
+  }
+  function amArt() {
+    return `<svg viewBox="300 0 340 260" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" class="gh-svg am-svg">
+      <defs><pattern id="amdots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#fff" opacity=".12"/></pattern></defs>
+      <rect x="300" width="340" height="260" fill="url(#amdots)"/>
+      <g class="am-b b1" style="--d:120ms"><rect x="476" y="96" width="120" height="100" rx="12"/><path d="M476 126 h120 M536 96 v30"/></g>
+      <g class="am-b b2" style="--d:280ms"><rect x="420" y="128" width="96" height="80" rx="10"/><path d="M420 152 h96 M468 128 v24"/></g>
+      <g class="am-b b3" style="--d:440ms"><rect x="520" y="40" width="70" height="58" rx="9"/><path d="M520 58 h70 M555 40 v18"/></g>
+    </svg>`;
+  }
+
   /* ---------- Controlli di tutte le aree (dashboard) ---------- */
   function attChecks(rows) {
     const A = [];
@@ -3719,6 +4096,7 @@
         gasolio: { litri: r2(gSum(P.gas, 'litri')), rifornimenti: P.gas.length, prezzoLitro: gasPrice() || null, noleggiMensili: R, mezzi: [...groupBy(P.gas, r => plate(r.targa))].map(([p, v]) => { const x = gV.get(p); let k = 0, kl = 0; if (x) x.seg.forEach((d, id) => { const z = v.find(r => r.id === id); if (z) { k += d; kl += num(z.litri); } }); return { targa: p, nome: gasName(p) || undefined, litri: r2(gSum(v, 'litri')), km: k, kmPerLitro: kl ? r2(k / kl) : null }; }).sort((a, b) => b.litri - a.litri).slice(0, 10) },
         fatture: { numero: P.fat.length, perFornitore: [...groupBy(P.fat, r => String(r.fornitore || '').toUpperCase())].map(([k, v]) => ({ fornitore: k, imponibile: r2(v.reduce((a, r) => a + num(r.imponibile), 0)), fatture: v.length })), daPagare: r2(P.fat.filter(r => !faPaid(r)).reduce((a, r) => a + num(r.totale), 0)), scadute: P.fat.filter(faLate).length },
         lyreco: (() => { const R = lyRows().filter(r => !ovP || String(r.data).slice(0, 7) === ovP); if (!R.length) return undefined; return { nota: 'forniture Lyreco (cancelleria, carta, toner, pulizia, IT) ripartite per centro di costo', imponibile: lySumN(R), perCentro: lyPlist(R).filter(x => x.rows.length).map(x => ({ centro: x.n, imponibile: lySumN(x.rows), righe: x.rows.length })), perCategoria: [...groupBy(R, r => r.categoria || 'Altro')].map(([k, v]) => ({ categoria: k, imponibile: lySumN(v) })), daAttribuire: lySumN(R.filter(r => (r.cdc || LY_NONE) === LY_NONE)), trasporto: lySumN(R.filter(lyIsShip)) }; })(),
+        amazon: (() => { const O = amOrd().filter(o => !ovP || String(o.data).slice(0, 7) === ovP); if (!O.length) return undefined; const A = amArts(O); return { nota: 'ordini Amazon (imponibile; dove Amazon non riporta l\'IVA è stimato al 22%)', imponibile: amSumN(O), totalePagato: r2(O.reduce((a, o) => a + num(o.totale), 0)), ordini: O.length, imponibileStimato: amSumN(O.filter(amEst)), perCentro: amPlist(O).filter(x => x.rows.length).map(x => ({ centro: x.n, imponibile: amSumN(x.rows), ordini: x.rows.length })), perCategoria: [...groupBy(A, a => a.cat)].map(([k, v]) => ({ categoria: k, imponibile: r2(v.reduce((x, a) => x + a.net, 0)) })) }; })(),
         controlli: checks.map(x => ({ area: x.a, livello: x.t === 'warn' ? 'attenzione' : 'info', titolo: x.h, dettaglio: String(x.d).replace(/<[^>]+>/g, ''), impatto: String(x.v).replace(/<[^>]+>/g, '') }))
       };
     });
@@ -3728,7 +4106,7 @@
   function renderOvAI(ctx) {
     const el = $('#ov-ai'); if (!el) return;
     if (isLocal()) { el.hidden = true; return; }
-    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', lyreco: 'Lyreco', generale: 'Generale' };
+    const AREA = { attrezzatura: 'Attrezzatura', gls: 'GLS', gasolio: 'Gasolio', fatture: 'Fatture', lyreco: 'Lyreco', amazon: 'Amazon', generale: 'Generale' };
     if (!db.ai) {
       el.innerHTML = `<div class="card-h"><h3 class="ai-title">${IC.spark}Intelligenza artificiale</h3></div>
         <p class="muted small" style="margin:0 0 12px">Collega Gemini per far analizzare all'IA tutte le aree (attrezzatura, GLS, gasolio, fatture), trovare anomalie e rispondere alle tue domande. La chiave è gratuita su <b>aistudio.google.com</b> → «Get API key» e resta salvata solo nel tuo script Google.</p>
@@ -3807,6 +4185,25 @@
       const faq = t.closest('[data-faq]'); if (faq) { const ids = faq.dataset.faq.split(' '); faF.q = ''; faF.forn = ''; faF.stato = ''; renderFatList(null, faRows().filter(r => ids.includes(r.id))); $('#fa-cnt').textContent += ' · filtro controllo'; $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const faf = t.closest('[data-faforn]'); if (faf) { faF.forn = faf.dataset.faforn; $('#fa-ff').value = faF.forn; renderFatList(); $('#fa-list').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const fat = t.closest('[data-fat]'); if (fat) { faDetail(fat.dataset.fat); return; }
+      if (t.closest('#am-imp') || t.closest('#am-imp2')) { importAm(); return; }
+      if (t.closest('#am-xls')) { exportAm(); return; }
+      if (t.closest('#am-ai')) { amClassifyAI(); return; }
+      if (t.closest('#am-cdc') || t.closest('#am-cdc2')) { lyCdcForm(); return; }
+      if (t.closest('#am-prev') || t.closest('#am-next')) { const o = [...$('#am-per').options].map(x => x.value), i = o.indexOf(amP) + (t.closest('#am-prev') ? 1 : -1); if (i >= 0 && i < o.length) { amP = o[i]; amAnim = true; renderAm(); } return; }
+      const amTo = sel => { const c = $(sel); if (c) (c.closest('.card') || c).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+      const amOf = k => { amOrdF = k; amOrdLimit = k ? 999 : 12; $$('[data-amof]').forEach(b => b.classList.toggle('on', b.dataset.amof === k)); renderAmOrds(); };
+      if (t.closest('#am-omore')) { amOrdLimit = 999; renderAmOrds(); return; }
+      if (t.closest('#am-more')) { amLimit = 99999; renderAmList(); return; }
+      const amof = t.closest('[data-amof]'); if (amof) { amOf(amof.dataset.amof); return; }
+      const amac = t.closest('[data-amact]'); if (amac) { amOf(amac.dataset.amact === 'amest' ? 'est' : 'na'); amTo('#am-ords'); return; }
+      const amid = t.closest('[data-amids]'); if (amid) { renderAmOrds.ids = amid.dataset.amids.split(' '); amOf('ids'); $('#am-ocnt').textContent += ' · filtro controllo'; amTo('#am-ords'); return; }
+      const amaq = t.closest('[data-amartq]'); if (amaq) { amArtQ = amaq.dataset.amartq; $('#am-aq').value = amArtQ; renderAmArt(); amTo('#am-art'); return; }
+      const amak = t.closest('[data-amartk]'); if (amak) { amF.q = amak.dataset.amartk; $('#am-q').value = amF.q; renderAmList(); amTo('#am-list'); return; }
+      const amca = t.closest('[data-amcat]'); if (amca) { amF.cat = amF.cat === amca.dataset.amcat ? '' : amca.dataset.amcat; $('#am-fk').value = amF.cat; renderAmList(); if (amF.cat) amTo('#am-list'); return; }
+      const amve = t.closest('[data-amvend]'); if (amve) { amF.vend = amF.vend === amve.dataset.amvend ? '' : amve.dataset.amvend; $('#am-fv').value = amF.vend; renderAmList(); if (amF.vend) amTo('#am-list'); return; }
+      const ampe = t.closest('[data-amper]'); if (ampe) { amP = amP === ampe.dataset.amper ? '' : ampe.dataset.amper; amAnim = true; renderAm(); return; }
+      const amcd = t.closest('[data-amcdc]'); if (amcd && !t.closest('#sheet')) { const k = amcd.dataset.amcdc; amF.cdc = amF.cdc === k ? '' : k; $$('#am-map .tr-pin, #am-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.amcdc === amF.cdc)); $('#am-fc').value = amF.cdc; renderAmList(); if (amF.cdc) amTo('#am-list'); return; }
+      const amor = t.closest('[data-amord]'); if (amor && !t.closest('#sheet')) { amOrdDetail(amor.dataset.amord); return; }
       if (t.closest('#ly-imp') || t.closest('#ly-imp2')) { importLy(); return; }
       if (t.closest('#ly-xls')) { exportLy(); return; }
       if (t.closest('#ly-cdc') || t.closest('#ly-cdc2')) { lyCdcForm(); return; }
@@ -3887,6 +4284,9 @@
     $('#ov-per').onchange = e => { ovP = e.target.value; ovAnim = true; renderOverview(); };
     $('#fa-per').onchange = e => { faP = e.target.value; faAnim = true; renderFat(); };
     $('#ly-per').onchange = e => { lyP = e.target.value; lyAnim = true; renderLy(); };
+    $('#am-per').onchange = e => { amP = e.target.value; amAnim = true; renderAm(); };
+    document.addEventListener('input', e => { if (e.target.id === 'am-q') { clearTimeout(qt); qt = setTimeout(() => { amF.q = e.target.value; renderAmList(); }, 180); } if (e.target.id === 'am-aq') { clearTimeout(qt); qt = setTimeout(() => { amArtQ = e.target.value; renderAmArt(); }, 180); } });
+    document.addEventListener('change', e => { if (e.target.id === 'am-fc') { amF.cdc = e.target.value; $$('#am-map .tr-pin, #am-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.amcdc === amF.cdc)); renderAmList(); } if (e.target.id === 'am-fk') { amF.cat = e.target.value; renderAmList(); } if (e.target.id === 'am-fv') { amF.vend = e.target.value; renderAmList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'ly-q') { clearTimeout(qt); qt = setTimeout(() => { lyF.q = e.target.value; renderLyList(); }, 180); } if (e.target.id === 'ly-aq') { clearTimeout(qt); qt = setTimeout(() => { lyArtQ = e.target.value; renderLyArt(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'ly-fc') { lyF.cdc = e.target.value; $$('#ly-map .tr-pin, #ly-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.lycdc === lyF.cdc)); renderLyList(); } if (e.target.id === 'ly-fk') { lyF.cat = e.target.value; renderLyList(); } if (e.target.id === 'ly-fd') { lyF.doc = e.target.value; renderLyList(); } });
     ['input', 'change'].forEach(ev => document.addEventListener(ev, e => { if (e.target.closest && e.target.closest('#tr-calc') && (e.target.dataset.trq || e.target.dataset.trqs) && (ev === 'change' || e.target.type === 'number')) trQSet(e); }));
@@ -3925,7 +4325,7 @@
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
-    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); } }, 200); });
+    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); } }, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
   }
 
