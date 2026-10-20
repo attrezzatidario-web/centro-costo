@@ -3187,6 +3187,324 @@
       busy(); toast('PDF scaricato');
     } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
   }
+  /* ---------- Report PDF per piazzale e periodo (Lyreco, Amazon) ---------- */
+  const rpTxt = h => { const d = document.createElement('div'); d.innerHTML = String(h || ''); return d.textContent.replace(/\s+/g, ' ').trim(); };
+  const rpCut = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).replace(/[\s,;.\-–]+\S*$/, '') + '…' : t; };
+  const rpD = s => { const m = String(s || '').match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+  const rpMonthEnd = k => { const [y, m] = k.split('-').map(Number); return `${k}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
+  function rpSrc(kind) {
+    if (kind === 'ly') return { all: lyRows(), date: r => String(r.data).slice(0, 10), cdc: r => r.cdc || LY_NONE };
+    return { all: amOrd(), date: o => String(o.data).slice(0, 10), cdc: o => o.cdc || LY_NONE };
+  }
+  function rpPick(kind, cdc, da, a) {
+    const S = rpSrc(kind);
+    return S.all.filter(x => { const d = S.date(x); return (!da || d >= da) && (!a || d <= a) && (!cdc || S.cdc(x) === cdc); });
+  }
+  function rpAsk(kind) {
+    const LY = kind === 'ly', S = rpSrc(kind);
+    if (!S.all.length) return toast(LY ? 'Prima importa il file Lyreco' : 'Prima importa il file Amazon');
+    const dates = S.all.map(S.date).filter(d => /^\d{4}-\d\d-\d\d$/.test(d)).sort(), d0 = dates[0], d1 = dates[dates.length - 1];
+    const months = LY ? lyMonths() : amMonths(), curP = LY ? lyP : amP, curC = LY ? lyF.cdc : amF.cdc;
+    const by = groupBy(S.all, S.cdc), places = lyCdcList().filter(c => by.has(c.cod));
+    [...by.keys()].filter(k => !places.some(c => c.cod === k)).forEach(k => places.push({ cod: k, n: k }));
+    const qs = [...new Set(months.map(k => k.slice(0, 4) + '-Q' + Math.ceil(Number(k.slice(5)) / 3)))];
+    const qRange = q => { const y = q.slice(0, 4), n = Number(q.slice(-1)); return [`${y}-${String(n * 3 - 2).padStart(2, '0')}-01`, rpMonthEnd(`${y}-${String(n * 3).padStart(2, '0')}`)]; };
+    const chips = [['all', 'Tutto il periodo', d0, d1], ...qs.map(q => { const [x, y] = qRange(q); return [q, `${Number(q.slice(-1))}° trimestre ${q.slice(0, 4)}`, x, y]; }), ...months.map(k => [k, mLabel(k), k + '-01', rpMonthEnd(k)])];
+    const [ia, ib] = curP ? [curP + '-01', rpMonthEnd(curP)] : [d0, d1];
+    openSheet(LY ? 'Report Lyreco in PDF' : 'Report Amazon in PDF', `<div class="rp-w">
+      <label class="f"><span>Piazzale</span><select name="cdc">
+        <option value="">Tutti i piazzali · riepilogo con confronto</option>
+        ${places.map(c => `<option value="${esc(c.cod)}"${c.cod === curC ? ' selected' : ''}>${esc(c.n)} · ${esc(c.cod)}</option>`).join('')}
+      </select></label>
+      <div class="rp-l">Periodo</div>
+      <div class="rp-chips">${chips.map(([k, l, x, y]) => `<button type="button" class="rp-chip${x === ia && y === ib ? ' on' : ''}" data-rpq="${k}" data-da="${x}" data-a="${y}">${esc(l)}</button>`).join('')}</div>
+      <div class="rp-dates"><label class="f"><span>Dal</span><input type="date" name="da" value="${ia}" min="${d0}" max="${d1}" required></label><label class="f"><span>Al</span><input type="date" name="a" value="${ib}" min="${d0}" max="${d1}" required></label></div>
+      <div class="rp-l">Importi</div>
+      <div class="seg vers rp-iva"><label><input type="radio" name="iva" value="0"${ivaOn ? '' : ' checked'}><span>IVA esclusa</span></label><label><input type="radio" name="iva" value="1"${ivaOn ? ' checked' : ''}><span>IVA inclusa</span></label></div>
+      <div class="rp-l">Cosa mettere nel PDF</div>
+      <div class="rp-opts">
+        <label class="rp-o"><input type="checkbox" checked disabled><span><b>Riepilogo</b><small>totali, mese per mese, categorie${''}</small></span></label>
+        <label class="rp-o"><input type="checkbox" name="doc" checked><span><b>${LY ? 'Elenco delle fatture' : 'Elenco degli ordini'}</b><small>${LY ? 'numero, data, ordine e importo di ogni fattura' : 'data, numero, articoli, venditore e importo'}</small></span></label>
+        <label class="rp-o"><input type="checkbox" name="det" checked><span><b>${LY ? 'Dettaglio della merce' : 'Dettaglio degli articoli'}</b><small>${LY ? 'ogni riga: codice, descrizione, quantità e prezzo' : 'ogni articolo con quantità, categoria e importo'}</small></span></label>
+        <label class="rp-o"><input type="checkbox" name="chk"><span><b>Controlli</b><small>le cose da verificare nel periodo scelto</small></span></label>
+      </div>
+      <div class="rp-sum" id="rp-sum"></div></div>`, fd => {
+      const o = { cdc: String(fd.get('cdc') || ''), da: String(fd.get('da') || ''), a: String(fd.get('a') || ''), iva: fd.get('iva') === '1', doc: !!fd.get('doc'), det: !!fd.get('det'), chk: !!fd.get('chk') };
+      if (o.da > o.a) { toast('La data «Dal» è dopo la data «Al»'); return false; }
+      if (!rpPick(kind, o.cdc, o.da, o.a).length) { toast('Nessun dato per il piazzale e il periodo scelti'); return false; }
+      setTimeout(() => rpPdf(kind, o), 260); return true;
+    }, null, 'Crea PDF');
+    $('#sheet-form').classList.add('wide');
+    const W = $('#sheet-body .rp-w'), F = $('#sheet-form');
+    const upd = () => {
+      const cdc = F.cdc.value, da = F.da.value, a = F.a.value, X = rpPick(kind, cdc, da, a), iv = F.querySelector('[name=iva]:checked').value === '1';
+      $$('.rp-chip', W).forEach(b => b.classList.toggle('on', b.dataset.da === da && b.dataset.a === a));
+      const p = ivaOn; ivaOn = iv;
+      const v = LY ? lySum(X) : amSum(X), nd = LY ? new Set(X.map(r => r.fattura)).size : X.length;
+      ivaOn = p;
+      $('#rp-sum').innerHTML = X.length ? `<b>${esc(eur(v))}</b><span>${nd} ${LY ? (nd === 1 ? 'fattura' : 'fatture') : (nd === 1 ? 'ordine' : 'ordini')} · ${LY ? X.length + ' righe' : amArts(X).length + ' articoli'} · ${esc(rpD(da))} – ${esc(rpD(a))}</span>` : '<span class="rp-none">Nessun dato per questa scelta</span>';
+    };
+    W.addEventListener('click', e => { const c = e.target.closest('.rp-chip'); if (!c) return; F.da.value = c.dataset.da; F.a.value = c.dataset.a; upd(); });
+    W.addEventListener('input', upd); W.addEventListener('change', upd);
+    upd();
+  }
+
+  function rpModel(kind, o) {
+    const LY = kind === 'ly', X = rpPick(kind, o.cdc, o.da, o.a), ALL = rpPick(kind, '', o.da, o.a);
+    const place = o.cdc ? lyCdc(o.cdc) : null;
+    const M = { LY, place, o, title: LY ? 'Report forniture Lyreco' : 'Report acquisti Amazon', short: LY ? 'Lyreco' : 'Amazon', notes: [] };
+    const valOf = LY ? lySum : amSum;
+    M.total = valOf(X); M.companyTotal = valOf(ALL); M.net = LY ? lySumN(X) : amSumN(X);
+    // mesi del periodo (anche quelli a zero)
+    const ms = []; { let [y, m] = o.da.slice(0, 7).split('-').map(Number); const [y2, m2] = o.a.slice(0, 7).split('-').map(Number); while (y < y2 || (y === y2 && m <= m2)) { ms.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } } }
+    M.months = ms.map(k => ({ k, v: valOf(X.filter(x => String(x.data).slice(0, 7) === k)) }));
+    if (LY) {
+      const D = lyDocList(X);
+      M.ndoc = D.length; M.nline = X.length; M.docWord = ['fattura', 'fatture']; M.lineWord = ['riga', 'righe'];
+      M.byPlace = lyPlist(ALL).filter(x => x.rows.length).map(x => ({ cod: x.cod, n: x.n, citta: x.citta || '', docs: x.docs, lines: x.rows.length, v: x.t })).sort((a, b) => (a.cod === LY_NONE) - (b.cod === LY_NONE) || b.v - a.v);
+      M.byCat = [...groupBy(X, r => r.categoria || 'Altro')].map(([k, v]) => ({ k, v: lySum(v), n: v.length })).sort((a, b) => b.v - a.v);
+      M.docTitle = 'Fatture e note di credito';
+      M.docHead = ['Data', 'Numero', 'Tipo', 'Ordine', ...(o.cdc ? [] : ['Centro di costo']), 'Righe', 'Importo'];
+      M.docBody = D.slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).map(d => {
+        const part = o.cdc && lyDocRows(d.id).length > d.rows.length;
+        return [rpD(d.data), d.id + (part ? ' *' : ''), lyTipoLbl(d.tipo), d.ordini.slice(0, 2).join(', ') || '—', ...(o.cdc ? [] : [d.mixed ? 'più centri' : lyName(d.cdc)]), String(d.rows.length), eur(d.v)];
+      });
+      if (o.cdc && D.some(d => lyDocRows(d.id).length > d.rows.length)) M.notes.push('* Fattura divisa tra più centri di costo: l\'importo indicato è solo la parte di questo piazzale.');
+      M.docNum = o.cdc ? [5, 6] : [6, 7];
+      M.detTitle = 'Dettaglio della merce';
+      M.detHead = ['Data', 'Fattura', 'Codice', 'Descrizione', ...(o.cdc ? [] : ['Centro']), 'Q.tà', 'Prezzo', 'Importo'];
+      M.detBody = X.slice().sort((a, b) => String(a.data).localeCompare(String(b.data)) || String(a.fattura).localeCompare(String(b.fattura))).map(r => [rpD(r.data), String(r.fattura), r.codice || '—', rpCut(r.descrizione, 80), ...(o.cdc ? [] : [String(lyName(r.cdc || LY_NONE)).replace(/^(Magazzino|Piazzale)\s+/i, '')]), fmtNum(num(r.quantita), num(r.quantita) % 1 ? 2 : 0) + (r.um ? ' ' + String(r.um).toLowerCase() : ''), num(r.prezzo) ? eurP(num(r.prezzo) * lyMulR(r)) : '—', eur(lyV(r))]);
+      M.detNum = o.cdc ? [4, 5, 6] : [5, 6, 7];
+      if (o.chk) M.checks = lyChecks(X, D);
+      const na = X.filter(r => (r.cdc || LY_NONE) === LY_NONE);
+      if (!o.cdc && na.length) M.notes.push(`${eur(lySum(na))} (${new Set(na.map(r => r.fattura)).size} fatture) non indicano la sede di consegna e sono in «Da attribuire».`);
+    } else {
+      const A = amArts(X);
+      M.ndoc = X.length; M.nline = A.length; M.docWord = ['ordine', 'ordini']; M.lineWord = ['articolo', 'articoli'];
+      M.byPlace = amPlist(ALL).filter(x => x.rows.length).map(x => ({ cod: x.cod, n: x.n, citta: x.citta || '', docs: x.docs, lines: amArts(x.rows).length, v: x.t })).sort((a, b) => (a.cod === LY_NONE) - (b.cod === LY_NONE) || b.v - a.v);
+      M.byCat = [...groupBy(A, a => a.cat)].map(([k, v]) => ({ k, v: r2(v.reduce((s, a) => s + a.val, 0)), n: v.length })).sort((a, b) => b.v - a.v);
+      M.docTitle = 'Ordini';
+      M.docHead = ['Data', 'Ordine', 'Articoli', 'Venditore', ...(o.cdc ? [] : ['Centro']), 'Imponibile', 'Totale'];
+      M.docBody = X.slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).map(x => [rpD(x.data), String(x.id), rpCut(String(x.articoli || '').split(/\s*\|\s*/)[0], o.cdc ? 70 : 52), rpCut(String(x.venditore || '—').split(',')[0], 22), ...(o.cdc ? [] : [String(lyName(x.cdc || LY_NONE)).replace(/^(Magazzino|Piazzale)\s+/i, '')]), eur(amNet(x)) + (amEst(x) ? ' *' : ''), eur(num(x.totale))]);
+      M.docNum = o.cdc ? [4, 5] : [5, 6];
+      M.detTitle = 'Dettaglio degli articoli';
+      M.detHead = ['Data', 'Descrizione', 'Categoria', ...(o.cdc ? [] : ['Centro']), 'Q.tà', 'Importo'];
+      M.detBody = A.slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).map(a => [rpD(a.data), rpCut(a.descrizione, 90), a.cat, ...(o.cdc ? [] : [String(lyName(a.cdc)).replace(/^(Magazzino|Piazzale)\s+/i, '')]), fmtNum(num(a.quantita) || 1, 0), eur(a.val)]);
+      M.detNum = o.cdc ? [3, 4] : [4, 5];
+      if (o.chk) M.checks = amChecks(X, A);
+      const est = X.filter(amEst);
+      if (est.length) M.notes.push(`* In ${est.length} ordini Amazon non riporta l'IVA: l'imponibile è stimato al 22% (${eur(est.reduce((s, x) => s + num(x.totale), 0))} pagati). Il valore esatto è sulla fattura.`);
+      M.notes.push('Negli ordini con più articoli l\'importo del singolo articolo è ripartito in proporzione al suo prezzo.');
+    }
+    M.nplaces = M.byPlace.filter(x => x.cod !== LY_NONE).length;
+    return M;
+  }
+
+  async function rpPdf(kind, o) {
+    const pIva = ivaOn; ivaOn = o.iva;
+    try {
+      busy('Preparo il PDF…');
+      const R = rpModel(kind, o);
+      const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      let FF = 'helvetica';
+      if (fonts) { fonts.forEach(([w, data]) => { doc.addFileToVFS(`Inter-${w}.ttf`, data); doc.addFont(`Inter-${w}.ttf`, 'Inter', w === 'regular' ? 'normal' : w); }); FF = 'Inter'; }
+      const W = 210, H = 297, M = 16, CW = W - 2 * M;
+      const C = { navy: [23, 54, 109], blue: [51, 98, 171], blueSoft: [196, 211, 236], orange: [235, 104, 52], ink: [31, 36, 48], ink2: [74, 81, 96], muted: [120, 128, 142], line: [227, 231, 238], soft: [245, 247, 251], white: [255, 255, 255], red: [200, 52, 50], redSoft: [253, 236, 236], amber: [165, 111, 0], amberSoft: [251, 243, 220] };
+      const fill = c => doc.setFillColor(...c), stroke = c => doc.setDrawColor(...c), color = c => doc.setTextColor(...c);
+      const font = (st, sz) => { doc.setFont(FF, FF === 'helvetica' && st === 'semibold' ? 'bold' : st); doc.setFontSize(sz); };
+      const fit = (txt, st, sz, maxW, min = 8) => { font(st, sz); while (sz > min && doc.getTextWidth(txt) > maxW) { sz -= .5; font(st, sz); } return sz; };
+      const alpha = a => doc.setGState(new doc.GState({ opacity: a }));
+      const oggi = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const ivaT = o.iva ? 'IVA inclusa' : 'IVA esclusa';
+      const placeName = R.place ? R.place.n : 'Tutti i piazzali';
+      const perT = `dal ${rpD(o.da)} al ${rpD(o.a)}`;
+      const w = (n, ws) => `${n} ${n === 1 ? ws[0] : ws[1]}`;
+
+      // ---- intestazione ----
+      const HB = 66;
+      fill(C.navy); doc.rect(0, 0, W, HB, 'F');
+      fill(C.blue); alpha(.55); doc.triangle(W * .45, 0, W, 0, W, HB, 'F'); alpha(1);
+      const stripe = (x, y, sw, sh, c, a) => { fill(c); alpha(a); doc.lines([[sw, -sw * .25], [0, sh], [-sw, sw * .25]], x, y + sh, [1, 1], 'F', true); alpha(1); };
+      stripe(150, 32, 70, 7.5, C.orange, .95); stripe(160, 43, 60, 7.5, [217, 221, 228], .85); stripe(170, 54, 50, 7.5, C.white, .18);
+      if (logo) { fill(C.white); doc.roundedRect(M, 12, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 12.6, 10.8, 10.8); }
+      color(C.white); font('bold', 9.5); doc.text('SOLUZIONE VEICOLARE S.R.L.', M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text('San Cesareo (RM) · Centro di costo', M + (logo ? 16 : 0), 21.5); alpha(1);
+      font('bold', 8); doc.text(R.title.toUpperCase(), W - M, 17, { align: 'right' });
+      font('normal', 8); alpha(.8); doc.text(`Creato il ${oggi}`, W - M, 21.5, { align: 'right' }); alpha(1);
+      fit(placeName, 'bold', 25, CW - 40, 16); doc.text(placeName, M, 41);
+      font('normal', 10.5); alpha(.9); doc.text(`${R.short} · ${perT}`, M, 48.5); alpha(.75); font('normal', 9);
+      doc.text(R.place ? [R.place.cod, R.place.ind || R.place.citta].filter(Boolean).join(' · ').slice(0, 95) : `${w(R.nplaces, ['piazzale', 'piazzali'])} con acquisti nel periodo`, M, 54.5); alpha(1);
+      font('bold', 7.2); const tg = ivaT.toUpperCase(), tgw = doc.getTextWidth(tg) + 8; fill(C.orange); doc.roundedRect(W - M - tgw, 26, tgw, 6, 3, 3, 'F'); color(C.white); doc.text(tg, W - M - tgw / 2, 30.1, { align: 'center' });
+
+      // ---- riquadri ----
+      let y = HB + 8;
+      const share = R.companyTotal ? R.total / R.companyTotal * 100 : 0;
+      const nm = R.months.filter(x => x.v).length || 1;
+      const tiles = [
+        ['Spesa ' + (o.iva ? 'con IVA' : 'senza IVA'), eur(R.total), o.iva ? `imponibile ${eur(R.net)}` : (R.LY ? 'imponibile delle righe' : 'imponibile degli ordini')],
+        [R.LY ? 'Fatture' : 'Ordini', String(R.ndoc), w(R.nline, R.lineWord)],
+        ['Media mensile', eur0(R.total / Math.max(1, R.months.length)), `${w(R.months.length, ['mese', 'mesi'])} nel periodo`],
+        R.place ? ['Quota sul totale', fmtNum(share, 1) + '%', `su ${eur0(R.companyTotal)} di tutti i piazzali`] : ['Piazzali', String(R.nplaces), R.byPlace[0] ? `il primo: ${String(R.byPlace[0].n).replace(/^(Magazzino|Piazzale)\s+/i, '')}` : '']
+      ];
+      const tw = (CW - 3 * 4) / 4;
+      tiles.forEach(([l, v, s], i) => {
+        const x = M + i * (tw + 4);
+        fill(C.white); stroke(C.line); doc.setLineWidth(.3); doc.roundedRect(x, y, tw, 22, 2.5, 2.5, 'FD');
+        fill(i === 0 ? C.orange : C.blue); doc.roundedRect(x, y, 1.6, 22, .8, .8, 'F');
+        color(C.muted); font('normal', 7.2); doc.text(l.toUpperCase(), x + 5, y + 6.5);
+        color(C.ink); fit(v, 'bold', 14, tw - 8); doc.text(v, x + 5, y + 14);
+        color(C.muted); fit(s, 'normal', 7, tw - 8, 5.5); doc.text(s, x + 5, y + 18.6);
+      });
+      y += 22 + 10;
+
+      const newPage = () => { doc.addPage(); y = 26; };
+      const section = (title, sub, need = 40) => {
+        if (y + need > H - 20) newPage();
+        fill(C.orange); doc.roundedRect(M, y - 3.6, 3.2, 3.2, .6, .6, 'F');
+        color(C.navy); font('bold', 13); doc.text(title, M + 5.5, y);
+        if (sub) { color(C.muted); font('normal', 8); doc.text(sub, W - M, y, { align: 'right' }); }
+        stroke(C.line); doc.setLineWidth(.3); doc.line(M, y + 2.6, W - M, y + 2.6);
+        y += 6;
+      };
+      const table = (head, body, opt = {}) => {
+        doc.autoTable({
+          startY: y, head: [head], body, foot: opt.foot ? [opt.foot] : undefined, showFoot: 'lastPage', margin: { left: M, right: M, top: 24, bottom: 18 }, theme: 'plain',
+          styles: { font: FF, fontSize: opt.fs || 9, textColor: C.ink, cellPadding: { top: opt.pad || 2.5, bottom: opt.pad || 2.5, left: 2.2, right: 2.2 }, lineColor: C.line, lineWidth: { bottom: .2 }, valign: 'middle', overflow: 'linebreak' },
+          headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: (opt.fs || 9) - 1.2, cellPadding: { top: 3, bottom: 3, left: 2.2, right: 2.2 }, lineWidth: 0 },
+          footStyles: { fillColor: C.soft, textColor: C.navy, fontStyle: 'bold', fontSize: opt.fs || 9, lineWidth: 0 },
+          alternateRowStyles: { fillColor: C.soft },
+          columnStyles: opt.cols || {},
+          didParseCell: d => { if ((opt.num || []).includes(d.column.index)) d.cell.styles.halign = 'right'; if (opt.parse) opt.parse(d); },
+          didDrawCell: opt.draw
+        });
+        y = doc.lastAutoTable.finalY + 4;
+      };
+      const barCell = (getV, max, idx) => d => {
+        if (d.section !== 'body' || d.column.index !== idx) return;
+        const v = getV(d.row.index); if (v == null) return;
+        const bw = d.cell.width - 4.4, bh = 2.4, bx = d.cell.x + 2.2, by = d.cell.y + d.cell.height / 2 - bh / 2;
+        fill(C.line); doc.roundedRect(bx, by, bw, bh, 1.2, 1.2, 'F');
+        if (v > 0) { fill(d.row.raw && d.row.raw.na ? C.red : C.blue); doc.roundedRect(bx, by, Math.max(1.2, bw * Math.min(1, v / max)), bh, 1.2, 1.2, 'F'); }
+      };
+
+      // ---- confronto tra piazzali / posizione del piazzale ----
+      if (R.byPlace.length) {
+        const mxp = Math.max(1, ...R.byPlace.map(x => x.v));
+        section(R.place ? 'Il piazzale rispetto agli altri' : 'Spesa per piazzale', `stesso periodo · ${ivaT}`, 20 + R.byPlace.length * 8);
+        const body = R.byPlace.map((x, i) => { const row = [x.cod === LY_NONE ? '?' : String(i + 1), x.n, x.citta || '—', String(x.docs), '', fmtNum(pct(x.v, R.companyTotal), 1) + '%', eur(x.v)]; row.na = x.cod === LY_NONE; return row; });
+        table(['#', 'Centro di costo', 'Località', R.LY ? 'Fatture' : 'Ordini', 'Quota', '%', 'Importo'], body, {
+          num: [3, 5, 6], foot: ['', 'Totale', '', String(R.byPlace.reduce((a, x) => a + x.docs, 0)), '', '100%', eur(R.companyTotal)],
+          cols: { 0: { cellWidth: 9, halign: 'center', textColor: C.muted, fontStyle: 'bold' }, 1: { fontStyle: 'bold', cellWidth: 50 }, 2: { textColor: C.ink2 }, 3: { cellWidth: 16 }, 4: { cellWidth: 26 }, 5: { cellWidth: 15, textColor: C.muted }, 6: { cellWidth: 28, fontStyle: 'bold' } },
+          parse: d => { if (R.place && d.section === 'body' && R.byPlace[d.row.index] && R.byPlace[d.row.index].cod === R.place.cod) { d.cell.styles.fillColor = [234, 240, 250]; d.cell.styles.textColor = C.navy; d.cell.styles.fontStyle = 'bold'; } if (d.section === 'body' && R.byPlace[d.row.index] && R.byPlace[d.row.index].cod === LY_NONE) d.cell.styles.textColor = C.red; },
+          draw: barCell(i => R.byPlace[i] ? R.byPlace[i].v : null, mxp, 4)
+        });
+        y += 4;
+      }
+
+      // ---- mese per mese (grafico) ----
+      if (R.months.length > 1) {
+        const avg = R.total / R.months.length;
+        section('Mese per mese', `${ivaT} · linea arancione = media ${eur0(avg)} al mese`, 56);
+        const ch = 38, mx = Math.max(1, ...R.months.map(x => x.v)), n = R.months.length, gap = n > 8 ? 2.5 : 5, bw = Math.min(22, (CW - gap * (n - 1)) / n), tot = n * bw + (n - 1) * gap, x0 = M + (CW - tot) / 2, base = y + 8 + ch;
+        stroke(C.line); doc.setLineWidth(.2); [0, .5, 1].forEach(f => { const yy = base - ch * f; doc.setLineDashPattern(f ? [.8, .8] : [], 0); doc.line(M, yy, W - M, yy); }); doc.setLineDashPattern([], 0);
+        const ya = base - ch * avg / mx;
+        R.months.forEach((m, i) => {
+          const x = x0 + i * (bw + gap), h = m.v > 0 ? Math.max(.8, ch * m.v / mx) : 0;
+          if (h) { fill(m.v >= avg ? C.blue : C.blueSoft); doc.roundedRect(x, base - h, bw, h, 1.2, 1.2, 'F'); doc.rect(x, base - Math.min(h, 1.2), bw, Math.min(h, 1.2), 'F'); }
+          color(C.muted); font('normal', 7.4); const ml = MESI[Number(m.k.slice(5)) - 1].slice(0, 3); doc.text(ml.charAt(0).toUpperCase() + ml.slice(1) + (R.months[0].k.slice(0, 4) !== R.months[n - 1].k.slice(0, 4) ? ' ' + m.k.slice(2, 4) : ''), x + bw / 2, base + 4.5, { align: 'center' });
+        });
+        stroke(C.orange); doc.setLineWidth(.35); doc.setLineDashPattern([1.5, 1], 0); doc.line(M, ya, W - M, ya); doc.setLineDashPattern([], 0);
+        R.months.forEach((m, i) => {
+          const x = x0 + i * (bw + gap), h = m.v > 0 ? Math.max(.8, ch * m.v / mx) : 0, t = eur0(m.v);
+          const fs = fit(t, 'semibold', 7.4, bw + gap - 1, 5), tw0 = doc.getTextWidth(t) + 2, ty = base - h - 2;
+          fill(C.white); doc.roundedRect(x + bw / 2 - tw0 / 2, ty - fs * .3528 - .4, tw0, fs * .3528 + 1.4, .8, .8, 'F');
+          color(C.ink); doc.text(t, x + bw / 2, ty, { align: 'center' });
+        });
+        y = base + 12;
+      }
+
+      // ---- categorie ----
+      if (R.byCat.length) {
+        const mxc = Math.max(1, ...R.byCat.map(x => x.v));
+        section('Per categoria', ivaT, 20 + Math.min(R.byCat.length, 12) * 8);
+        table(['Categoria', R.LY ? 'Righe' : 'Articoli', 'Quota', '%', 'Importo'], R.byCat.map(x => [x.k, String(x.n), '', fmtNum(pct(x.v, R.total), 1) + '%', eur(x.v)]), {
+          num: [1, 3, 4], cols: { 0: { fontStyle: 'bold' }, 1: { cellWidth: 18 }, 2: { cellWidth: 46 }, 3: { cellWidth: 15, textColor: C.muted }, 4: { cellWidth: 28, fontStyle: 'bold' } },
+          foot: ['Totale', String(R.byCat.reduce((a, x) => a + x.n, 0)), '', '100%', eur(R.total)],
+          draw: barCell(i => R.byCat[i] ? R.byCat[i].v : null, mxc, 2)
+        });
+        y += 4;
+      }
+
+      // ---- controlli ----
+      if (R.checks && R.checks.length) {
+        section('Controlli', `${R.checks.length} punti da verificare`, 30);
+        R.checks.forEach(c => {
+          const txt = doc.splitTextToSize(rpTxt(c.d), CW - 50), hh = 9 + txt.length * 3.7;
+          if (y + hh > H - 20) newPage();
+          const warn = c.t === 'warn';
+          fill(warn ? C.amberSoft : C.soft); doc.roundedRect(M, y, CW, hh, 2, 2, 'F');
+          fill(warn ? C.amber : C.blue); doc.roundedRect(M, y, 1.4, hh, .7, .7, 'F');
+          color(C.ink); font('bold', 9); doc.text(rpTxt(c.h), M + 5, y + 5.6);
+          color(warn ? C.amber : C.navy); font('bold', 8.5); doc.text(rpTxt(c.v), W - M - 4, y + 5.6, { align: 'right' });
+          color(C.ink2); font('normal', 7.8); doc.text(txt, M + 5, y + 10);
+          y += hh + 3;
+        });
+        y += 4;
+      }
+
+      // ---- elenco documenti ----
+      if (o.doc && R.docBody.length) {
+        section(R.docTitle, `${w(R.docBody.length, R.docWord)} · ${ivaT}`, 30);
+        const ncol = R.docHead.length;
+        table(R.docHead, R.docBody, {
+          fs: 7.8, pad: 2, num: R.docNum,
+          foot: R.docHead.map((h, i) => i === 0 ? 'Totale' : i === ncol - 1 ? (R.LY ? eur(R.total) : eur(rpPick(kind, o.cdc, o.da, o.a).reduce((a, x) => a + num(x.totale), 0))) : (!R.LY && i === ncol - 2 ? eur(R.net) : '')),
+          cols: R.LY ? { 0: { cellWidth: 'wrap' }, 1: { fontStyle: 'bold', cellWidth: 'wrap' }, 2: { textColor: C.ink2 }, [ncol - 2]: { cellWidth: 'wrap' }, [ncol - 1]: { cellWidth: 'wrap', fontStyle: 'bold' } }
+            : { 0: { cellWidth: 'wrap' }, 1: { cellWidth: 'wrap', textColor: C.ink2, fontSize: 6.3 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 24, textColor: C.ink2 }, ...(o.cdc ? {} : { 4: { cellWidth: 19, textColor: C.ink2 } }), [ncol - 2]: { cellWidth: 'wrap' }, [ncol - 1]: { cellWidth: 'wrap', fontStyle: 'bold' } }
+        });
+        y += 4;
+      }
+
+      // ---- dettaglio righe / articoli ----
+      if (o.det && R.detBody.length) {
+        section(R.detTitle, `${w(R.detBody.length, R.lineWord)} · ${ivaT}`, 30);
+        const ncol = R.detHead.length;
+        table(R.detHead, R.detBody, {
+          fs: 7.4, pad: 1.7, num: R.detNum,
+          foot: R.detHead.map((h, i) => i === 0 ? 'Totale' : i === ncol - 1 ? eur(R.total) : ''),
+          cols: R.LY ? { 0: { cellWidth: 'wrap' }, 1: { cellWidth: 'wrap', textColor: C.ink2 }, 2: { cellWidth: 'wrap', textColor: C.muted }, 3: { cellWidth: 'auto' }, [ncol - 1]: { cellWidth: 'wrap', fontStyle: 'bold' }, [ncol - 2]: { cellWidth: 'wrap' }, [ncol - 3]: { cellWidth: 'wrap' }, ...(o.cdc ? {} : { 4: { cellWidth: 22, textColor: C.ink2 } }) }
+            : { 0: { cellWidth: 'wrap' }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 30, textColor: C.ink2 }, [ncol - 1]: { cellWidth: 'wrap', fontStyle: 'bold' }, [ncol - 2]: { cellWidth: 'wrap' }, ...(o.cdc ? {} : { 3: { cellWidth: 22, textColor: C.ink2 } }) }
+        });
+        y += 4;
+      }
+
+      // ---- note ----
+      const notes = [...R.notes, `Importi ${ivaT}. Periodo ${perT}.`, R.place ? `Centro di costo ${R.place.cod} · ${R.place.n}${R.place.ind ? ' · ' + R.place.ind : ''}.` : ''].filter(Boolean);
+      const nl = notes.map(n => doc.splitTextToSize('•  ' + n, CW - 12));
+      const nh = 10 + nl.reduce((a, l) => a + l.length * 3.9, 0);
+      if (y + nh > H - 22) newPage();
+      fill(C.soft); stroke(C.line); doc.setLineWidth(.3); doc.roundedRect(M, y, CW, nh, 2.5, 2.5, 'FD');
+      color(C.navy); font('bold', 9); doc.text('Note', M + 6, y + 7);
+      color(C.ink2); font('normal', 7.9); let ny = y + 12.3; nl.forEach(l => { doc.text(l, M + 6, ny); ny += l.length * 3.9; });
+
+      // ---- intestazione pagine successive e piè di pagina ----
+      const N = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= N; p++) {
+        doc.setPage(p);
+        if (p > 1) { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.navy); font('bold', 9); doc.text(`${R.short} · ${placeName}`, M, 13); color(C.muted); font('normal', 8); doc.text(`${perT} · ${ivaT}`, W - M, 13, { align: 'right' }); stroke(C.line); doc.setLineWidth(.3); doc.line(M, 16, W - M, 16); }
+        stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12);
+        color(C.muted); font('normal', 7.5);
+        doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5);
+        doc.text(`${R.title} · creato il ${oggi}`, W / 2, H - 7.5, { align: 'center' });
+        doc.text(`Pagina ${p} di ${N}`, W - M, H - 7.5, { align: 'right' });
+      }
+      doc.setProperties({ title: `${R.title} · ${placeName} · ${perT}`, subject: R.title, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      const slug = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
+      doc.save(`${R.short}_${slug(R.place ? R.place.n : 'Tutti_i_piazzali')}_${o.da}_${o.a}.pdf`);
+      busy(); toast('PDF scaricato');
+    } catch (e) { busy(); toast('PDF non creato: ' + e.message); console.error(e); }
+    finally { ivaOn = pIva; }
+  }
   function trFix(i) {
     const D = JSON.parse(JSON.stringify(trData())), k = D.kit[i]; if (!k) return;
     const c = trCalc({ ...k, fx: null }, D);
@@ -4281,6 +4599,8 @@
       if (t.closest('#tr-xls')) { exportTor(); return; }
       if (t.closest('#tr-mod')) { trForm(); return; }
       if (t.closest('#tr-pdf')) { trPdfAsk(); return; }
+      if (t.closest('#ly-pdf')) { rpAsk('ly'); return; }
+      if (t.closest('#am-pdf')) { rpAsk('am'); return; }
       const trpd = t.closest('[data-trpdf]'); if (trpd) { const m = trpd.dataset.trpdf; closeSheet(); setTimeout(() => trPdf(m), 260); return; }
       if (t.closest('#tr-copy')) { trCopy(); return; }
       const trfx = t.closest('[data-trfix]'); if (trfx) { trFix(+trfx.dataset.trfix); return; }
