@@ -1969,3 +1969,9 @@ body.has-sel .fab { display: none; }
 /* v52 scheda lavoro */
 #pv-work { display: inline-flex; align-items: center; gap: 6px; }
 #pv-work svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* v53 «Aggiungi prodotti» nella sezione Prodotti */
+.pv-ph { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pv-ph > div { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.pv-ph h3 { margin: 0; }
+#pv-addp { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+#pv-addp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
