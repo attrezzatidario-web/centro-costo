@@ -2779,7 +2779,7 @@
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
@@ -2906,7 +2906,7 @@
         <div class="pv-hero-l">
           <img class="pv-hero-logo" src="logo-${pvSup}.svg" alt="${esc(cat.nome)}">
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
-          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'prezzi consigliati dal volantino (validi fino al 31/01/2027)' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
+          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'dati dal sito ufficiale · prezzi del volantino dove ci sono' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
         <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
@@ -2974,9 +2974,9 @@
     pvSumUpd(it);
   }
   // scheda di un attrezzo (DeWalt): niente taglie e colori, solo la quantità
-  const pvSpecTool = it => [['Codice', it.c.length > 1 ? `${it.c.length} codici, uno per taglia` : it.x ? (it.code || it.id) : it.id], ['Marca', it.x ? it.marca || '' : ''], ['Modello', it.mod || ''], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].filter(x => x[1]);
+  const pvSpecTool = it => [['Codice', it.c.length > 1 ? `${it.c.length} codici, ${it.c.every(c => /^taglia/i.test(c[1])) ? 'uno per taglia' : 'uno per versione'}` : it.x ? (it.code || it.id) : it.id], ['Marca', it.x ? it.marca || '' : ''], ['Modello', it.mod || ''], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].concat((it.sp || []).map(([a, b]) => [esc(a), b])).filter(x => x[1]).slice(0, 14);
   function pvDetailTool(body, cat, it, base, q, quotes) {
-    const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]), lordo = it.pl && it.pl[0], acq = base === '' ? null : num(base);
+    const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]) ?? pvMinPub(it), lordo = it.pl && it.pl[0], acq = base === '' ? null : num(base);
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(pvGroupT(it.g))}</span></div>
       <div class="card pv-hd">
@@ -2994,7 +2994,7 @@
         </div>
       </div>
       <div class="card pv-mx">
-        <div class="card-h"><h3>Quantità</h3><span class="muted small">${it.c.length > 1 ? `scrivi i pezzi per ogni taglia · ${it.c.length} taglie` : `${it.uv > 1 ? `confezione da ${it.uv} pezzi · ` : ''}${pub != null ? `${eur(pub)} cad. al pubblico` : 'prezzo da definire'}`}</span></div>
+        <div class="card-h"><h3>Quantità</h3><span class="muted small">${it.c.length > 1 ? (it.c.every(c => /^taglia/i.test(c[1])) ? `scrivi i pezzi per ogni taglia · ${it.c.length} taglie` : `scrivi i pezzi per ogni versione · ${it.c.length} versioni`) : `${it.uv > 1 ? `confezione da ${it.uv} pezzi · ` : ''}${pub != null ? `${eur(pub)} cad. al pubblico` : 'prezzo da definire'}`}</span></div>
         ${it.c.length > 1 ? `<div class="pv-vr">${it.c.map(c => { const kk = c[0] + '|Pz', pp = pvPub(it.id, c[0]); return `<div class="pv-vrow"><span class="pv-vn"><b>${esc(c[1] || c[0])}</b><small>cod. ${esc(c[0])}${pp != null ? ' · ' + eur(pp) : ''}</small></span><div class="pv-tq"><button type="button" class="pv-tqb" data-pvtq="-1" aria-label="Meno">−</button><input class="pv-qi pv-tqi" data-pvq="${esc(kk)}" inputmode="numeric" value="${q[kk] ? esc(String(q[kk])) : ''}" placeholder="0" aria-label="Quantità ${esc(c[1] || c[0])}"><button type="button" class="pv-tqb" data-pvtq="1" aria-label="Più">+</button></div></div>`; }).join('')}</div>` : `<div class="pv-tq"><button type="button" class="pv-tqb" data-pvtq="-1" aria-label="Meno">−</button><input class="pv-qi pv-tqi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" placeholder="0" aria-label="Quantità"><button type="button" class="pv-tqb" data-pvtq="1" aria-label="Più">+</button></div>`}
       </div>
       <div class="pv-bar"><span id="pv-sum"></span>
