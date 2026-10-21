@@ -292,7 +292,7 @@
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
     $('#fab').hidden = view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#add-top').style.visibility = view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -860,19 +860,27 @@
     sub('');
     renderBackup();
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
-    $('#s-conn').innerHTML = `
-      <div><span>Modalità</span><strong>${isLocal() ? 'Solo su questo dispositivo' : 'Foglio Google'}</strong></div>
-      <div><span>Movimenti</span><strong>${fmtNum(db.movimenti.length, 0)}</strong></div>
-      <div><span>Senza data</span><strong>${fmtNum(nd, 0)}</strong></div>
-      ${!isLocal() ? `<div><span>Versione script</span><strong>${esc(db.v || '—')}</strong></div>` : ''}`;
-    $('#s-pull').hidden = isLocal();
-    $('#s-ai-st').textContent = isLocal() ? 'Disponibile solo con il Foglio Google collegato.' : db.ai ? 'Chiave Gemini attiva. Puoi sostituirla incollandone una nuova.' : 'Incolla la chiave API di Google AI Studio (gratuita). Resta salvata nello script, non nel telefono.';
+    const stat = (l, v, s2) => `<div class="st-stat"><span>${l}</span><b>${v}</b>${s2 ? `<small>${s2}</small>` : ''}</div>`;
+    $('#s-conn').innerHTML = stat('Dati salvati in', isLocal() ? 'Questo dispositivo' : 'Foglio Google') + (!isLocal() ? stat('Versione script', esc(db.v || '—')) : '')
+      + stat('Acquisti attrezzatura', fmtNum(db.movimenti.length, 0), nd ? `${fmtNum(nd, 0)} senza data` : 'tutti con data')
+      + stat('Ordini e fatture', fmtNum(amOrd().length + new Set(lyRows().map(r => r.fattura)).size + faRows().length, 0), 'Amazon, Lyreco, fornitori');
+    $('#s-pull').closest('.st-row').hidden = isLocal();
+    $('#s-ai-st').textContent = isLocal() ? 'Disponibile solo con il Foglio Google collegato.' : db.ai ? 'Chiave Gemini attiva: puoi sostituirla incollandone una nuova.' : 'Nessuna chiave: le funzioni IA sono spente.';
+    $('#s-ai-pill').className = 'st-pill ' + (db.ai && !isLocal() ? 'on' : 'off'); $('#s-ai-pill').textContent = db.ai && !isLocal() ? 'Attiva' : 'Non attiva';
     $('#s-key').disabled = $('#s-key-go').disabled = isLocal();
-    $('#s-classify').hidden = !aiReady();
-    const bud = budget();
-    $('#s-budget').innerHTML = centri().map(c => `<label class="f bud-row"><span>${esc(c)}</span><input type="text" inputmode="decimal" data-bud="${esc(c)}" value="${bud[c] ? esc(String(bud[c]).replace('.', ',')) : ''}" placeholder="Nessun budget"></label>`).join('');
-    $('#s-cc').innerHTML = centri().map(c => `<span class="chip">${esc(c)}<button data-delcc="${esc(c)}" aria-label="Rimuovi">✕</button></span>`).join('');
-    $('#s-cat').innerHTML = categorie().map(c => `<span class="chip">${esc(c)}<button data-delcat="${esc(c)}" aria-label="Rimuovi">✕</button></span>`).join('');
+    $('#s-classify-row').hidden = !aiReady();
+    // piazzali e collegamenti
+    const C = lyCdcList().filter(c => c.cod !== LY_NONE), nn = pzNames(), da = nn.filter(x => x.cod === PZ_NC).length, prop = nn.filter(x => x.how === 'auto' && !x.set).length;
+    $('#s-pz-n').textContent = `${C.length} piazzali (${C.slice(0, 4).map(c => pzName(c.n)).join(', ')}${C.length > 4 ? '…' : ''}) · usati da Lyreco, Amazon e dalla sezione Piazzali.`;
+    $('#s-pz-link').innerHTML = nn.length ? `${nn.length} nomi da attrezzatura, GLS e gasolio${da ? ` · <b class="st-warn">${da} da collegare</b>` : ''}${prop ? ` · ${prop} proposti dall'app da confermare` : ''}${!da && !prop ? ' · tutti collegati' : ''}` : 'Nessun nome da collegare.';
+    // budget
+    const bud = budget(), CC = centri(), spent = c => sumT(db.movimenti.filter(r => r.centro === c));
+    $('#s-budget').innerHTML = `<div class="st-bt"><div class="st-bh"><span>Centro</span><span>Speso registrato</span><span>Budget annuale €</span></div>${CC.map(c => { const v = spent(c), b = num(bud[c]) * (ivaOn ? 1.22 : 1), p0 = b ? v / b : 0; return `<div class="st-br"><b>${esc(c)}</b><span class="st-bs">${eur0(v)}${b ? `<i class="st-bb"><u class="${p0 > 1 ? 'over' : p0 > .8 ? 'near' : ''}" style="width:${Math.min(100, p0 * 100).toFixed(1)}%"></u></i><small class="${p0 > 1 ? 'st-warn' : ''}">${fmtNum(p0 * 100, 0)}% del budget</small>` : '<small>nessun budget</small>'}</span><input type="text" inputmode="decimal" data-bud="${esc(c)}" value="${bud[c] ? esc(String(bud[c]).replace('.', ',')) : ''}" placeholder="—" aria-label="Budget ${esc(c)}"></div>`; }).join('')}</div>`;
+    $('#s-cc').innerHTML = CC.map(c => `<span class="chip">${esc(c)}<button data-delcc="${esc(c)}" aria-label="Rimuovi">✕</button></span>`).join('');
+    $('#s-cc-n').textContent = `${CC.length} centri`;
+    const CA = categorie();
+    $('#s-cat').innerHTML = CA.map(c => `<span class="chip">${esc(c)}<button data-delcat="${esc(c)}" aria-label="Rimuovi">✕</button></span>`).join('');
+    $('#s-cat-n').textContent = `${CA.length} categorie`;
   }
 
   /* ---------- Import Excel ---------- */
@@ -5159,6 +5167,9 @@
       if (v > 0) b[c] = v; else delete b[c];
       setConfig('budget', b); toast('Budget salvato');
     });
+    $('#s-pz-cdc').onclick = () => lyCdcForm();
+    $('#s-pz-lk').onclick = () => pzLinkForm();
+    document.addEventListener('click', e => { const a = e.target.closest('[data-st-go]'); if (!a) return; e.preventDefault(); const t = document.getElementById(a.dataset.stGo); if (t) t.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); });
     const addChip = (inp, key, getter) => { const v = $(inp).value.trim(); if (!v) return; const l = getter(); if (l.includes(v)) return toast('Già presente'); setConfig(key, [...l, key === 'centri' ? v.toUpperCase() : v]); $(inp).value = ''; };
     $('#s-cc-add').onclick = () => addChip('#s-cc-in', 'centri', centri);
     $('#s-cat-add').onclick = () => addChip('#s-cat-in', 'categorie', categorie);
