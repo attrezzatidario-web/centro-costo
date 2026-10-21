@@ -2061,3 +2061,33 @@ body.has-sel .fab { display: none; }
 /* v65: 7 fornitori */
 .pv-brand { grid-template-columns: repeat(7, 58px); } .pv-bi { width: 58px; transform: translateX(calc(var(--i, 0) * 62px)); }
 @media (max-width: 520px) { .pv-brand { grid-template-columns: repeat(7, 41px); gap: 3px; } .pv-bi { width: 41px; transform: translateX(calc(var(--i, 0) * 44px)); } .pv-brand img { height: 22px; } }
+/* v67: menu «Altro» e foto ingrandita */
+.pv-act { position: relative; }
+.pv-more svg circle { fill: currentColor; stroke: none; }
+.pv-more[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.pv-menu { position: absolute; z-index: 60; top: calc(100% + 8px); right: 0; width: min(340px, calc(100vw - 32px)); padding: 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 40px -16px rgba(15, 23, 42, .35); animation: pvmenu .18s ease-out both; }
+@keyframes pvmenu { from { opacity: 0; transform: translateY(-4px); } }
+.pv-mh { padding: 8px 10px 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pv-menu button { display: flex; align-items: flex-start; gap: 11px; width: 100%; padding: 10px; border: 0; border-radius: 10px; background: none; text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.pv-menu button:hover, .pv-menu button:focus-visible { background: var(--bg); outline: none; }
+.pv-menu svg { flex: none; width: 19px; height: 19px; margin-top: 1px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pv-menu b { display: block; font-size: 14px; font-weight: 600; }
+.pv-menu small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-2); line-height: 1.35; }
+.pv-img img, .pv-mki img, .pv-lgx img { cursor: zoom-in; }
+.pv-card .pv-img img, .pv-cat img, label .pv-img img { cursor: inherit; }
+.pv-zoom { position: fixed; inset: 0; z-index: 400; display: flex; flex-direction: column; background: rgba(10, 13, 20, .9); opacity: 0; transition: opacity .2s ease; }
+.pv-zoom.on { opacity: 1; }
+.pv-zbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; color: #fff; }
+.pv-zcap { font-weight: 600; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-zact { display: inline-flex; gap: 8px; flex: none; }
+.pv-zbtn { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .1); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pv-zbtn:hover { background: rgba(255, 255, 255, .2); }
+.pv-zbtn.x { width: 38px; padding: 0; justify-content: center; }
+.pv-zbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pv-zstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px 16px; overflow: auto; }
+.pv-zimg { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; border-radius: 14px; cursor: zoom-in; transition: transform .25s ease; }
+.pv-zoom.big .pv-zstage { align-items: flex-start; justify-content: flex-start; }
+.pv-zoom.big .pv-zimg { max-width: none; max-height: none; width: min(2000px, 220vw); cursor: zoom-out; }
+.pv-zhint { margin: 0; padding: 8px 16px 14px; text-align: center; font-size: 12px; color: rgba(255, 255, 255, .6); }
+@media (max-width: 520px) { .pv-more span { display: none; } .pv-zcap { font-size: 13px; } .pv-zbtn { height: 34px; padding: 0 11px; font-size: 13px; } }
+@media (prefers-reduced-motion: reduce) { .pv-zoom, .pv-zimg, .pv-menu { transition: none; animation: none; } }

@@ -2910,9 +2910,8 @@
         </div>
         <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
-      <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<span class="pv-sha"><button type="button" class="btn sm primary" id="pv-linkadd"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Aggiungi prodotto da link</button><button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button></span>`}</div>
-      <div class="pv-cats">${G.map(card).join('')}</div>
-      ${!pvCli && cfg(pvInfoKey()) ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg(pvInfoKey()).file || '')}» il ${esc(shortDate(cfg(pvInfoKey()).data))} · ${fmtNum(cfg(pvInfoKey()).n || 0, 0)} prodotti</div>` : ''}`;
+      <div class="pv-sh"><h3>Categorie</h3></div>
+      <div class="pv-cats">${G.map(card).join('')}</div>`;
   }
   const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]), multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
     return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
@@ -2948,7 +2947,7 @@
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc) : ''}</span></div>
       <div class="card pv-hd">
-        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pv3dIds(pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])]).length ? '' : ' <em>IA</em>'}</button>` : ''}</div>
+        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}</div>
         <div class="pv-hi">
           <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
@@ -2980,7 +2979,7 @@
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(pvGroupT(it.g))}</span></div>
       <div class="card pv-hd">
-        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pv3dIds(pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])]).length ? '' : ' <em>IA</em>'}</button>` : ''}</div>
+        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}</div>
         <div class="pv-hi">
           <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
@@ -3071,6 +3070,59 @@
       write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify({ ...prev, ...out }) } }, { action: 'upsert', sheet: 'Config', row: { chiave: pvInfoKey(), valore: JSON.stringify({ data: today(), file: file.name, n: acc.size, miss: miss.length }) } }]);
       toast(`Prezzi d'acquisto caricati per ${fmtNum(acc.size, 0)} prodotti`);
     } catch (e) { busy(); toast(e.message); }
+  }
+
+  /* ---------- v67: foto ingrandita (clic su qualsiasi foto) e menu «Altro» dei preventivi ---------- */
+  let pvZoomCtx = null;
+  const pvBig = src => String(src || '').replace(/:t$/, ':f').replace(/([?&])width=\d+/, '$1width=1400');
+  function pvZoomOpen(img) {
+    const csrc = img.dataset.csrc, src = csrc ? pvBig(csrc) : pvBig(img.currentSrc || img.src);
+    if (!src) return;
+    const row = img.closest('[data-pvcol]'), inDet = img.closest('.pv-hm, .pv-t, .pv-vr'), cat = pvCats[pvSup], it = inDet && cat && cat.items.find(x => x.id === pvItem);
+    const c = it ? (row ? it.c.find(x => x[0] === row.dataset.pvcol) : it.c[0]) : null;
+    pvZoomCtx = it ? { sup: pvSup, it: it.id, c: c && c[0] } : null;
+    const cap = it ? `${it.n}${c && c[1] ? ' · ' + c[1] : ''}` : (img.alt || img.closest('[data-pvl]')?.querySelector('b')?.textContent || img.closest('.pv-mkc')?.querySelector('.pv-mkh b')?.textContent || '');
+    let z = $('#pv-zoom'); if (z) z.remove();
+    z = document.createElement('div'); z.id = 'pv-zoom'; z.className = 'pv-zoom'; z.setAttribute('role', 'dialog'); z.setAttribute('aria-label', 'Foto ingrandita');
+    z.innerHTML = `<div class="pv-zbar"><span class="pv-zcap">${esc(cap)}</span><span class="pv-zact">${it && pvImg(cat, c) ? `<button type="button" class="pv-zbtn" data-pv3d="1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D</button>` : ''}<button type="button" class="pv-zbtn x" id="pv-zclose" aria-label="Chiudi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>
+      <div class="pv-zstage"><img class="pv-zimg" alt="${esc(cap)}"></div><p class="pv-zhint">Tocca la foto per ingrandire ancora · Esc per chiudere</p>`;
+    document.body.appendChild(z); document.body.style.overflow = 'hidden';
+    const im = $('.pv-zimg', z);
+    const setSrc = u => { im.src = u; };
+    if (src.startsWith('cimg:')) { im.src = img.src; pvCimg(src).then(d => { if (d) setSrc(d); }); } else { im.src = img.src; const pre = new Image(); pre.onload = () => setSrc(src); pre.src = src; }
+    requestAnimationFrame(() => z.classList.add('on'));
+  }
+  function pvZoomClose() { const z = $('#pv-zoom'); if (!z) return; z.remove(); pvZoomCtx = null; if ($('#sheet').hidden) document.body.style.overflow = ''; }
+  function pvZoomClick(e) {
+    const t = e.target;
+    const z = t.closest('#pv-zoom');
+    if (z) {
+      if (t.closest('#pv-zclose') || t === z || t.classList.contains('pv-zstage')) { pvZoomClose(); e.stopPropagation(); return true; }
+      if (t.classList.contains('pv-zimg')) { z.classList.toggle('big'); e.stopPropagation(); return true; }
+      return false;
+    }
+    if (t.tagName !== 'IMG') return false;
+    if (t.closest('.pv-card, .pv-cat, .pv-brand, label, .pvx-p, .pv-hero, .pv-elogo, #pv-zoom, .pv3d')) return false;
+    if (!t.closest('.pv-img, .pv-mki, .pv-lgx, .pv-mk, .pv-mkc')) return false;
+    e.preventDefault(); e.stopPropagation(); pvZoomOpen(t); return true;
+  }
+  // menu «Altro» nella barra dei preventivi
+  function pvMenuToggle(force) {
+    let m = $('#pv-menu'); const b = $('#pv-more');
+    if (m && force !== true) { m.remove(); b && b.setAttribute('aria-expanded', 'false'); return; }
+    if (m) m.remove();
+    const sup = PV_SUP[pvSup], info = cfg(pvInfoKey());
+    m = document.createElement('div'); m.id = 'pv-menu'; m.className = 'pv-menu'; m.setAttribute('role', 'menu');
+    m.innerHTML = `<div class="pv-mh">${esc(sup.n)}</div>
+      <button type="button" role="menuitem" id="pv-linkadd"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span><b>Aggiungi prodotto da link</b><small>incolla la pagina del prodotto, lo approvi tu</small></span></button>
+      ${pvCli ? '' : `<button type="button" role="menuitem" id="pv-impacq"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 19h14"/></svg><span><b>Importa prezzi d'acquisto</b><small>${info ? `ultimo: «${esc(info.file || '')}» il ${esc(shortDate(info.data))} · ${fmtNum(info.n || 0, 0)} prodotti` : 'listino Excel o CSV del fornitore'}</small></span></button>`}`;
+    b.parentNode.insertBefore(m, b.nextSibling); b.setAttribute('aria-expanded', 'true');
+  }
+  function pvMenuClick(t) {
+    if (t.closest('#pv-more')) { pvMenuToggle(); return true; }
+    if (!t.closest('#pv-menu') && $('#pv-menu')) $('#pv-menu').remove();
+    if (t.closest('#pv-menu [role="menuitem"]')) setTimeout(() => { const m = $('#pv-menu'); if (m) m.remove(); }, 0);
+    return false;
   }
   /* ---------- v62: prodotti nuovi da un link (per ogni fornitore, dopo l'approvazione) ---------- */
   // salvati nel Foglio Google in Config «pvExtra» = { fornitore: [scheda, …] }; foto nel Drive (cimg:drv:id)
@@ -6427,7 +6479,8 @@
     });
     $('#sheet-del').onclick = () => { if (onDelete && onDelete() === true) closeSheet(); };
     $$('[data-close]').forEach(b => (b.onclick = closeSheet));
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#pv-zoom')) { pvZoomClose(); return; } if (e.key === 'Escape' && $('#pv-menu')) { $('#pv-menu').remove(); return; } if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+    document.addEventListener('click', e => { if (pvZoomClick(e)) return; if (pvMenuClick(e.target)) { e.stopPropagation(); } }, true);
     $('#fab').onclick = () => view === 'gasolio' ? formGas() : view === 'fatture' ? (aiReady() ? readFatAI() : formFat()) : formMov(); $('#add-top').onclick = () => formMov();
 
     document.addEventListener('click', e => {
@@ -6509,7 +6562,7 @@
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-work')) { pvWorkPdf(); return; }
-      if (t.closest('[data-pv3d]')) { const cat = pvCats[pvSup], it = cat && cat.items.find(x => x.id === pvItem); if (it) pv3dOpen(pvSup, it, it.c[0]); return; }
+      if (t.closest('[data-pv3d]')) { const z = pvZoomCtx || {}, cat = pvCats[z.sup || pvSup], it = cat && cat.items.find(x => x.id === (z.it || pvItem)); if (it) { pvZoomClose(); pv3dOpen(z.sup || pvSup, it, it.c.find(c => c[0] === z.c) || it.c[0]); } return; }
       const tq = t.closest('[data-pvtq]'); if (tq) { const inp = (tq.closest('.pv-tq') || document).querySelector('.pv-tqi'); if (inp) { inp.value = Math.max(0, Math.round(num(inp.value)) + Number(tq.dataset.pvtq)) || ''; inp.dispatchEvent(new Event('input', { bubbles: true })); } return; }
       const lgs = t.closest('[data-pvlgset]'); if (lgs) { pvLogoSet(lgs.dataset.pvlgset); return; }
       const lgd = t.closest('[data-pvlgdel]'); if (lgd) { const p = pvFromForm(); if (!p || !p.loghi) return; const s0 = lgd.dataset.pvlgdel; if (!confirm(`Togliere il logo ${s0 === 'f' ? 'del fronte' : 'della schiena'} da questo preventivo?`)) return; p.loghi[s0] = null; p.righe.forEach(l => { l[s0 === 'f' ? 'lf' : 'lr'] = false; }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
