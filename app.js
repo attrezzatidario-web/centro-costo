@@ -2760,13 +2760,13 @@
   /* =========================================================
      PREVENTIVI PAYPER E JRC — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: '' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' } };
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc}`); }); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
@@ -2774,9 +2774,12 @@
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
   const pvAcq = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
   const pvPub = (it, col) => { const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
+  const pvCode = it => /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
+  const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
   const pvImg = (cat, c) => c && c[4] ? (/^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
   // colori: tinta indicativa dal nome
-  const PV_COL = [['GIALLO FLUO', '#e4ff1a'], ['ARANCIONE FLUO', '#ff6a13'], ['FUCSIA FLUO', '#ff2aa6'], ['VERDE FLUO', '#5dff3a'], ['ROSA FLUO', '#ff5fb0'], ['GRIGIO MELANGE', '#a8aaad'], ['LIGHT BLU ROYAL', '#4f6fd6'], ['BLU ROYAL', '#2643a6'], ['BLU NAVY', '#1d2b4c'], ['BLU ATOLLO', '#1493c9'], ['BLU JEANS', '#3d5a80'], ['AZZURRO', '#79c1ee'], ['VERDE MILITARE', '#4b5320'], ['VERDE ACIDO', '#a3d12f'], ['JELLY GREEN', '#3fbf62'], ['EMERALD GREEN', '#009b77'], ['VERDE BOTTIGLIA', '#0f4d2c'], ['LIME LIGHT', '#f3ea8f'], ['AQUAMARINE', '#5fd3c4'], ['SUMMER VIOLET', '#8e6fc1'], ['HOT CORAL', '#f2545b'], ['ROSA SHADOW', '#f1b7c8'], ['ANTRACITE', '#3b3e42'], ['SMOKE', '#5b5e62'], ['BORDEAUX', '#7a1f2b'], ['ARANCIONE', '#f47b20'], ['GIALLO', '#f7d417'], ['ROSSO', '#c8102e'], ['VERDE', '#1f8a3b'], ['BIANCO', '#ffffff'], ['NERO', '#151515'], ['GRIGIO', '#8a8d91'], ['FUCSIA', '#d6247b'], ['ROSA', '#f4a6c0'], ['MARRONE', '#6b4226'], ['BEIGE', '#d8c7a3'], ['SABBIA', '#d9c9a0'], ['KAKI', '#8f8455'], ['VIOLA', '#6b3fa0'], ['TURCHESE', '#20b2aa'], ['CELESTE', '#a6d4f2'], ['ORO', '#c9a227'], ['ARGENTO', '#c0c0c0'], ['NATURALE', '#efe6d2'], ['CORDA', '#cbb994'], ['MIMETICO', 'linear-gradient(135deg,#4b5320 0 33%,#8f8455 33% 66%,#3b2f1e 66%)']];
+  const PV_COL = [['GIALLO FLUO', '#e4ff1a'], ['ARANCIONE FLUO', '#ff6a13'], ['FUCSIA FLUO', '#ff2aa6'], ['VERDE FLUO', '#5dff3a'], ['ROSA FLUO', '#ff5fb0'], ['GRIGIO MELANGE', '#a8aaad'], ['LIGHT BLU ROYAL', '#4f6fd6'], ['BLU ROYAL', '#2643a6'], ['BLU NAVY', '#1d2b4c'], ['BLU ATOLLO', '#1493c9'], ['BLU JEANS', '#3d5a80'], ['AZZURRO', '#79c1ee'], ['VERDE MILITARE', '#4b5320'], ['VERDE ACIDO', '#a3d12f'], ['JELLY GREEN', '#3fbf62'], ['EMERALD GREEN', '#009b77'], ['VERDE BOTTIGLIA', '#0f4d2c'], ['LIME LIGHT', '#f3ea8f'], ['AQUAMARINE', '#5fd3c4'], ['SUMMER VIOLET', '#8e6fc1'], ['HOT CORAL', '#f2545b'], ['ROSA SHADOW', '#f1b7c8'], ['ANTRACITE', '#3b3e42'], ['SMOKE', '#5b5e62'], ['BORDEAUX', '#7a1f2b'], ['ARANCIONE', '#f47b20'], ['GIALLO', '#f7d417'], ['ROSSO', '#c8102e'], ['VERDE', '#1f8a3b'], ['BIANCO', '#ffffff'], ['NERO', '#151515'], ['GRIGIO', '#8a8d91'], ['FUCSIA', '#d6247b'], ['ROSA', '#f4a6c0'], ['MARRONE', '#6b4226'], ['BEIGE', '#d8c7a3'], ['SABBIA', '#d9c9a0'], ['KAKI', '#8f8455'], ['VIOLA', '#6b3fa0'], ['TURCHESE', '#20b2aa'], ['CELESTE', '#a6d4f2'], ['ORO', '#c9a227'], ['ARGENTO', '#c0c0c0'], ['NATURALE', '#efe6d2'], ['CORDA', '#cbb994'], ['MIMETICO', 'linear-gradient(135deg,#4b5320 0 33%,#8f8455 33% 66%,#3b2f1e 66%)'],
+    ['YELLOW FLUO', '#e4ff1a'], ['YELLOWFLUO', '#e4ff1a'], ['ORANGE FLUO', '#ff6a13'], ['GREEN FLUO', '#5dff3a'], ['FUCSIA FLUO', '#ff2aa6'], ['CAMOUFLAG', 'linear-gradient(135deg,#4b5320 0 33%,#8f8455 33% 66%,#3b2f1e 66%)'], ['ARMY GREE', '#4b5320'], ['DARK GREEN', '#0f4d2c'], ['FOREST', '#1f4d2b'], ['IRISH GREEN', '#1f9a4a'], ['MEDIUM GREEN', '#2e8b57'], ['LIGHT GREEN', '#8fd18b'], ['SUNNY LIME', '#d4e157'], ['LIME', '#a3d12f'], ['DARK MELANGE', '#6d7075'], ['LIGHT MELANGE', '#c9cbce'], ['VULCAN', '#3b3e42'], ['MELANGE', '#a8aaad'], ['LIGHT GREY', '#c4c6c9'], ['COOL GREY', '#9ea2a8'], ['MEDIUM GREY', '#7d8186'], ['DARK GREY', '#4a4d51'], ['DARK NAVY', '#141d33'], ['NAVY', '#1d2b4c'], ['ROYAL', '#2643a6'], ['LIGHT SKY', '#a6d4f2'], ['SKY', '#79c1ee'], ['LIGHT BLUE', '#a6d4f2'], ['AVIO', '#5d7fa3'], ['DENIM', '#3d5a80'], ['INDIGO', '#2e3a6b'], ['BLUE', '#24439a'], ['BLACK', '#151515'], ['WHITE OFF', '#f3efe4'], ['WHITE', '#ffffff'], ['DARK RED', '#8b1a1a'], ['RED MINERAL', '#9e2a2b'], ['RASPBERRY', '#c22a5a'], ['RED', '#c8102e'], ['BURGUNDY', '#7a1f2b'], ['ORANGE', '#f47b20'], ['MUSTARD', '#d9a321'], ['YELLOW', '#f7d417'], ['GREEN', '#1f8a3b'], ['GREY', '#8a8d91'], ['KHAKI', '#8f8455'], ['SAND', '#d9c9a0'], ['BROWN', '#6b4226'], ['CHOCOLATE', '#4a2c1d'], ['TOBACCO', '#7b5230'], ['DRIFTWOOD', '#8b7d6b'], ['PINK', '#f4a6c0'], ['LIGHT VIOLET', '#b9a6dd'], ['LAVANDER', '#b9a6dd'], ['VIOLET', '#6b3fa0'], ['CORAL', '#f2545b'], ['CREAM', '#f1e7cf'], ['ICE', '#dfeff6'], ['STELLAR', '#2b3a55']];
   const pvHex = name => { const N = amNorm(name), parts = N.split('/').map(s => s.trim()).filter(Boolean); const one = p => { const h = PV_COL.find(([k]) => p.includes(k)); return h ? h[1] : '#c9ccd1'; }; if (parts.length > 1) { const a = one(parts[0]), b = one(parts[1]); return a.startsWith('linear') ? a : `linear-gradient(135deg,${a} 0 55%,${b} 55%)`; } return one(N); };
   const pvSw = name => `<i class="pv-sw" style="background:${pvHex(name)}" title="${esc(name)}"></i>`;
   const pvThumb = (cat, it, c, cls = '') => { const cc = c || it.c[0], u = pvImg(cat, cc), sm = cls === 'sm'; return `<span class="pv-img ${cls}${u ? ' has' : ''}"${sm ? ` style="--sw:${pvHex(cc[1])}"` : ''}>${u ? `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${sm ? '' : `<b>${esc(it.n.split(/\s+/).map(w => w[0]).join('').slice(0, 2))}</b>`}</span>`; };
@@ -2812,7 +2815,7 @@
     document.body.classList.toggle('pv-cli', pvCli);
     const body = $('#pv-body');
     const anim = pvAnim && !reduced(); pvAnim = false; body.classList.toggle('cc-anim', anim);
-    if (pvTab === 'prev') { pvEdit ? pvEditor(body) : pvQuotes(body); if (pvEdit && !pvCats.payper) pvLoad('payper').then(() => { if (view === 'preventivi' && pvTab === 'prev' && pvEdit && !$('#pv-ed :focus')) renderPv(); }).catch(() => {}); return; }
+    if (pvTab === 'prev') { pvEdit ? pvEditor(body) : pvQuotes(body); const need = pvEdit ? [...new Set(((pvGet(pvEdit) || {}).righe || []).map(l => l.sup || 'payper'))].filter(x => !pvCats[x]) : []; if (need.length) Promise.all(need.map(pvLoad)).then(() => { if (view === 'preventivi' && pvTab === 'prev' && pvEdit && !$('#pv-ed :focus')) renderPv(); }).catch(() => {}); return; }
     if (!PV_SUP[pvSup].file) { body.innerHTML = `<div class="card pv-empty"><img class="pv-elogo" src="logo-${pvSup}.svg" alt="${esc(PV_SUP[pvSup].n)}"><h3>Catalogo ${esc(PV_SUP[pvSup].n)} in arrivo</h3><p>Mandami il listino ${esc(PV_SUP[pvSup].n)} (Excel o CSV) e lo carico come quello di Payper: ricerca, taglie, colori e prezzi.</p></div>`; return; }
     let cat = pvCats[pvSup];
     if (!cat) { body.innerHTML = '<div class="card"><div class="empty">Carico il catalogo…</div></div>'; try { cat = await pvLoad(pvSup); } catch (e) { body.innerHTML = `<div class="card"><div class="empty">Catalogo non caricato: ${esc(e.message)}</div></div>`; return; } if (view !== 'preventivi') return; }
@@ -2824,26 +2827,26 @@
   }
   // macro-categorie del catalogo (le classi del listino raggruppate)
   const PV_GROUPS = [
-    { k: 'tshirt', t: 'T-shirt', s: 'manica corta, lunga, canotte', re: /^T-SHIRT$/ },
+    { k: 'tshirt', t: 'T-shirt', s: 'manica corta, lunga, canotte', re: /^T-SHIRT$|^CANOTTE/ },
     { k: 'polo', t: 'Polo', s: 'manica corta e lunga', re: /^POLO/ },
     { k: 'felpe', t: 'Felpe e pile', s: 'zip, cappuccio, girocollo, pile', re: /^FELPE|^PILE|^MAGLION|^MAGLIERIA/ },
     { k: 'camicie', t: 'Camicie', s: 'lavoro e ufficio', re: /^CAMICIE/ },
-    { k: 'giacche', t: 'Giacche e giubbotti', s: 'soft-shell, imbottiti, antipioggia', re: /^GIUBBOTTI|^SOFT-SHELL|^4-SEASON|^SET ANTI PIOGGIA|^GIACCHE PROFESSIONALI/ },
+    { k: 'giacche', t: 'Giacche e giubbotti', s: 'soft-shell, imbottiti, antipioggia', re: /^GIUBBOTTI|^GIUBBINI|^SOFT[- ]SHELL|^4-SEASON|^SET ANTI PIOGGIA|^GIACCHE PROFESSIONALI/ },
     { k: 'gilet', t: 'Gilet', s: 'imbottiti e da lavoro', re: /^GILET/ },
     { k: 'pantaloni', t: 'Pantaloni e bermuda', s: 'lavoro, felpa, denim, tute', re: /^PANTALONI(?! TERMICI)|^BERMUDA|^DENIM|^TUTE/ },
     { k: 'prof', t: 'Abbigliamento professionale', s: 'camici, casacche, cucina', re: /^CAMICI|^CASACCHE|^GIACCHE DA CUOCO|^GREMBIULI|^T-SHIRT PROFESSIONALI/ },
     { k: 'scarpe', t: 'Scarpe di sicurezza', s: 'S1, S2, S3', re: /^SCARPE/ },
     { k: 'guanti', t: 'Guanti', s: 'antitaglio, spalmati, pelle', re: /^GUANTI/ },
     { k: 'dpi', t: 'DPI e protezione', s: 'saldatura, protezione, visiere', re: /^ACCESSORI (PROTEZIONE|DI PROTEZIONE|ANTITAGLIO|PER SALDATURE)|^VISIERA/ },
-    { k: 'intimo', t: 'Intimo e termico', s: 'maglie termiche, calzini, boxer', re: /^MAGLIE TERMICHE|^PANTALONI TERMICI|^BOXER|^SLIP|^COSTUMI|^CALZINI/ },
-    { k: 'acc', t: 'Cappellini e accessori', s: 'cappellini, zaini, sacche', re: /^CAPPELLINI|^COPRICAPO|^BERRETTI|^ZAINI|^SACCHE|^ACCESSORI$|^MERCHANDISING/ }
+    { k: 'intimo', t: 'Intimo e termico', s: 'maglie termiche, calzini, boxer', re: /^INTIMO|^MAGLIE TERMICHE|^PANTALONI TERMICI|^BOXER|^SLIP|^COSTUMI|^CALZINI/ },
+    { k: 'acc', t: 'Cappellini e accessori', s: 'cappellini, zaini, sacche', re: /^CAPPELLI|^COPRICAPO|^BERRETTI|^ZAINI|^SACCHE|^ACCESSORI$|^MERCHANDISING/ }
   ];
   const pvGroupOf = cl => { const order = ['prof', 'intimo', 'dpi']; const g = [...PV_GROUPS.filter(x => order.includes(x.k)), ...PV_GROUPS.filter(x => !order.includes(x.k))].find(x => x.re.test(cl)); return g ? g.k : 'altro'; };
   let pvGroup = '', pvSort = '';
   const pvGroupT = k => (PV_GROUPS.find(g => g.k === k) || { t: 'Altro' }).t;
   const pvMinPub = it => { const v = it.c.map(c => pvPub(it.id, c[0])).filter(x => x != null); return v.length ? Math.min(...v) : null; };
   // colore più «pulito» per la foto di copertina
-  const pvCover = it => it.c.find(c => /^BIANCO$/.test(c[1])) || it.c.find(c => /^(NERO|BLU NAVY|GRIGIO)/.test(c[1])) || it.c[0];
+  const pvCover = it => it.c.find(c => /^(BIANCO|WHITE)$/.test(c[1])) || it.c.find(c => /^(NERO|BLU NAVY|GRIGIO|BLACK|NAVY|GREY)$/.test(c[1])) || it.c[0];
   function pvCatalog(body, cat) {
     cat.items.forEach(it => { if (!it.g) it.g = pvGroupOf(it.cl); });
     if (!pvQ && !pvGroup) return pvHome(body, cat);
@@ -2888,12 +2891,12 @@
       <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
       <div class="pv-cats">${G.map(card).join('')}</div>
       ${used.length ? `<div class="pv-sh"><h3>Usati di recente nei preventivi</h3></div><div class="pv-grid pv-recent">${used.map((it, i) => pvCardHtml(cat, it, i)).join('')}</div>` : ''}
-      ${!pvCli && cfg('ppAcqInfo') && pvSup === 'payper' ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg('ppAcqInfo').file || '')}» il ${esc(shortDate(cfg('ppAcqInfo').data))} · ${fmtNum(cfg('ppAcqInfo').n || 0, 0)} prodotti</div>` : ''}`;
+      ${!pvCli && cfg(pvInfoKey()) ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg(pvInfoKey()).file || '')}» il ${esc(shortDate(cfg(pvInfoKey()).data))} · ${fmtNum(cfg(pvInfoKey()).n || 0, 0)} prodotti</div>` : ''}`;
   }
   const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]), multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
     return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
       ${pvThumb(cat, it, c0)}
-      <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(it.id)} · ${esc(it.cl.toLowerCase())}${it.sc ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
+      <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(pvCode(it))} · ${esc(it.cl.toLowerCase())}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
         <span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>
         <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${eur(acq)}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>`}</span></span>
     </button>`; };
@@ -2921,11 +2924,11 @@
     const cell = (c, si) => { if (!c[3].includes(si)) return '<td class="pv-na"></td>'; const k = c[0] + '|' + it.sz[si], pub = pvPub(it.id, c[0]); return `<td><input class="pv-qi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" aria-label="${esc(c[1])} taglia ${esc(it.sz[si])}"><small>${pub != null ? eur(pub) : '—'}</small></td>`; };
     const quotes = pvList().filter(p => p.stato === 'bozza' || p.stato === 'inviato');
     body.innerHTML = `${pvBanner()}
-      <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc ? ' · ' + esc(it.sc) : ''}</span></div>
+      <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc) : ''}</span></div>
       <div class="card pv-hd">
         <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}</div>
         <div class="pv-hi">
-          <span class="pv-code">${esc(it.id)}</span>
+          <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
           <p>${esc(it.d)}</p>
           <div class="pv-spec">${[['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? `${it.pk} pz` : ''], ['Cartone', it.ct ? `${it.ct} pz` : ''], ['Taglie', it.sz.join(' · ')], ['Colori', String(it.c.length)]].filter(x => x[1]).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
@@ -2933,7 +2936,7 @@
         <div class="pv-prices">${pvCli ? (() => { const ps = [...new Set(it.c.map(c => pvPub(it.id, c[0])).filter(v => v != null))].sort((a, b) => a - b); return `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${ps.length ? (ps.length > 1 ? `${eur(ps[0])} – ${eur(ps[ps.length - 1])}` : eur(ps[0])) : '—'}</b><small>a pezzo · IVA esclusa</small></div>`; })() : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
           <div class="pv-pf"><span>Prezzo al pubblico</span><b id="pv-pub">${base !== '' ? eur(r2(num(base) * ric)) : '—'}</b><small>acquisto × ${fmtNum(ric, 2).replace(/,00$/, '')}</small></div>
-          <div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>prezzo di riferimento del fornitore</small></div>
+          <div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>${it.pl && cat.pl ? it.pl.map((v, i) => v ? `${cat.pl[i]} ${eur(v)}` : '').filter(Boolean).join(' · ') : 'prezzo di riferimento del fornitore'}</small></div>
           <label class="pv-tgl"><input type="checkbox" id="pv-percol"${perCol ? ' checked' : ''}><span>Prezzo d'acquisto diverso per colore</span></label>`}
         </div>
       </div>
@@ -2983,19 +2986,21 @@
       if (/\.(csv|txt)$/i.test(file.name)) aoa = amCsv(await file.text());
       else { await loadXlsx(); const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }); aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
       busy();
-      const hi = aoa.findIndex(r => r.some(c => /^(articolo|nome|prodotto|itemname|modello)$/.test(nh(c))) && r.some(c => /^prezzo|^price|^costo/.test(nh(c))));
-      if (hi < 0) throw new Error('Non trovo le colonne «Articolo» e «Prezzo»');
+      const hi = aoa.findIndex(r => r.some(c => /^(articolo|nome|prodotto|itemname|modello|codice|codicearticolo|itemid)$/.test(nh(c))) && r.some(c => /^prezzo|^price|^costo|^przacquisto|^acquisto/.test(nh(c))));
+      if (hi < 0) throw new Error('Non trovo le colonne «Articolo» (o «Codice») e «Prezzo»');
       const H = aoa[hi].map(nh), col = re => H.findIndex(h => re.test(h));
-      const C = { a: col(/^(articolo|nome|prodotto|itemname|modello)$/), c: col(/^(colore|colour|color|coloredescrizione)$/), p: col(/^prezzo|^price|^costo/), id: col(/^(itemid|codicearticolo|codice)$/), m: col(/^marchio|^brand/) };
+      const C = { a: col(/^(articolo|nome|prodotto|itemname|modello)$/), c: col(/^(colore|colour|color|coloredescrizione)$/), p: col(/^prezzo|^price|^costo|^przacquisto|^acquisto/), id: col(/^(itemid|codicearticolo|codice)$/), m: col(/^marchio|^brand/) };
       const K = s2 => String(s2 || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const byN = new Map(cat.items.map(it => [K(it.n), it])), byId = new Map(cat.items.map(it => [String(it.id), it]));
+      const byN = new Map(cat.items.map(it => [K(it.n), it])), byId = new Map(cat.items.map(it => [String(it.id), it])), byCode = new Map(cat.items.flatMap(it => it.c.map(c => [K(c[0]), [it, c]])));
+      cat.items.forEach(it => { const k = K(`${it.n} ${it.sc}`); if (!byN.has(k)) byN.set(k, it); });
       const acc = new Map(), miss = []; let n = 0;
       aoa.slice(hi + 1).forEach(r => {
-        const a = String(r[C.a] || '').trim(), pr = amNum(r[C.p]); if (!a || !(pr > 0)) return;
+        const a = String(C.a >= 0 ? r[C.a] || '' : '').trim(), pr = amNum(r[C.p]), cod = C.id >= 0 ? K(r[C.id]) : ''; if (!(a || cod) || !(pr > 0)) return;
+        if (cod && byCode.has(cod)) { const [it0, c0] = byCode.get(cod); const e0 = acc.get(it0.id) || { it: it0, all: [], col: {} }; acc.set(it0.id, e0); e0.col[c0[0]] = pr; n++; return; }
         const colN = C.c >= 0 ? String(r[C.c] || '').trim() : '';
         let it = (C.id >= 0 && byId.get(String(r[C.id]).trim())) || byN.get(K(a)), only = null;
         if (!it) { const m = a.toUpperCase().match(/^(.*?)\s*(MELANGE|FLUO)$/); if (m && byN.get(K(m[1]))) { it = byN.get(K(m[1])); only = m[2]; } }
-        if (!it) { miss.push(a); return; }
+        if (!it) { miss.push(a || String(r[C.id])); return; }
         const e = acc.get(it.id) || { it, all: [], col: {} }; acc.set(it.id, e);
         const cols = colN ? it.c.filter(c => K(c[1]) === K(colN)) : only ? it.c.filter(c => c[1].toUpperCase().includes(only)) : null;
         if (cols && !cols.length && colN) { miss.push(`${a} · ${colN}`); return; }
@@ -3012,7 +3017,7 @@
       });
       const prev = pvAcqMap(), changed = Object.keys(out).filter(k => JSON.stringify(prev[k]) !== JSON.stringify(out[k])).length;
       if (!confirm(`File «${file.name}»\n${fmtNum(n, 0)} prezzi letti → ${fmtNum(acc.size, 0)} prodotti del catalogo ${cat.nome} (${fmtNum(changed, 0)} nuovi o cambiati).\n${miss.length ? `${miss.length} righe non trovate nel catalogo (es. ${[...new Set(miss)].slice(0, 3).join(', ')}).\n` : ''}I prezzi si salvano nel tuo Foglio Google (privato), non sul sito. Il prezzo al pubblico diventa il doppio.\nImportare?`)) return;
-      write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify({ ...prev, ...out }) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcqInfo', valore: JSON.stringify({ data: today(), file: file.name, n: acc.size, miss: miss.length }) } }]);
+      write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify({ ...prev, ...out }) } }, { action: 'upsert', sheet: 'Config', row: { chiave: pvInfoKey(), valore: JSON.stringify({ data: today(), file: file.name, n: acc.size, miss: miss.length }) } }]);
       toast(`Prezzi d'acquisto caricati per ${fmtNum(acc.size, 0)} prodotti`);
     } catch (e) { busy(); toast(e.message); }
   }
