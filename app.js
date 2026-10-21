@@ -3249,23 +3249,61 @@
     if (x1 < 0 || x1 - x0 < W * .25 || y1 - y0 < H * .25) return { x0: .1, y0: .08, x1: .9, y1: .95 };
     return { x0: x0 / W, y0: y0 / H, x1: (x1 + 1) / W, y1: (y1 + 1) / H };
   }
-  // riquadro del logo [ymin, xmin, ymax, xmax] 0..1000: centro dall'IA (se c'è), misure standard (cuore ≈ 8-9 cm, schiena ≈ 25-28 cm)
   // posizione standard [centro x, centro y, larghezza, rapporto altezza] rispetto all'ingombro del capo
-  const PV_POS = { top: { f: [.665, .27, .16, 1], r: [.5, .33, .42, .72] }, pant: { f: [.70, .17, .14, 1], r: [.5, .1, .2, .6] }, cap: { f: [.5, .4, .34, .55], r: [.5, .45, .24, .6] }, altro: { f: [.5, .45, .3, .8], r: [.5, .45, .3, .8] } };
-  function pvBox(o, slot, kind, ai) {
-    const g = pvGBox(o), gw = g.x1 - g.x0, gh = g.y1 - g.y0, ar = o.w / o.h, P = PV_POS[pvGrp(kind)][slot];
+  const PV_POS = { top: { f: [.64, .30, .15, 1], r: [.5, .33, .40, .72] }, pant: { f: [.70, .17, .14, 1], r: [.5, .1, .2, .6] }, cap: { f: [.5, .4, .34, .55], r: [.5, .45, .24, .6] }, altro: { f: [.5, .45, .3, .8], r: [.5, .45, .3, .8] } };
+  // dove va il logo: { cx, cy, w, h, rot } in frazioni dell'immagine (w = larghezza massima, h = altezza massima)
+  // priorità: posizione sistemata a mano > punti del capo trovati dall'IA > riquadro IA > posizione standard
+  function pvPlace(o, slot, kind, ai, fix) {
+    const ar = o.w / o.h, grp = pvGrp(kind), P = PV_POS[grp][slot];
+    if (fix && fix.w) return { cx: fix.cx, cy: fix.cy, w: fix.w, h: fix.h || fix.w * ar, rot: fix.rot || 0 };
+    const g = pvGBox(o), gw = g.x1 - g.x0, gh = g.y1 - g.y0;
+    const lm = ai && ai.lm;
+    if (lm && grp === 'top') {
+      // punti: scollo (centro sotto il colletto), ascella e spalla del lato sinistro di chi lo indossa (in coordinate 0..1)
+      const sc = lm.sc, as = lm.as, sp = lm.sp;
+      if (sc && as) {
+        const half = Math.abs(as[0] - sc[0]), dy = as[1] - sc[1];
+        if (half > .06 && dy > .03) {
+          if (slot === 'f') {
+            const dir = Math.sign(as[0] - sc[0]) || 1, w = half * .38;
+            return { cx: sc[0] + dir * half * .5, cy: sc[1] + dy * .62, w, h: w * ar * 1.05, rot: 0 };
+          }
+          const w = half * 1.25;
+          return { cx: sc[0], cy: sc[1] + dy * .55, w, h: w * ar * .7, rot: 0 };
+        }
+      }
+    }
     let cx = g.x0 + gw * P[0], cy = g.y0 + gh * P[1];
     if (ai && ai.b) { cx = Math.min(g.x1, Math.max(g.x0, (ai.b[1] + ai.b[3]) / 2000)); cy = Math.min(g.y1, Math.max(g.y0, (ai.b[0] + ai.b[2]) / 2000)); }
-    const w = gw * P[2], h = w * ar * P[3];
-    return [(cy - h / 2) * 1000, (cx - w / 2) * 1000, (cy + h / 2) * 1000, (cx + w / 2) * 1000];
+    // foto ravvicinate (il capo tocca i bordi): logo più piccolo
+    const crop = (g.x0 < .02 ? 1 : 0) + (g.x1 > .98 ? 1 : 0) + (g.y1 > .98 ? 1 : 0);
+    const w = gw * P[2] * (crop >= 2 ? .75 : 1);
+    return { cx, cy, w, h: w * ar * P[3], rot: 0 };
   }
-  function pvCompose(base, logo, b) {
-    const cv = document.createElement('canvas'); cv.width = base.w; cv.height = base.h; const x = cv.getContext('2d');
-    x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(base.im, 0, 0, cv.width, cv.height);
-    const bx = b[1] / 1000 * cv.width, by = b[0] / 1000 * cv.height, bw = (b[3] - b[1]) / 1000 * cv.width, bh = (b[2] - b[0]) / 1000 * cv.height;
-    const k = Math.min(bw / logo.w, bh / logo.h), lw = logo.w * k, lh = logo.h * k;
-    x.imageSmoothingQuality = 'high'; x.globalAlpha = .97; x.drawImage(logo.im, bx + (bw - lw) / 2, by + (bh - lh) / 2, lw, lh); x.globalAlpha = 1;
-    return { d: cv.toDataURL('image/jpeg', .93), w: cv.width, h: cv.height };
+  // mette il logo sul capo come se fosse stampato: segue pieghe e ombre del tessuto
+  function pvCompose(base, logo, pl, canvas) {
+    const W = base.w, H = base.h, cv = canvas || document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.drawImage(base.im, 0, 0, W, H);
+    const k = Math.min(pl.w * W / logo.w, pl.h * H / logo.h), lw = logo.w * k, lh = logo.h * k, cx = pl.cx * W, cy = pl.cy * H;
+    if (!(lw > 1 && lh > 1)) return { d: cv.toDataURL('image/jpeg', .93), w: W, h: H };
+    const r = Math.ceil(Math.hypot(lw, lh) / 2) + 2, x0 = Math.max(0, Math.floor(cx - r)), y0 = Math.max(0, Math.floor(cy - r)), x1 = Math.min(W, Math.ceil(cx + r)), y1 = Math.min(H, Math.ceil(cy + r)), rw = x1 - x0, rh = y1 - y0;
+    if (rw < 2 || rh < 2) return { d: cv.toDataURL('image/jpeg', .93), w: W, h: H };
+    const L = document.createElement('canvas'); L.width = rw; L.height = rh; const lx = L.getContext('2d');
+    lx.imageSmoothingQuality = 'high'; lx.translate(cx - x0, cy - y0); lx.rotate((pl.rot || 0) * Math.PI / 180); lx.drawImage(logo.im, -lw / 2, -lh / 2, lw, lh);
+    try {
+      const ld = lx.getImageData(0, 0, rw, rh), bd = x.getImageData(x0, y0, rw, rh), a = ld.data, b = bd.data;
+      let s = 0, n = 0; for (let i = 0; i < a.length; i += 4) if (a[i + 3] > 30) { s += .299 * b[i] + .587 * b[i + 1] + .114 * b[i + 2]; n++; }
+      const avg = n ? s / n : 128;
+      for (let i = 0; i < a.length; i += 4) {
+        if (!a[i + 3]) continue;
+        const lum = .299 * b[i] + .587 * b[i + 1] + .114 * b[i + 2], f = Math.max(-.2, Math.min(.16, (lum - avg) / 255 * 1.25));
+        const m = f < 0 ? 1 + f : 1, add = f > 0 ? f * 255 * .5 : 0;
+        a[i] = Math.min(255, a[i] * m + add); a[i + 1] = Math.min(255, a[i + 1] * m + add); a[i + 2] = Math.min(255, a[i + 2] * m + add); a[i + 3] = a[i + 3] * .96;
+      }
+      lx.setTransform(1, 0, 0, 1, 0, 0); lx.putImageData(ld, 0, 0);
+    } catch {}
+    x.drawImage(L, x0, y0);
+    return { d: cv.toDataURL('image/jpeg', .93), w: W, h: H };
   }
   const pvShortUrl = u => String(u || '').replace(/^https:\/\/www\.payperwear\.com\/flex\/AppData\/Redational\/ppw2025\/img\//, 'p:').replace(/^https:\/\/www\.jamesross\.it\/images\/products\//, 'j:');
   const pvCfgMap = k => { const c = cfg(k); return c && typeof c === 'object' ? { ...c } : {}; };
@@ -3274,13 +3312,15 @@
   const pvAiFail = e => { if (e instanceof AuthError) throw e; const m = String(e && e.message || e); if (/sconosciuta|quota|billing|not found|non supportat|permission|API key/i.test(m)) pvAiOff = true; pvAiMsg = m; };
   // l'IA guarda la foto e indica dove va il logo (risultato salvato: non lo richiede più)
   async function pvAiBox(url, o, slot, kind) {
-    const key = slot + '|' + pvShortUrl(url), M = pvCfgMap('pvLogoAI');
+    const key = 'v2' + slot + '|' + pvShortUrl(url), M = pvCfgMap('pvLogoAI');
     if (M[key]) return M[key];
     if (!pvAiCan()) return null;
     try {
       const r = await api('ai', { task: 'logoPos', vista: slot, tipo: kind || 'top', mime: 'image/jpeg', image: o.d.split(',')[1] });
       const b = r && (r.box || r.box_2d); if (!Array.isArray(b) || b.length !== 4) return null;
       const v = { b: b.map(n => Math.max(0, Math.min(1000, Math.round(Number(n) || 0)))), c: String(r.capo || '').slice(0, 10) };
+      const pt = q => Array.isArray(q) && q.length === 2 && q.every(n => isFinite(Number(n))) ? [Math.round(Number(q[1])) / 1000, Math.round(Number(q[0])) / 1000] : null; // [y, x] 0..1000 → [x, y] 0..1
+      if (r.punti) { const lm = { sc: pt(r.punti.scollo), as: pt(r.punti.ascella_sinistra), sp: pt(r.punti.spalla_sinistra) }; if (lm.sc && lm.as) v.lm = lm; }
       const keys = Object.keys(M); if (keys.length > 380) keys.slice(0, keys.length - 380).forEach(k => delete M[k]);
       M[key] = v; pvCfgQuiet('pvLogoAI', M); return v;
     } catch (e) { pvAiFail(e); return null; }
@@ -3303,36 +3343,62 @@
     if (d) { const im = await pvLoadImg(d).catch(() => null); if (im) o = { d, im, w: im.naturalWidth, h: im.naturalHeight, ai: true }; }
     pvRetroMem.set(url, o); return o;
   }
-  // anteprime: per ogni riga del preventivo { f: fronte, r: retro, rk: 'ai' | 'flat' }
+  // anteprime: per ogni riga del preventivo { f, r: immagini · fb, rb: foto di base · fpl, rpl: posizione · fk, rk2: chiave per sistemare a mano }
+  const pvFixKey = (slot, url, l) => `${slot}|${url ? pvShortUrl(url) : 'flat:' + pvKind(l) + ':' + l.cn}`;
   async function pvMockups(p, urlOf, photos, step, only) {
-    const L = p.loghi || {}, LF = L.f ? await pvLogoGet(L.f) : null, LR = L.r ? await pvLogoGet(L.r) : null;
+    const L = p.loghi || {}, LF = L.f ? await pvLogoGet(L.f) : null, LR = L.r ? await pvLogoGet(L.r) : null, FIX = pvCfgMap('pvLogoFix');
     const todo = p.righe.map((l, i) => [l, i]).filter(([l, i]) => (!only || only.has(i)) && ((l.lf && LF) || (l.lr && LR)));
     const out = []; let n = 0;
     for (const [l, i] of todo) {
       if (step) step(++n, todo.length);
       const url = urlOf(l), ph = url && photos.get(url), kind = pvKind(l), grp = pvGrp(kind);
       const base = ph ? await pvWithIm(ph) : await pvFlat(l.cn, kind, false);
-      const m = { f: null, r: null, rk: '' };
+      const m = { f: null, r: null, rk: '', l, kind };
       if (l.lf && LF && base) {
-        const k = `f|${url || l.it + l.c}|${L.f.id}`;
-        m.f = pvMockMem.get(k) || null;
-        if (!m.f) { const ai = ph ? await pvAiBox(url, base, 'f', grp) : null; m.f = pvCompose(base, LF, pvBox(base, 'f', kind, ai)); pvMockMem.set(k, m.f); }
+        const fk = pvFixKey('f', url, l), ai = ph && !FIX[fk] ? await pvAiBox(url, base, 'f', grp) : null;
+        m.fb = base; m.fk = fk; m.fpl = pvPlace(base, 'f', kind, ai, FIX[fk]); m.flogo = LF;
+        const k = `f|${url || l.it + l.c}|${L.f.id}|${JSON.stringify(m.fpl)}`;
+        m.f = pvMockMem.get(k) || pvCompose(base, LF, m.fpl); pvMockMem.set(k, m.f);
       }
       if (l.lr && LR && (base || ph)) {
-        const k = `r|${url || l.it + l.c}|${L.r.id}`, hit = pvMockMem.get(k);
-        if (hit) { m.r = hit.img; m.rk = hit.rk; }
-        else {
-          const back = ph ? await pvRetro(url, base, l) : null, bb = back || await pvFlat(l.cn, kind, true);
-          if (bb) {
-            const ai = back ? await pvAiBox(url + '#retro', bb, 'r', grp) : null;
-            m.r = pvCompose(bb, LR, pvBox(bb, 'r', kind, ai)); m.rk = back ? 'ai' : 'flat';
-            pvMockMem.set(k, { img: m.r, rk: m.rk });
-          }
+        const back = ph ? await pvRetro(url, base, l) : null, bb = back || await pvFlat(l.cn, kind, true);
+        if (bb) {
+          const rk = pvFixKey('r', url, l), ai = back && !FIX[rk] ? await pvAiBox(url + '#retro', bb, 'r', grp) : null;
+          m.rb = bb; m.rk2 = rk; m.rpl = pvPlace(bb, 'r', kind, ai, FIX[rk]); m.rlogo = LR; m.rk = back ? 'ai' : 'flat';
+          const k = `r|${url || l.it + l.c}|${L.r.id}|${JSON.stringify(m.rpl)}`;
+          m.r = pvMockMem.get(k) || pvCompose(bb, LR, m.rpl); pvMockMem.set(k, m.r);
         }
       }
       out[i] = m;
     }
     return out;
+  }
+  // sistemare a mano: trascina il logo, cambia grandezza e inclinazione (ricordato per quel capo e colore)
+  function pvLogoAdjust(key) {
+    if (!pvLastMk) return; const [i, s0] = key.split(':'), c = pvLastMk.cards.find(x => x[2] === +i); if (!c) return;
+    const m = c[1], base = s0 === 'f' ? m.fb : m.rb, logo = s0 === 'f' ? m.flogo : m.rlogo, fk = s0 === 'f' ? m.fk : m.rk2; if (!base || !logo) return;
+    const pl = { ...(s0 === 'f' ? m.fpl : m.rpl) }, ar = base.w / base.h;
+    // la larghezza si regola con il cursore: il riquadro segue le proporzioni del logo
+    const lr = logo.h / logo.w; pl.h = pl.w * ar * lr * 1.0001; const startW = pl.w;
+    openSheet(`Sistema il logo · ${c[0].n} ${c[0].cn}`, `<p class="muted small" style="margin:0 0 10px">Trascina il logo dove vuoi, poi regola grandezza e inclinazione. La posizione viene ricordata per questo capo e colore, anche nei prossimi preventivi.</p>
+      <div class="pv-adj"><canvas id="pv-adjc" aria-label="Anteprima: trascina il logo"></canvas></div>
+      <div class="pv-adjs"><label><span>Grandezza</span><input type="range" id="pv-adjw" min="3" max="70" step=".5" value="${(pl.w * 100).toFixed(1)}"><b id="pv-adjwv"></b></label>
+        <label><span>Inclinazione</span><input type="range" id="pv-adjr" min="-35" max="35" step="1" value="${pl.rot || 0}"><b id="pv-adjrv"></b></label></div>
+      <div class="pv-adjb"><button type="button" class="link" id="pv-adjauto">Torna alla posizione automatica</button><span class="muted small">Puoi anche usare le frecce della tastiera</span></div>`,
+      () => { const F = pvCfgMap('pvLogoFix'); F[fk] = { cx: +pl.cx.toFixed(4), cy: +pl.cy.toFixed(4), w: +pl.w.toFixed(4), h: +pl.h.toFixed(4), rot: pl.rot || 0 }; const ks = Object.keys(F); if (ks.length > 300) ks.slice(0, ks.length - 300).forEach(k => delete F[k]); pvCfgQuiet('pvLogoFix', F); toast('Posizione del logo salvata'); setTimeout(() => pvLogoPreviewRun(pvLastMk.sel), 260); return true; }, null, 'Salva posizione');
+    $('#sheet-form').classList.add('wide');
+    const cv = $('#pv-adjc'), wv = $('#pv-adjw'), rv = $('#pv-adjr');
+    let raf = 0; const draw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { pvCompose(base, logo, pl, cv); $('#pv-adjwv').textContent = Math.round(pl.w / startW * 100) + '%'; $('#pv-adjrv').textContent = (pl.rot || 0) + '°'; }); };
+    wv.oninput = () => { pl.w = +wv.value / 100; pl.h = pl.w * ar * lr * 1.0001; draw(); };
+    rv.oninput = () => { pl.rot = +rv.value; draw(); };
+    let drag = null;
+    const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+    cv.onpointerdown = e => { const [u, v] = pos(e); drag = [u - pl.cx, v - pl.cy]; if (Math.abs(drag[0]) > pl.w || Math.abs(drag[1]) > pl.h) drag = [0, 0]; cv.setPointerCapture(e.pointerId); pl.cx = u - drag[0]; pl.cy = v - drag[1]; draw(); };
+    cv.onpointermove = e => { if (!drag) return; const [u, v] = pos(e); pl.cx = Math.min(1, Math.max(0, u - drag[0])); pl.cy = Math.min(1, Math.max(0, v - drag[1])); draw(); };
+    cv.onpointerup = cv.onpointercancel = () => { drag = null; };
+    cv.tabIndex = 0; cv.onkeydown = e => { const st = e.shiftKey ? .02 : .004, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key]; if (mv) { e.preventDefault(); pl.cx += mv[0]; pl.cy += mv[1]; draw(); } };
+    $('#pv-adjauto').onclick = () => { const F = pvCfgMap('pvLogoFix'); delete F[fk]; pvCfgQuiet('pvLogoFix', F); closeSheet(); toast('Posizione automatica ripristinata'); setTimeout(() => pvLogoPreviewRun(pvLastMk.sel), 260); };
+    draw();
   }
   async function pvMockPrepare(p, only) {
     const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoad(sup); } catch { cats[sup] = null; } }
@@ -3359,9 +3425,9 @@
     try {
       const { mocks } = await pvMockPrepare(p, sel); busy();
       const cards = p.righe.map((l, i) => [l, mocks[i], i]).filter(([, m]) => m && (m.f || m.r));
-      pvLastMk = { p, cards };
+      pvLastMk = { p, cards, sel };
       openSheet('Anteprima del logo sui capi', `<p class="muted small" style="margin:0 0 12px">${pvAiCan() ? 'Posizione scelta dall\'IA guardando la foto di ogni capo.' : aiReady() ? 'IA non disponibile ora: posizione standard.' : 'Posizione standard (attiva l\'IA in Impostazioni per un posizionamento più preciso e il retro ricostruito).'} Anteprima indicativa: misure e posizione definitive si confermano in produzione.</p>
-        <div class="pv-mk">${cards.map(([l, m, i]) => `<div class="pv-mkc"><div class="pv-mkh"><b>${esc(l.n)}</b><small>${esc(l.cn)}</small></div><div class="pv-mki">${['f', 'r'].filter(s0 => m[s0]).map(s0 => `<figure><img src="${m[s0].d}" alt="${esc(l.n)} ${pvPosLong(l, s0)}"><figcaption>${pvPosLong(l, s0)}${s0 === 'r' ? (m.rk === 'flat' ? ' · sagoma' : ' · ricostruito dall\'IA') : ''}</figcaption><button type="button" class="btn sm" data-pvmkdl="${i}:${s0}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Scarica</button></figure>`).join('')}</div></div>`).join('') || '<div class="empty">Nessuna anteprima</div>'}</div>
+        <div class="pv-mk">${cards.map(([l, m, i]) => `<div class="pv-mkc"><div class="pv-mkh"><b>${esc(l.n)}</b><small>${esc(l.cn)}</small></div><div class="pv-mki">${['f', 'r'].filter(s0 => m[s0]).map(s0 => `<figure><img src="${m[s0].d}" alt="${esc(l.n)} ${pvPosLong(l, s0)}"><figcaption>${pvPosLong(l, s0)}${s0 === 'r' ? (m.rk === 'flat' ? ' · sagoma' : ' · ricostruito dall\'IA') : ''}</figcaption><span class="pv-mkbt"><button type="button" class="btn sm" data-pvmkadj="${i}:${s0}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>Sistema</button><button type="button" class="btn sm" data-pvmkdl="${i}:${s0}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Scarica</button></span></figure>`).join('')}</div></div>`).join('') || '<div class="empty">Nessuna anteprima</div>'}</div>
         ${cards.length ? '<div class="pv-mkf"><button type="button" class="btn primary" id="pv-mkpdf">Scarica tutte in PDF</button></div>' : ''}`, () => true, null, 'Chiudi');
       $('#sheet-form').classList.add('wide');
       if (pvAiMsg) toast('IA: ' + pvAiMsg.slice(0, 120));
@@ -5951,6 +6017,7 @@
       if (t.closest('#pv-lgprev')) { pvLogoPreview(); return; }
       if (t.closest('[data-pvmkall]')) { const on = !$$('#sheet-body [name="mk"]').every(x => x.checked); $$('#sheet-body [name="mk"]').forEach(x => { x.checked = on; }); return; }
       const mkd = t.closest('[data-pvmkdl]'); if (mkd) { pvMockDownload(mkd.dataset.pvmkdl); return; }
+      const mka = t.closest('[data-pvmkadj]'); if (mka) { pvLogoAdjust(mka.dataset.pvmkadj); return; }
       if (t.closest('#pv-mkpdf')) { pvMockPdf(); return; }
       if (t.closest('#pv-pradd')) { const p = pvFromForm(); if (!p) return; const it = pvPersList()[0]; p.pers = [...(p.pers || []), { id: uid(), slot: '', cod: '', d: 'Personalizzazione', p: 0, q: 1 }]; p.persAuto = false; pvSave(p); return; }
       const prd = t.closest('[data-pvprdel]'); if (prd) { const p = pvFromForm(); if (!p) return; p.pers.splice(+prd.dataset.pvprdel, 1); p.persAuto = false; pvSave(p); return; }
