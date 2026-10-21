@@ -1806,3 +1806,9 @@ body.has-sel .fab { display: none; }
   .pv-bar .btn { height: 38px; padding: 0 12px; font-size: 13.5px; }
   .pv-hi h2 { font-size: 22px; }
 }
+/* miniature dei colori: bordo pulito, tinta solo se manca la foto — v45 */
+.pv-img.sm { width: 34px; height: 40px; border-radius: 8px; background: #fff; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(15, 23, 42, .06); }
+.pv-img.sm:not(.has), .pv-img.sm:not(:has(img)) { background: var(--sw); border-color: rgba(0, 0, 0, .1); }
+.pv-img.sm img { inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); border-radius: 6px; background: #fff; }
+.pv-img img { background: #fff; }
+.pv-opts { display: grid; gap: 8px; }

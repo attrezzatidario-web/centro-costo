@@ -2778,7 +2778,7 @@
   const PV_COL = [['GIALLO FLUO', '#e4ff1a'], ['ARANCIONE FLUO', '#ff6a13'], ['FUCSIA FLUO', '#ff2aa6'], ['VERDE FLUO', '#5dff3a'], ['ROSA FLUO', '#ff5fb0'], ['GRIGIO MELANGE', '#a8aaad'], ['LIGHT BLU ROYAL', '#4f6fd6'], ['BLU ROYAL', '#2643a6'], ['BLU NAVY', '#1d2b4c'], ['BLU ATOLLO', '#1493c9'], ['BLU JEANS', '#3d5a80'], ['AZZURRO', '#79c1ee'], ['VERDE MILITARE', '#4b5320'], ['VERDE ACIDO', '#a3d12f'], ['JELLY GREEN', '#3fbf62'], ['EMERALD GREEN', '#009b77'], ['VERDE BOTTIGLIA', '#0f4d2c'], ['LIME LIGHT', '#f3ea8f'], ['AQUAMARINE', '#5fd3c4'], ['SUMMER VIOLET', '#8e6fc1'], ['HOT CORAL', '#f2545b'], ['ROSA SHADOW', '#f1b7c8'], ['ANTRACITE', '#3b3e42'], ['SMOKE', '#5b5e62'], ['BORDEAUX', '#7a1f2b'], ['ARANCIONE', '#f47b20'], ['GIALLO', '#f7d417'], ['ROSSO', '#c8102e'], ['VERDE', '#1f8a3b'], ['BIANCO', '#ffffff'], ['NERO', '#151515'], ['GRIGIO', '#8a8d91'], ['FUCSIA', '#d6247b'], ['ROSA', '#f4a6c0'], ['MARRONE', '#6b4226'], ['BEIGE', '#d8c7a3'], ['SABBIA', '#d9c9a0'], ['KAKI', '#8f8455'], ['VIOLA', '#6b3fa0'], ['TURCHESE', '#20b2aa'], ['CELESTE', '#a6d4f2'], ['ORO', '#c9a227'], ['ARGENTO', '#c0c0c0'], ['NATURALE', '#efe6d2'], ['CORDA', '#cbb994'], ['MIMETICO', 'linear-gradient(135deg,#4b5320 0 33%,#8f8455 33% 66%,#3b2f1e 66%)']];
   const pvHex = name => { const N = amNorm(name), parts = N.split('/').map(s => s.trim()).filter(Boolean); const one = p => { const h = PV_COL.find(([k]) => p.includes(k)); return h ? h[1] : '#c9ccd1'; }; if (parts.length > 1) { const a = one(parts[0]), b = one(parts[1]); return a.startsWith('linear') ? a : `linear-gradient(135deg,${a} 0 55%,${b} 55%)`; } return one(N); };
   const pvSw = name => `<i class="pv-sw" style="background:${pvHex(name)}" title="${esc(name)}"></i>`;
-  const pvThumb = (cat, it, c, cls = '') => { const u = pvImg(cat, c || it.c[0]), sm = cls === 'sm'; return `<span class="pv-img ${cls}"${sm ? ` style="background:${pvHex((c || it.c[0])[1])}"` : ''}>${u ? `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${sm ? '' : `<b>${esc(it.n.split(/\s+/).map(w => w[0]).join('').slice(0, 2))}</b>`}</span>`; };
+  const pvThumb = (cat, it, c, cls = '') => { const cc = c || it.c[0], u = pvImg(cat, cc), sm = cls === 'sm'; return `<span class="pv-img ${cls}${u ? ' has' : ''}"${sm ? ` style="--sw:${pvHex(cc[1])}"` : ''}>${u ? `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${sm ? '' : `<b>${esc(it.n.split(/\s+/).map(w => w[0]).join('').slice(0, 2))}</b>`}</span>`; };
   // preventivi salvati in Config come «pv:id»
   const pvList = () => Object.keys(db.config || {}).filter(k => k.startsWith('pv:')).map(k => ({ ...cfg(k), key: k })).filter(p => p && p.id).sort((a, b) => String(b.num).localeCompare(String(a.num)));
   const pvGet = id => { const p = cfg('pv:' + id); return p ? JSON.parse(JSON.stringify(p)) : null; };
@@ -2801,13 +2801,14 @@
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
     $$('#sheet-body [data-close-nav]').forEach(a => a.addEventListener('click', () => setTimeout(closeSheet, 30)));
   }
+  const pvLineThumb = l => { const cat = pvCats[l.sup || 'payper'], it = cat && cat.items.find(x => x.id === l.it), c = it && it.c.find(x => x[0] === l.c); return it && c ? pvThumb(cat, it, c, 'sm') : pvSw(l.cn); };
   async function renderPv() {
     sub(`${PV_SUP[pvSup].n} · catalogo e preventivi`);
     $$('[data-pvtab]').forEach(b => b.classList.toggle('on', b.dataset.pvtab === pvTab));
     $$('[data-pvsup]').forEach(b => b.classList.toggle('on', b.dataset.pvsup === pvSup));
     const body = $('#pv-body');
     const anim = pvAnim && !reduced(); pvAnim = false; body.classList.toggle('cc-anim', anim);
-    if (pvTab === 'prev') { pvEdit ? pvEditor(body) : pvQuotes(body); return; }
+    if (pvTab === 'prev') { pvEdit ? pvEditor(body) : pvQuotes(body); if (pvEdit && !pvCats.payper) pvLoad('payper').then(() => { if (view === 'preventivi' && pvTab === 'prev' && pvEdit && !$('#pv-ed :focus')) renderPv(); }).catch(() => {}); return; }
     if (!PV_SUP[pvSup].file) { body.innerHTML = `<div class="card pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg></div><h3>Catalogo ${esc(PV_SUP[pvSup].n)} in arrivo</h3><p>Mandami il listino ${esc(PV_SUP[pvSup].n)} (Excel o CSV) e lo carico come quello di Payper: ricerca, taglie, colori e prezzi.</p></div>`; return; }
     let cat = pvCats[pvSup];
     if (!cat) { body.innerHTML = '<div class="card"><div class="empty">Carico il catalogo…</div></div>'; try { cat = await pvLoad(pvSup); } catch (e) { body.innerHTML = `<div class="card"><div class="empty">Catalogo non caricato: ${esc(e.message)}</div></div>`; return; } if (view !== 'preventivi') return; }
@@ -2939,7 +2940,7 @@
         </div>
         <div class="card"><div class="card-h"><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th><th></th></tr></thead><tbody>
-            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvSw(l.cn)}<span><b>${esc(l.n)}</b><small>${esc(l.cn)} · ${esc(l.it)}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}"></td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td><td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
+            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${esc(l.cn)} · ${esc(l.it)}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}"></td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td><td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
         </div>
         <div class="pv-foot">
@@ -2983,13 +2984,54 @@
     }, null, 'Salva');
   }
 
-  /* ---------- PDF del preventivo (per il cliente) ---------- */
-  async function pvPdf() {
+  /* ---------- foto per il PDF: dal sito del fornitore (diretto o tramite lo script Google) ---------- */
+  const pvImgCache = new Map();
+  const pvToJpeg = (src, max = 520) => new Promise(res => { const im = new Image(); im.onload = () => { try { const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight)), w = Math.round(im.naturalWidth * k), h = Math.round(im.naturalHeight * k), cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(im, 0, 0, w, h); res({ d: cv.toDataURL('image/jpeg', .86), w, h }); } catch { res(null); } }; im.onerror = () => res(null); im.src = src; });
+  async function pvPhotos(urls) {
+    const todo = [...new Set(urls.filter(u => u && !pvImgCache.has(u)))];
+    // 1) diretto dal browser
+    await Promise.all(todo.map(async u => { try { const r = await fetch(u, { mode: 'cors', referrerPolicy: 'no-referrer' }); if (!r.ok) throw 0; const b = await r.blob(), ou = URL.createObjectURL(b), j = await pvToJpeg(ou); URL.revokeObjectURL(ou); if (j) pvImgCache.set(u, j); } catch {} }));
+    // 2) tramite lo script Google (cdc-1.9) per quelle che il sito non lascia scaricare
+    const miss = todo.filter(u => !pvImgCache.has(u));
+    if (miss.length && !isLocal() && (!db.v || db.v >= 'cdc-1.9')) {
+      for (let i = 0; i < miss.length; i += 12) {
+        try { const res = await api('imgs', { urls: miss.slice(i, i + 12) }); for (const [u, b64] of Object.entries(res || {})) { if (!b64) continue; const j = await pvToJpeg('data:image/jpeg;base64,' + b64); if (j) pvImgCache.set(u, j); } } catch (e) { if (e instanceof AuthError) throw e; break; }
+      }
+    }
+    return urls.map(u => pvImgCache.get(u) || null);
+  }
+  function pvPdfAsk() {
     const p = pvFromForm(); if (!p) return;
     if (!p.righe.length) return toast('Il preventivo non ha prodotti');
-    pvSave(p);
+    pvQuiet(p);
+    let o = { foto: true, scheda: false }; try { o = { ...o, ...JSON.parse(localStorage.getItem('cdc_pvpdf') || '{}') }; } catch {}
+    const art = new Set(p.righe.map(l => l.it)).size;
+    openSheet(`Scarica il preventivo ${p.num}`, `<p class="muted small" style="margin:0 0 14px">Scegli cosa mettere nel PDF per il cliente. Costi d'acquisto e margine non compaiono mai.</p>
+      <div class="pv-opts">
+        <label class="rp-o"><input type="checkbox" name="foto"${o.foto ? ' checked' : ''}><span><b>Foto dei prodotti</b><small>accanto a ogni riga la foto del prodotto nel colore scelto</small></span></label>
+        <label class="rp-o"><input type="checkbox" name="scheda"${o.scheda ? ' checked' : ''}><span><b>Scheda tecnica di ogni prodotto</b><small>in fondo al preventivo, una pagina per ognuno dei ${art} prodotti: foto, descrizione, composizione, grammatura, taglie, colori scelti</small></span></label>
+      </div>`, fd => { const opt = { foto: !!fd.get('foto'), scheda: !!fd.get('scheda') }; try { localStorage.setItem('cdc_pvpdf', JSON.stringify(opt)); } catch {} setTimeout(() => pvPdf(opt), 250); return true; }, null, 'Scarica PDF');
+  }
+  /* ---------- PDF del preventivo (per il cliente) ---------- */
+  async function pvPdf(opt = { foto: true, scheda: false }) {
+    const p = pvFromForm() || pvGet(pvEdit); if (!p) return;
+    if (!p.righe.length) return toast('Il preventivo non ha prodotti');
+    pvQuiet(p);
     try {
       busy('Preparo il PDF…');
+      // catalogo e foto
+      const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoad(sup); } catch { cats[sup] = null; } }
+      const itemOf = l => { const c = cats[l.sup || 'payper']; return c ? c.items.find(x => x.id === l.it) : null; };
+      const colOf = (it, code) => it ? it.c.find(x => x[0] === code) : null;
+      const urlOf = l => { const c = cats[l.sup || 'payper'], it = itemOf(l), cc = colOf(it, l.c); return c && cc ? pvImg(c, cc) : ''; };
+      const arts = [...new Map(p.righe.map(l => [l.it, l])).values()];
+      let need = [];
+      if (opt.foto) need.push(...p.righe.map(urlOf));
+      if (opt.scheda) need.push(...p.righe.map(urlOf));
+      const ph = new Map();
+      if (need.filter(Boolean).length) { busy('Scarico le foto dei prodotti…'); const U = [...new Set(need.filter(Boolean))], R = await pvPhotos(U); U.forEach((u, i) => ph.set(u, R[i])); busy('Preparo il PDF…'); }
+      const photoOf = l => ph.get(urlOf(l)) || null;
+      const noPh = (opt.foto || opt.scheda) && need.filter(Boolean).length && ![...ph.values()].some(Boolean);
       const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
       const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
       let FF = 'helvetica';
@@ -3017,14 +3059,22 @@
       color(C.ink2); font('normal', 8.5); doc.text([cl.ref ? 'Alla c.a. di ' + cl.ref : '', cl.ind].filter(Boolean).join(' · ').slice(0, 95), M + 6, y + 20);
       doc.text([cl.email, cl.tel].filter(Boolean).join(' · '), W - M - 6, y + 20, { align: 'right' });
       y += 34;
+      const fitImg = (im, x, y, w, h) => { const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k; doc.addImage(im.d, 'JPEG', x + (w - iw) / 2, y + (h - ih) / 2, iw, ih, undefined, 'FAST'); };
       const body = p.righe.map(l => { const sz = (l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  '); return [`${l.n}\n${l.it}`, l.cn, sz, fmtNum(pvLineQ(l), 0), l.p != null ? eur(l.p) : '—', num(l.sc) ? fmtNum(num(l.sc), 1).replace(/,0$/, '') + '%' : '', l.p != null ? eur(pvLineTot(l)) : '—']; });
+      const FOTO = opt.foto;
+      if (FOTO) body.forEach(r => r.unshift(''));
+      const head = ['Prodotto', 'Colore', 'Taglie', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale']; if (FOTO) head.unshift('');
+      const o0 = FOTO ? 1 : 0;
+      const colSt = { [o0]: { fontStyle: 'bold', cellWidth: FOTO ? 38 : 44 }, [o0 + 1]: { cellWidth: FOTO ? 26 : 30, textColor: C.ink2 }, [o0 + 2]: { cellWidth: 'auto', textColor: C.ink2, fontSize: 7.6 }, [o0 + 3]: { halign: 'right', cellWidth: 'wrap' }, [o0 + 4]: { halign: 'right', cellWidth: 'wrap' }, [o0 + 5]: { halign: 'right', cellWidth: 'wrap' }, [o0 + 6]: { halign: 'right', fontStyle: 'bold', cellWidth: 'wrap' } };
+      if (FOTO) colSt[0] = { cellWidth: 18, minCellHeight: 20 };
       doc.autoTable({
-        startY: y, head: [['Prodotto', 'Colore', 'Taglie', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale']], body, margin: { left: M, right: M, top: 20, bottom: 18 }, theme: 'plain',
-        styles: { font: FF, fontSize: 8.4, textColor: C.ink, cellPadding: { top: 2.6, bottom: 2.6, left: 2.2, right: 2.2 }, lineColor: C.line, lineWidth: { bottom: .2 }, valign: 'middle' },
-        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.6, lineWidth: 0 },
+        startY: y, head: [head], body, margin: { left: M, right: M, top: 20, bottom: 18 }, theme: 'plain',
+        styles: { font: FF, fontSize: 8.4, textColor: C.ink, cellPadding: { top: 2.6, bottom: 2.6, left: 2.2, right: 2.2 }, lineColor: C.line, lineWidth: { bottom: .2 }, valign: 'middle', minCellHeight: FOTO ? 20 : 0 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.6, lineWidth: 0, minCellHeight: 0 },
         alternateRowStyles: { fillColor: C.soft },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 44 }, 1: { cellWidth: 30, textColor: C.ink2 }, 2: { cellWidth: 'auto', textColor: C.ink2, fontSize: 7.6 }, 3: { halign: 'right', cellWidth: 'wrap' }, 4: { halign: 'right', cellWidth: 'wrap' }, 5: { halign: 'right', cellWidth: 'wrap' }, 6: { halign: 'right', fontStyle: 'bold', cellWidth: 'wrap' } },
-        didParseCell: d => { if (d.section === 'head' && d.column.index >= 3) d.cell.styles.halign = 'right'; }
+        columnStyles: colSt,
+        didParseCell: d => { if (d.section === 'head' && d.column.index >= o0 + 3) d.cell.styles.halign = 'right'; },
+        didDrawCell: d => { if (!FOTO || d.section !== 'body' || d.column.index !== 0) return; const im = photoOf(p.righe[d.row.index]); const x = d.cell.x + 1.5, yy = d.cell.y + 1.5, w = d.cell.width - 3, h = d.cell.height - 3; fill(C.white); stroke(C.line); doc.setLineWidth(.2); doc.roundedRect(x, yy, w, h, 1.5, 1.5, 'FD'); if (im) fitImg(im, x + .6, yy + .6, w - 1.2, h - 1.2); else { color(C.muted); font('bold', 9); doc.text(String(p.righe[d.row.index].n).split(/\s+/).map(w0 => w0[0]).join('').slice(0, 2), x + w / 2, yy + h / 2 + 1.2, { align: 'center' }); } }
       });
       y = doc.lastAutoTable.finalY + 6;
       if (y + 50 > H - 20) { doc.addPage(); y = 24; }
@@ -3037,12 +3087,46 @@
       const notes = [p.note, `Prezzi in euro IVA esclusa. Preventivo valido ${num(p.valid) || 30} giorni (fino al ${scad}).`].filter(Boolean);
       color(C.navy); font('bold', 9); doc.text('Note', M, y + 1);
       color(C.ink2); font('normal', 8.3); let ny = y + 7; notes.forEach(n => { const ls = doc.splitTextToSize(n, CW - tw - 14); doc.text(ls, M, ny); ny += ls.length * 4 + 2; });
+      // ---- schede tecniche ----
+      if (opt.scheda) arts.forEach(l0 => {
+        const it = itemOf(l0); doc.addPage(); let yy = 22;
+        fill(C.navy); doc.rect(0, 0, W, 3, 'F');
+        color(C.orange); font('bold', 8); doc.text('SCHEDA TECNICA', M, 13); color(C.muted); font('normal', 8); doc.text(`Preventivo ${p.num}`, W - M, 13, { align: 'right' });
+        const lines = p.righe.filter(x => x.it === l0.it);
+        const im = photoOf(lines[0]);
+        const bw = 66, bh = 80;
+        fill(C.soft); doc.roundedRect(M, yy, bw, bh, 3, 3, 'F');
+        if (im) { fill(C.white); doc.roundedRect(M, yy, bw, bh, 3, 3, 'F'); stroke(C.line); doc.setLineWidth(.25); doc.roundedRect(M, yy, bw, bh, 3, 3, 'S'); fitImg(im, M + 3, yy + 3, bw - 6, bh - 6); }
+        else { color([170, 180, 196]); font('bold', 30); doc.text(String(l0.n).split(/\s+/).map(w0 => w0[0]).join('').slice(0, 2), M + bw / 2, yy + bh / 2 + 4, { align: 'center' }); }
+        const rx = M + bw + 8, rw = W - M - rx;
+        color(C.muted); font('bold', 8); doc.text(`${l0.it}${it ? ' · ' + it.cl + (it.sc ? ' · ' + it.sc : '') : ''}`.slice(0, 70), rx, yy + 5);
+        color(C.navy); font('bold', 20); doc.text(l0.n, rx, yy + 14);
+        color(C.ink2); font('normal', 9); const dl = doc.splitTextToSize(it ? it.d : '', rw); doc.text(dl.slice(0, 12), rx, yy + 21);
+        let sy = yy + 21 + Math.min(dl.length, 12) * 4.1 + 4;
+        if (it) {
+          const spec = [['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
+          doc.autoTable({ startY: Math.max(sy, yy), margin: { left: rx, right: M }, body: spec, theme: 'plain', styles: { font: FF, fontSize: 8.6, textColor: C.ink, cellPadding: { top: 1.8, bottom: 1.8, left: 0, right: 2 }, lineColor: C.line, lineWidth: { bottom: .2 } }, columnStyles: { 0: { textColor: C.muted, cellWidth: 34 }, 1: { fontStyle: 'bold' } } });
+          sy = doc.lastAutoTable.finalY;
+        }
+        yy = Math.max(yy + bh, sy) + 10;
+        color(C.navy); font('bold', 11); doc.text('Colori e taglie in questo preventivo', M, yy); stroke(C.line); doc.setLineWidth(.3); doc.line(M, yy + 2.4, W - M, yy + 2.4); yy += 6;
+        lines.forEach(l => {
+          if (yy + 20 > H - 22) { doc.addPage(); yy = 22; }
+          const pim = photoOf(l);
+          fill(C.white); stroke(C.line); doc.setLineWidth(.2); doc.roundedRect(M, yy, 16, 18, 1.5, 1.5, 'FD'); if (pim) fitImg(pim, M + .7, yy + .7, 14.6, 16.6);
+          color(C.ink); font('bold', 10); doc.text(l.cn, M + 21, yy + 6); color(C.muted); font('normal', 8); doc.text(`codice colore ${l.c}`, M + 21, yy + 10.5);
+          color(C.ink2); font('normal', 8.6); doc.text((l.sz || Object.keys(l.q)).filter(s2 => num(l.q[s2]) > 0).map(s2 => `${s2} × ${fmtNum(num(l.q[s2]), 0)}`).join('    '), M + 21, yy + 15);
+          color(C.ink); font('bold', 10); doc.text(`${fmtNum(pvLineQ(l), 0)} pz`, W - M, yy + 6, { align: 'right' });
+          yy += 22;
+        });
+        if (it && it.c.length > lines.length) { if (yy + 16 > H - 22) { doc.addPage(); yy = 22; } color(C.muted); font('bold', 8); doc.text('ALTRI COLORI DISPONIBILI', M, yy + 2); color(C.ink2); font('normal', 8.2); const al = doc.splitTextToSize(it.c.filter(c => !lines.some(x => x.c === c[0])).map(c => c[1].toLowerCase().replace(/(^|\s|\/)\S/g, m => m.toUpperCase())).join(' · '), CW); doc.text(al, M, yy + 7); }
+      });
       const N = doc.internal.getNumberOfPages();
       for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5); doc.text(`Preventivo ${p.num} · ${dIt}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
       doc.setProperties({ title: `Preventivo ${p.num}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
       const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Preventivo_${p.num}${cl.nome ? '_' + slug(cl.nome) : ''}.pdf`);
-      busy(); toast('PDF scaricato');
+      busy(); toast(noPh ? 'PDF scaricato, ma senza foto: il sito del fornitore non le ha date. Aggiorna lo script Google alla cdc-1.9.' : 'PDF scaricato');
     } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
   }
 
@@ -5352,7 +5436,7 @@
       if (t.closest('#pv-qback')) { pvQuiet(pvFromForm()); pvEdit = ''; renderPv(); return; }
       if (t.closest('#pv-save')) { pvQuiet(pvFromForm()); toast('Preventivo salvato'); return; }
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
-      if (t.closest('#pv-pdf')) { pvPdf(); return; }
+      if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-dup')) { const p = pvFromForm(); if (!p) return; const n = { ...JSON.parse(JSON.stringify(p)), id: uid(), num: pvNextNum(), data: today(), stato: 'bozza' }; pvEdit = n.id; pvSave(n); toast(`Creato ${n.num} (copia di ${p.num})`); return; }
       if (t.closest('#pv-del')) { const p = pvGet(pvEdit); if (!p || !confirm(`Eliminare il preventivo ${p.num}?`)) return; pvEdit = ''; if (pvTarget === p.id) pvTarget = ''; write([{ action: 'delete', sheet: 'Config', id: 'pv:' + p.id }]); toast('Preventivo eliminato'); return; }
       const pvld = t.closest('[data-pvldel]'); if (pvld) { const p = pvFromForm(); p.righe.splice(+pvld.dataset.pvldel, 1); pvSave(p); return; }
