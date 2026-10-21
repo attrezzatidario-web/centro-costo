@@ -1812,3 +1812,26 @@ body.has-sel .fab { display: none; }
 .pv-img.sm img { inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); border-radius: 6px; background: #fff; }
 .pv-img img { background: #fff; }
 .pv-opts { display: grid; gap: 8px; }
+
+/* ===== Loghi dei fornitori con animazione + vista cliente — v46 ===== */
+.pv-brand { position: relative; display: inline-grid; grid-template-columns: repeat(2, 64px); gap: 4px; padding: 4px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); isolation: isolate; }
+.pv-bi { position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px; width: 64px; border-radius: 12px; background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 8px 18px -10px rgba(15, 23, 42, .35); transform: translateX(calc(var(--i, 0) * 68px)); transition: transform .55s cubic-bezier(.34, 1.36, .5, 1); }
+.pv-brand button { position: relative; display: grid; place-items: center; height: 46px; border: 0; background: transparent; border-radius: 12px; cursor: pointer; padding: 0; overflow: hidden; }
+.pv-brand img { height: 32px; width: auto; display: block; border-radius: 4px; filter: grayscale(1); opacity: .42; transform: scale(.94); transition: filter .45s ease, opacity .45s ease, transform .5s cubic-bezier(.34, 1.36, .5, 1); }
+.pv-brand button:hover img { filter: grayscale(.35); opacity: .78; transform: scale(.98) translateY(-1px); }
+.pv-brand button.on img { filter: none; opacity: 1; transform: scale(1); animation: pvpop .6s cubic-bezier(.34, 1.56, .5, 1); }
+.pv-brand button.on::after { content: ""; position: absolute; inset: 7px 14px; border-radius: 4px; pointer-events: none; background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, .7) 50%, transparent 62%); background-size: 260% 100%; background-position: 140% 0; animation: pvshine 1.15s .18s cubic-bezier(.4, 0, .2, 1) both; }
+.pv-brand button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@keyframes pvpop { 0% { transform: scale(.8); } 55% { transform: scale(1.07); } 100% { transform: scale(1); } }
+@keyframes pvshine { from { background-position: 140% 0; } to { background-position: -40% 0; } }
+@media (prefers-reduced-motion: reduce) { .pv-bi, .pv-brand img { transition: none; } .pv-brand button.on img, .pv-brand button.on::after { animation: none; } }
+.pv-elogo { width: 64px; height: 64px; border-radius: 14px; box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .5); animation: pvpop .7s cubic-bezier(.34, 1.56, .5, 1); }
+.pv-eye { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s, color .2s, border-color .2s; }
+.pv-eye svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pv-eye .e-off { display: none; }
+.pv-eye.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.pv-eye.on .e-on { display: none; } .pv-eye.on .e-off { display: block; }
+@media (max-width: 640px) { .pv-eye span { display: none; } .pv-eye { padding: 0 10px; } }
+.pv-big { font-size: 26px !important; color: var(--accent); }
+.pv-acqinfo { font-size: 12px; color: var(--muted); padding-top: 2px; }
+.pv-int[hidden] { display: none; }

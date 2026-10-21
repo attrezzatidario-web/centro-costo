@@ -2769,6 +2769,7 @@
     if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc}`); }); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
+  let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
   const pvRic = () => num(cfg('ppRic')) || 2;
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
   const pvAcq = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
@@ -2805,11 +2806,14 @@
   async function renderPv() {
     sub(`${PV_SUP[pvSup].n} · catalogo e preventivi`);
     $$('[data-pvtab]').forEach(b => b.classList.toggle('on', b.dataset.pvtab === pvTab));
-    $$('[data-pvsup]').forEach(b => b.classList.toggle('on', b.dataset.pvsup === pvSup));
+    $$('[data-pvsup]').forEach(b => { b.classList.toggle('on', b.dataset.pvsup === pvSup); b.setAttribute('aria-pressed', b.dataset.pvsup === pvSup); });
+    const br = $('.pv-brand'); if (br) br.style.setProperty('--i', pvSup === 'jrc' ? 1 : 0);
+    const eye = $('#pv-eye'); if (eye) { eye.classList.toggle('on', pvCli); eye.setAttribute('aria-pressed', pvCli); eye.querySelector('span').textContent = pvCli ? 'Vista cliente' : 'Prezzi d\'acquisto visibili'; }
+    document.body.classList.toggle('pv-cli', pvCli);
     const body = $('#pv-body');
     const anim = pvAnim && !reduced(); pvAnim = false; body.classList.toggle('cc-anim', anim);
     if (pvTab === 'prev') { pvEdit ? pvEditor(body) : pvQuotes(body); if (pvEdit && !pvCats.payper) pvLoad('payper').then(() => { if (view === 'preventivi' && pvTab === 'prev' && pvEdit && !$('#pv-ed :focus')) renderPv(); }).catch(() => {}); return; }
-    if (!PV_SUP[pvSup].file) { body.innerHTML = `<div class="card pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg></div><h3>Catalogo ${esc(PV_SUP[pvSup].n)} in arrivo</h3><p>Mandami il listino ${esc(PV_SUP[pvSup].n)} (Excel o CSV) e lo carico come quello di Payper: ricerca, taglie, colori e prezzi.</p></div>`; return; }
+    if (!PV_SUP[pvSup].file) { body.innerHTML = `<div class="card pv-empty"><img class="pv-elogo" src="logo-${pvSup}.svg" alt="${esc(PV_SUP[pvSup].n)}"><h3>Catalogo ${esc(PV_SUP[pvSup].n)} in arrivo</h3><p>Mandami il listino ${esc(PV_SUP[pvSup].n)} (Excel o CSV) e lo carico come quello di Payper: ricerca, taglie, colori e prezzi.</p></div>`; return; }
     let cat = pvCats[pvSup];
     if (!cat) { body.innerHTML = '<div class="card"><div class="empty">Carico il catalogo…</div></div>'; try { cat = await pvLoad(pvSup); } catch (e) { body.innerHTML = `<div class="card"><div class="empty">Catalogo non caricato: ${esc(e.message)}</div></div>`; return; } if (view !== 'preventivi') return; }
     pvItem ? pvDetail(body, cat) : pvCatalog(body, cat);
@@ -2825,7 +2829,8 @@
         <div class="pv-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)" value="${esc(pvQ)}" autocomplete="off"></div>
         <div class="pv-fl"><select id="pv-cl" aria-label="Categoria"><option value="">Tutte le categorie (${cls.length})</option>${cls.map(c => `<option${c === pvCl ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
           <div class="tr-seg">${[['', 'Tutti'], ['acq', `Con prezzo (${nAcq})`], ['no', 'Senza prezzo']].map(([k, l]) => `<button type="button" data-pvonly="${k}" class="${pvOnly === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-          <span class="muted small" id="pv-cnt"></span></div>
+          <span class="muted small" id="pv-cnt"></span>${pvCli ? '' : `<span class="pv-sp"></span><button type="button" class="btn sm" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
+        ${!pvCli && cfg('ppAcqInfo') ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg('ppAcqInfo').file || '')}» il ${esc(shortDate(cfg('ppAcqInfo').data))} · ${fmtNum(cfg('ppAcqInfo').n || 0, 0)} prezzi su ${fmtNum(nAcq, 0)} prodotti</div>` : ''}
       </div>
       <div id="pv-res"></div>`;
     pvCatRes(cat);
@@ -2842,14 +2847,14 @@
           ${pvThumb(cat, it, it.c[0])}
           <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(it.id)} · ${esc(it.cl.toLowerCase())}${it.sc ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
             <span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>
-            <span class="pv-pr">${pub != null ? `<strong>${eur(pub)}</strong><small>al pubblico · acquisto ${eur(acq)}</small>` : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(it.c[0][2])}</small>`}</span></span>
+            <span class="pv-pr">${pub != null ? `<strong>${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${eur(acq)}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(it.c[0][2])}</small>`}</span></span>
         </button>`; }).join('')}</div>${L.length > pvLimit ? `<div class="more-row"><button class="btn sm" id="pv-more">Mostra altri (${fmtNum(L.length - pvLimit, 0)})</button></div>` : ''}` : '<div class="card"><div class="empty">Nessun prodotto trovato</div></div>';
   }
   let pvGridQ = {};
   const pvPerCol = new Set();
   function pvDetail(body, cat) {
     const it = cat.items.find(x => x.id === pvItem); if (!it) { pvItem = ''; return pvCatalog(body, cat); }
-    const A = pvAcqMap()[it.id], perCol = pvPerCol.has(it.id) || (A && typeof A === 'object' && Object.keys(A).some(k => k !== '*'));
+    const A = pvAcqMap()[it.id], perCol = !pvCli && (pvPerCol.has(it.id) || (A && typeof A === 'object' && Object.keys(A).some(k => k !== '*')));
     const base = A == null ? '' : typeof A === 'number' ? A : A['*'] != null ? A['*'] : '';
     const ric = pvRic();
     const q = pvGridQ[it.id] = pvGridQ[it.id] || {};
@@ -2865,11 +2870,11 @@
           <p>${esc(it.d)}</p>
           <div class="pv-spec">${[['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? `${it.pk} pz` : ''], ['Cartone', it.ct ? `${it.ct} pz` : ''], ['Taglie', it.sz.join(' · ')], ['Colori', String(it.c.length)]].filter(x => x[1]).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
         </div>
-        <div class="pv-prices">
+        <div class="pv-prices">${pvCli ? (() => { const ps = [...new Set(it.c.map(c => pvPub(it.id, c[0])).filter(v => v != null))].sort((a, b) => a - b); return `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${ps.length ? (ps.length > 1 ? `${eur(ps[0])} – ${eur(ps[ps.length - 1])}` : eur(ps[0])) : '—'}</b><small>a pezzo · IVA esclusa</small></div>`; })() : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
           <div class="pv-pf"><span>Prezzo al pubblico</span><b id="pv-pub">${base !== '' ? eur(r2(num(base) * ric)) : '—'}</b><small>acquisto × ${fmtNum(ric, 2).replace(/,00$/, '')}</small></div>
           <div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>prezzo di riferimento del fornitore</small></div>
-          <label class="pv-tgl"><input type="checkbox" id="pv-percol"${perCol ? ' checked' : ''}><span>Prezzo d'acquisto diverso per colore</span></label>
+          <label class="pv-tgl"><input type="checkbox" id="pv-percol"${perCol ? ' checked' : ''}><span>Prezzo d'acquisto diverso per colore</span></label>`}
         </div>
       </div>
       <div class="card pv-mx">
@@ -2908,6 +2913,49 @@
     setConfig('ppAcq', all);
   }
 
+  /* ---------- importa i prezzi d'acquisto (CSV o Excel: Articolo, Colore, Prezzo) ---------- */
+  async function pvImportAcq() {
+    const cat = await pvLoad(pvSup); if (!cat) return;
+    let file; try { file = await pickFile('.csv,.txt,.xlsx,.xls'); } catch { return; }
+    try {
+      busy('Leggo i prezzi…');
+      let aoa;
+      if (/\.(csv|txt)$/i.test(file.name)) aoa = amCsv(await file.text());
+      else { await loadXlsx(); const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }); aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
+      busy();
+      const hi = aoa.findIndex(r => r.some(c => /^(articolo|nome|prodotto|itemname|modello)$/.test(nh(c))) && r.some(c => /^prezzo|^price|^costo/.test(nh(c))));
+      if (hi < 0) throw new Error('Non trovo le colonne «Articolo» e «Prezzo»');
+      const H = aoa[hi].map(nh), col = re => H.findIndex(h => re.test(h));
+      const C = { a: col(/^(articolo|nome|prodotto|itemname|modello)$/), c: col(/^(colore|colour|color|coloredescrizione)$/), p: col(/^prezzo|^price|^costo/), id: col(/^(itemid|codicearticolo|codice)$/), m: col(/^marchio|^brand/) };
+      const K = s2 => String(s2 || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const byN = new Map(cat.items.map(it => [K(it.n), it])), byId = new Map(cat.items.map(it => [String(it.id), it]));
+      const acc = new Map(), miss = []; let n = 0;
+      aoa.slice(hi + 1).forEach(r => {
+        const a = String(r[C.a] || '').trim(), pr = amNum(r[C.p]); if (!a || !(pr > 0)) return;
+        const colN = C.c >= 0 ? String(r[C.c] || '').trim() : '';
+        let it = (C.id >= 0 && byId.get(String(r[C.id]).trim())) || byN.get(K(a)), only = null;
+        if (!it) { const m = a.toUpperCase().match(/^(.*?)\s*(MELANGE|FLUO)$/); if (m && byN.get(K(m[1]))) { it = byN.get(K(m[1])); only = m[2]; } }
+        if (!it) { miss.push(a); return; }
+        const e = acc.get(it.id) || { it, all: [], col: {} }; acc.set(it.id, e);
+        const cols = colN ? it.c.filter(c => K(c[1]) === K(colN)) : only ? it.c.filter(c => c[1].toUpperCase().includes(only)) : null;
+        if (cols && !cols.length && colN) { miss.push(`${a} · ${colN}`); return; }
+        if (cols) cols.forEach(c => { e.col[c[0]] = pr; }); else e.all.push(pr);
+        n++;
+      });
+      if (!acc.size) throw new Error('Nessun prodotto del file corrisponde al catalogo');
+      const out = {};
+      acc.forEach(e => {
+        const vals = [...e.all, ...Object.values(e.col)], cnt = new Map(); vals.forEach(v => cnt.set(v, (cnt.get(v) || 0) + 1));
+        const base = e.all.length ? e.all[e.all.length - 1] : [...cnt].sort((x, y) => y[1] - x[1])[0][0];
+        const ex = Object.fromEntries(Object.entries(e.col).filter(([, v]) => Math.abs(v - base) > .0001));
+        out[e.it.id] = Object.keys(ex).length ? { '*': base, ...ex } : base;
+      });
+      const prev = pvAcqMap(), changed = Object.keys(out).filter(k => JSON.stringify(prev[k]) !== JSON.stringify(out[k])).length;
+      if (!confirm(`File «${file.name}»\n${fmtNum(n, 0)} prezzi letti → ${fmtNum(acc.size, 0)} prodotti del catalogo ${cat.nome} (${fmtNum(changed, 0)} nuovi o cambiati).\n${miss.length ? `${miss.length} righe non trovate nel catalogo (es. ${[...new Set(miss)].slice(0, 3).join(', ')}).\n` : ''}I prezzi si salvano nel tuo Foglio Google (privato), non sul sito. Il prezzo al pubblico diventa il doppio.\nImportare?`)) return;
+      write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify({ ...prev, ...out }) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcqInfo', valore: JSON.stringify({ data: today(), file: file.name, n: acc.size, miss: miss.length }) } }]);
+      toast(`Prezzi d'acquisto caricati per ${fmtNum(acc.size, 0)} prodotti`);
+    } catch (e) { busy(); toast(e.message); }
+  }
   /* ---------- elenco e scheda del preventivo ---------- */
   function pvQuotes(body) {
     const L = pvList();
@@ -2972,7 +3020,7 @@
       <div class="pv-tr"><span>Imponibile</span><b id="pv-t-imp">${eur(t.imp)}</b></div>
       <div class="pv-tr"><span>IVA ${fmtNum(num(p.iva), 0)}%</span><b id="pv-t-iva">${eur(t.iva)}</b></div>
       <div class="pv-tr t"><span>Totale</span><b id="pv-t-tot">${eur(t.tot)}</b></div>
-      <div class="pv-int"><span>Solo per te · non va nel PDF</span>${t.noCost ? `<small>${t.noCost} righe senza prezzo d'acquisto: margine incompleto</small>` : ''}<div class="pv-tr"><span>Costo d'acquisto</span><b>${eur(t.costo)}</b></div><div class="pv-tr"><span>Margine</span><b class="${t.marg >= 0 ? 'pos' : 'neg'}">${eur(t.marg)}${t.imp ? ` · ${fmtNum(t.marg / t.imp * 100, 0)}%` : ''}</b></div></div>`;
+      <div class="pv-int"${pvCli ? ' hidden' : ''}><span>Solo per te · non va nel PDF</span>${t.noCost ? `<small>${t.noCost} righe senza prezzo d'acquisto: margine incompleto</small>` : ''}<div class="pv-tr"><span>Costo d'acquisto</span><b>${eur(t.costo)}</b></div><div class="pv-tr"><span>Margine</span><b class="${t.marg >= 0 ? 'pos' : 'neg'}">${eur(t.marg)}${t.imp ? ` · ${fmtNum(t.marg / t.imp * 100, 0)}%` : ''}</b></div></div>`;
   }
   function pvLineEdit(i) {
     const p = pvFromForm(); if (!p) return; const l = p.righe[i]; if (!l) return;
@@ -5437,6 +5485,8 @@
       if (t.closest('#pv-save')) { pvQuiet(pvFromForm()); toast('Preventivo salvato'); return; }
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
+      if (t.closest('#pv-impacq')) { pvImportAcq(); return; }
+      if (t.closest('#pv-eye')) { pvCli = !pvCli; try { localStorage.setItem('cdc_pvcli', pvCli ? '1' : '0'); } catch {} if ($('#pv-ed')) pvQuiet(pvFromForm()); renderPv(); toast(pvCli ? 'Vista cliente: prezzi d\'acquisto nascosti' : 'Prezzi d\'acquisto visibili'); return; }
       if (t.closest('#pv-dup')) { const p = pvFromForm(); if (!p) return; const n = { ...JSON.parse(JSON.stringify(p)), id: uid(), num: pvNextNum(), data: today(), stato: 'bozza' }; pvEdit = n.id; pvSave(n); toast(`Creato ${n.num} (copia di ${p.num})`); return; }
       if (t.closest('#pv-del')) { const p = pvGet(pvEdit); if (!p || !confirm(`Eliminare il preventivo ${p.num}?`)) return; pvEdit = ''; if (pvTarget === p.id) pvTarget = ''; write([{ action: 'delete', sheet: 'Config', id: 'pv:' + p.id }]); toast('Preventivo eliminato'); return; }
       const pvld = t.closest('[data-pvldel]'); if (pvld) { const p = pvFromForm(); p.righe.splice(+pvld.dataset.pvldel, 1); pvSave(p); return; }
