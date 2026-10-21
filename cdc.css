@@ -1926,3 +1926,29 @@ body.has-sel .fab { display: none; }
 .pv-mki figcaption { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
 .pv-lgn .link, .pv-lgs-i > .link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; }
 .pv-lgn .link:hover, .pv-lgs-i > .link:hover { text-decoration: underline; } .pv-lgn .link.d { color: var(--danger); }
+
+/* ---------- v50 anteprima a scelta, prezzi personalizzazione ---------- */
+.pv-mks-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+.pv-mks-h .link { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; }
+.pv-mks { display: grid; gap: 6px; max-height: 52vh; overflow: auto; }
+.pv-mks-r { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; background: var(--surface); transition: border-color .15s, background .15s; }
+.pv-mks-r:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pv-mks-r input { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.pv-mks-r b { display: block; font-size: 13.5px; } .pv-mks-r small { color: var(--muted); font-size: 12px; }
+.pv-mki figure { display: grid; gap: 6px; justify-items: center; }
+.pv-mki figure .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pv-mki figure .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.pv-mk { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.pv-mkf { display: flex; justify-content: flex-end; margin-top: 14px; }
+.pv-pr { margin-top: 16px; }
+.pv-prt td { vertical-align: middle; }
+.pv-prd { display: grid; gap: 6px; min-width: 260px; }
+.pv-prd select, .pv-prs { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; padding: 0 8px; max-width: 100%; }
+.pv-prd input { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; padding: 0 10px; }
+.pv-pl { display: grid; gap: 6px; }
+.pv-plr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; }
+.pv-plr em { font-style: normal; font-size: 11px; color: var(--muted); background: var(--bg); padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
+.pv-pli { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); flex: none; }
+.pv-pli input { width: 84px; height: 34px; border: 1px solid var(--line); border-radius: 8px; text-align: right; padding: 0 8px; font: inherit; background: var(--surface); color: var(--ink); }
+.pv-lgt small em { font-style: normal; color: var(--accent); font-weight: 600; }
+.pv-mki img { max-height: 320px; }
