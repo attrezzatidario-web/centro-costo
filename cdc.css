@@ -1989,3 +1989,29 @@ body.has-sel .fab { display: none; }
 .pv-brand { grid-template-columns: repeat(5, 60px); } .pv-bi { width: 60px; transform: translateX(calc(var(--i, 0) * 64px)); }
 @media (max-width: 520px) { .pv-brand { grid-template-columns: repeat(5, 50px); gap: 3px; } .pv-bi { width: 50px; transform: translateX(calc(var(--i, 0) * 53px)); } .pv-brand img { height: 26px; } }
 .pv-card .pv-cm > b { -webkit-line-clamp: 3; }
+
+/* ---------- v59 vista 3D ---------- */
+.pv-hm { position: relative; }
+.pv-3dbtn { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 18px -10px rgba(15, 23, 42, .5); transition: border-color .2s, color .2s, transform .2s; white-space: nowrap; }
+.pv-3dbtn:hover { border-color: var(--accent); color: var(--accent); transform: translateX(-50%) translateY(-1px); }
+.pv-3dbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.pv-3dbtn em { font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.pv3d { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; cursor: grab; touch-action: pan-y; user-select: none; outline: none; }
+.pv3d.drag { cursor: grabbing; }
+.pv3d:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.pv3d-st { position: relative; aspect-ratio: 1; max-height: 62vh; margin: 0 auto; }
+.pv3d-st img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.pv3d-hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #5b6472; background: rgba(255, 255, 255, .9); padding: 4px 10px; border-radius: 999px; border: 1px solid #e3e7ee; }
+.pv3d-hint svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pv3d-deg { position: absolute; top: 10px; right: 12px; font-size: 12px; font-weight: 600; color: #5b6472; font-variant-numeric: tabular-nums; }
+.pv3d-ctl { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.pv3d-ctl input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.pv3d-ctl .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pv3d-ctl .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pv3d-ctl .link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.pv3d-ask { text-align: center; padding: 6px 4px; }
+.pv3d-ask p { margin: 6px 0; }
+.pv3d-ico { width: 56px; height: 56px; margin: 0 auto 8px; border-radius: 16px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.pv3d-ico svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+@media (prefers-reduced-motion: reduce) { .pv-3dbtn { transition: none; } }
+.pv-3dbtn { z-index: 3; }
