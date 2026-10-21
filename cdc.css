@@ -1986,3 +1986,6 @@ body.has-sel .fab { display: none; }
 .pv-card .pv-cm > b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pv-brand { grid-template-columns: repeat(4, 64px); }
 @media (max-width: 520px) { .pv-brand { grid-template-columns: repeat(4, 54px); } .pv-bi { width: 54px; transform: translateX(calc(var(--i, 0) * 58px)); } .pv-brand img { height: 28px; } }
+.pv-brand { grid-template-columns: repeat(5, 60px); } .pv-bi { width: 60px; transform: translateX(calc(var(--i, 0) * 64px)); }
+@media (max-width: 520px) { .pv-brand { grid-template-columns: repeat(5, 50px); gap: 3px; } .pv-bi { width: 50px; transform: translateX(calc(var(--i, 0) * 53px)); } .pv-brand img { height: 26px; } }
+.pv-card .pv-cm > b { -webkit-line-clamp: 3; }
