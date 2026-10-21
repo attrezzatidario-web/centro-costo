@@ -187,8 +187,17 @@
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: tok, ...extra }), credentials: 'omit', referrerPolicy: 'no-referrer' });
     const j = await r.json();
     if (!j.ok && j.auth) { lockApp(j.error); throw new AuthError(j.error); }
-    if (!j.ok) throw new Error(j.error || 'Errore');
+    if (!j.ok) throw new Error(errIt(j.error || 'Errore'));
     return j;
+  }
+  // errori di Google Gemini tradotti in italiano
+  function errIt(m) {
+    m = String(m);
+    if (/prepayment credits|credits are depleted|billing/i.test(m)) return 'Credito di Gemini esaurito: ricarica il credito su Google AI Studio (aistudio.google.com › Billing), poi riprova.';
+    if (/quota|RESOURCE_EXHAUSTED|rate limit|too many requests/i.test(m)) return 'Limite di richieste a Gemini raggiunto: aspetta qualche minuto e riprova.';
+    if (/API key not valid|API_KEY_INVALID|permission denied/i.test(m)) return 'La chiave di Gemini non è valida: controllala in Impostazioni › Intelligenza artificiale.';
+    if (/overloaded|UNAVAILABLE|503/i.test(m)) return 'Gemini è sovraccarico in questo momento: riprova tra poco.';
+    return m;
   }
   async function api(action, extra) { return (await post(action, extra)).result; }
   function lockApp(msg) {
@@ -3101,7 +3110,7 @@
       const G = pvGroupsOf(cat).map(g => `${g.k}: ${g.t}${g.s ? ' (' + g.s + ')' : ''}`);
       let r;
       try { busy('Leggo la pagina del prodotto…'); r = await api('ai', { task: 'prodottoLink', url, fornitore: cat.nome, abbigliamento: !cat.tool, gruppi: G }); }
-      catch (e) { busy(); toast(e.message); return; }
+      catch (e) { busy(); toast(e.message); if (/Gemini|IA|leggere|blocca/i.test(e.message)) pvLinkForm(cat, null, { url, dubbi: e.message + ' Intanto puoi compilare la scheda a mano.' }); return; }
       busy();
       if (!r || !r.nome) toast('Non ho trovato un prodotto in quella pagina: controlla i dati o scrivili a mano');
       pvLinkForm(cat, null, r || { url });
