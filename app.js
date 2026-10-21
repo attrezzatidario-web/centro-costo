@@ -2760,21 +2760,21 @@
   /* =========================================================
      PREVENTIVI PAYPER, JRC, DEWALT, STANLEY E USAG — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' } };
   const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt, Stanley: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach(c => { if (c[2] != null) pvListPub[it.id] = c[2]; })); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
   const pvRic = () => num(cfg('ppRic')) || 2;
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
   const pvAcq = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
-  const pvPub = (it, col) => { if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
+  const pvPub = (it, col) => { if (col != null && pvListPub[it + '|' + col] != null) return pvListPub[it + '|' + col]; if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
   const pvCode = it => /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
   const pvImg = (cat, c) => c && c[4] ? (cat.img ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
@@ -2891,9 +2891,9 @@
         <div class="pv-hero-l">
           <img class="pv-hero-logo" src="logo-${pvSup}.svg" alt="${esc(cat.nome)}">
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
-          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? 'prezzi al pubblico dal listino' : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
+          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'prezzi consigliati dal volantino (validi fino al 31/01/2027)' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
-        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
       <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
       <div class="pv-cats">${G.map(card).join('')}</div>
@@ -2959,7 +2959,7 @@
     pvSumUpd(it);
   }
   // scheda di un attrezzo (DeWalt): niente taglie e colori, solo la quantità
-  const pvSpecTool = it => [['Codice', it.id], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].filter(x => x[1]);
+  const pvSpecTool = it => [['Codice', it.c.length > 1 ? `${it.c.length} codici, uno per taglia` : it.id], ['Modello', it.mod || ''], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].filter(x => x[1]);
   function pvDetailTool(body, cat, it, base, q, quotes) {
     const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]), lordo = it.pl && it.pl[0], acq = base === '' ? null : num(base);
     body.innerHTML = `${pvBanner()}
@@ -2974,13 +2974,13 @@
         </div>
         <div class="pv-prices">${pvCli ? `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${pub != null ? eur(pub) : '—'}</b><small>a pezzo · IVA esclusa</small></div>` : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
-          <div class="pv-pf"><span>Prezzo al pubblico</span><b>${pub != null ? eur(pub) : '—'}</b><small>prezzo utilizzatore ${esc(cat.nome)}${acq && pub ? ` · margine ${fmtNum((pub - acq) / pub * 100, 0)}%` : ''}</small></div>
+          <div class="pv-pf"><span>Prezzo al pubblico</span><b>${pub != null ? eur(pub) : '—'}</b><small>${cat.f === 'milwaukee' ? 'prezzo consigliato volantino' : 'prezzo utilizzatore ' + esc(cat.nome)}${acq && pub ? ` · margine ${fmtNum((pub - acq) / pub * 100, 0)}%` : ''}</small></div>
           ${lordo ? `<div class="pv-pf"><span>Listino lordo</span><b>${eur(lordo)}</b><small>${pub ? `sconto utilizzatore ${fmtNum((1 - pub / lordo) * 100, 0)}%` : 'prezzo di listino'}</small></div>` : ''}`}
         </div>
       </div>
       <div class="card pv-mx">
-        <div class="card-h"><h3>Quantità</h3><span class="muted small">${it.uv > 1 ? `confezione da ${it.uv} pezzi · ` : ''}${pub != null ? `${eur(pub)} cad. al pubblico` : 'prezzo da definire'}</span></div>
-        <div class="pv-tq"><button type="button" class="pv-tqb" data-pvtq="-1" aria-label="Meno">−</button><input class="pv-qi pv-tqi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" placeholder="0" aria-label="Quantità"><button type="button" class="pv-tqb" data-pvtq="1" aria-label="Più">+</button></div>
+        <div class="card-h"><h3>Quantità</h3><span class="muted small">${it.c.length > 1 ? `scrivi i pezzi per ogni taglia · ${it.c.length} taglie` : `${it.uv > 1 ? `confezione da ${it.uv} pezzi · ` : ''}${pub != null ? `${eur(pub)} cad. al pubblico` : 'prezzo da definire'}`}</span></div>
+        ${it.c.length > 1 ? `<div class="pv-vr">${it.c.map(c => { const kk = c[0] + '|Pz', pp = pvPub(it.id, c[0]); return `<div class="pv-vrow"><span class="pv-vn"><b>${esc(c[1] || c[0])}</b><small>cod. ${esc(c[0])}${pp != null ? ' · ' + eur(pp) : ''}</small></span><div class="pv-tq"><button type="button" class="pv-tqb" data-pvtq="-1" aria-label="Meno">−</button><input class="pv-qi pv-tqi" data-pvq="${esc(kk)}" inputmode="numeric" value="${q[kk] ? esc(String(q[kk])) : ''}" placeholder="0" aria-label="Quantità ${esc(c[1] || c[0])}"><button type="button" class="pv-tqb" data-pvtq="1" aria-label="Più">+</button></div></div>`; }).join('')}</div>` : `<div class="pv-tq"><button type="button" class="pv-tqb" data-pvtq="-1" aria-label="Meno">−</button><input class="pv-qi pv-tqi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" placeholder="0" aria-label="Quantità"><button type="button" class="pv-tqb" data-pvtq="1" aria-label="Più">+</button></div>`}
       </div>
       <div class="pv-bar"><span id="pv-sum"></span>
         <select id="pv-dest" aria-label="Preventivo">${pvTarget && pvGet(pvTarget) ? '' : '<option value="">+ Nuovo preventivo</option>'}${quotes.map(p => `<option value="${esc(p.id)}"${p.id === pvTarget ? ' selected' : ''}>${esc(p.num)}${p.cliente && p.cliente.nome ? ' · ' + esc(p.cliente.nome) : ''}</option>`).join('')}${pvTarget && pvGet(pvTarget) ? '<option value="">+ Nuovo preventivo</option>' : ''}</select>
@@ -3089,7 +3089,7 @@
         </div>
         <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
-            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc(l.it) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}"></td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td><span class="muted small">—</span></td>' : `<td><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
+            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc((l.cn ? l.cn + ' · ' : '') + (l.c || l.it)) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}"></td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td><span class="muted small">—</span></td>' : `<td><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
         </div>
         ${pvLogoCard(p)}
@@ -3673,7 +3673,7 @@
       y = sec(p.righe.every(l => l.tool) ? 'Articoli da preparare' : p.righe.some(l => l.tool) ? 'Capi e articoli da preparare' : 'Capi da preparare', y, `${p.righe.length} righe · ${fmtNum(totPz, 0)} pezzi`);
       const SZ = pvSzSort(p.righe.flatMap(l => Object.keys(l.q || {}).filter(s => num(l.q[s]) > 0))), MATRIX = SZ.length <= 9;
       const head = ['', 'Articolo', 'Colore', ...(MATRIX ? SZ : ['Taglie']), 'Tot.', 'Logo', 'OK'];
-      const body = p.righe.map(l => { const it = itemOf(l), sup = (cats[l.sup || 'payper'] || {}).nome || (l.sup === 'jrc' ? 'JRC' : 'Payper'); const lg = [l.lf && LG.f ? pvPos(l, 'f') : '', l.lr && LG.r ? pvPos(l, 'r') : ''].filter(Boolean).join('\n'); return ['', `${l.n}\n${sup} · ${pvCode(it || { id: l.it })}${it && it.cl ? '\n' + it.cl.toLowerCase() : ''}`, l.tool ? '—' : `${l.cn}\ncod. ${l.c}`, ...(MATRIX ? SZ.map(s => num(l.q[s]) ? fmtNum(num(l.q[s]), 0) : '') : [pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  ')]), fmtNum(LQ(l), 0), lg || '—', '']; });
+      const body = p.righe.map(l => { const it = itemOf(l), sup = (cats[l.sup || 'payper'] || {}).nome || (l.sup === 'jrc' ? 'JRC' : 'Payper'); const lg = [l.lf && LG.f ? pvPos(l, 'f') : '', l.lr && LG.r ? pvPos(l, 'r') : ''].filter(Boolean).join('\n'); return ['', `${l.n}\n${sup} · ${pvCode(it || { id: l.it })}${it && it.cl ? '\n' + it.cl.toLowerCase() : ''}`, l.tool ? (l.cn ? `${l.cn}\ncod. ${l.c}` : '—') : `${l.cn}\ncod. ${l.c}`, ...(MATRIX ? SZ.map(s => num(l.q[s]) ? fmtNum(num(l.q[s]), 0) : '') : [pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  ')]), fmtNum(LQ(l), 0), lg || '—', '']; });
       const foot = [['', 'Totale', '', ...(MATRIX ? SZ.map(s => { const v = p.righe.reduce((a, l) => a + num(l.q[s]), 0); return v ? fmtNum(v, 0) : ''; }) : ['']), fmtNum(totPz, 0), '', '']];
       const nS = MATRIX ? SZ.length : 1, iTot = 3 + nS, iLogo = iTot + 1, iOk = iLogo + 1;
       const colSt = { 0: { cellWidth: 17 }, 1: { cellWidth: MATRIX ? 40 : 46, fontStyle: 'bold' }, 2: { cellWidth: 27 }, [iTot]: { halign: 'center', fontStyle: 'bold', cellWidth: 11 }, [iLogo]: { cellWidth: 16, fontSize: 7.2 }, [iOk]: { cellWidth: 9 } };
@@ -3703,7 +3703,7 @@
         doc.autoTable({
           startY: y + 3, margin: { left: M, right: M, top: 18, bottom: 16 }, theme: 'grid', rowPageBreak: 'avoid',
           head: [['Cod. articolo', 'Articolo', 'Cod. colore', 'Colore', 'Taglie e quantità', 'Pezzi', 'Arrivato']],
-          body: ls.map(l => l.tool ? [l.it, l.n, '—', '—', '—', fmtNum(LQ(l), 0), ''] : [pvCode(itemOf(l) || { id: l.it }), l.n, l.c, l.cn, pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s} × ${fmtNum(num(l.q[s]), 0)}`).join('   '), fmtNum(LQ(l), 0), '']),
+          body: ls.map(l => l.tool ? [l.c || l.it, l.n, '—', l.cn || '—', '—', fmtNum(LQ(l), 0), ''] : [pvCode(itemOf(l) || { id: l.it }), l.n, l.c, l.cn, pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s} × ${fmtNum(num(l.q[s]), 0)}`).join('   '), fmtNum(LQ(l), 0), '']),
           styles: { font: FF, fontSize: 8, textColor: C.ink, lineColor: C.line, lineWidth: .2, cellPadding: 1.8, valign: 'middle' },
           headStyles: { fillColor: C.soft, textColor: C.navy, fontStyle: 'bold', fontSize: 7.4 },
           columnStyles: { 0: { cellWidth: 24, fontStyle: 'bold' }, 1: { cellWidth: 34 }, 2: { cellWidth: 20 }, 3: { cellWidth: 26 }, 5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' }, 6: { cellWidth: 15 } },
@@ -3953,7 +3953,7 @@
       doc.text([cl.email, cl.tel].filter(Boolean).join(' · '), W - M - 6, y + 20, { align: 'right' });
       y += 34;
       const fitImg = (im, x, y, w, h) => { const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k; doc.addImage(im.d, 'JPEG', x + (w - iw) / 2, y + (h - ih) / 2, iw, ih, undefined, 'FAST'); };
-      const body = p.righe.map(l => { const sz = l.tool ? '' : (l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  '); const lt = lgTxt(l); return [`${l.n}\n${l.it}${lt ? '\nLogo: ' + lt : ''}`, l.cn, sz, fmtNum(pvLineQ(l), 0), l.p != null ? eur(l.p) : '—', num(l.sc) ? fmtNum(num(l.sc), 1).replace(/,0$/, '') + '%' : '', l.p != null ? eur(pvLineTot(l)) : '—']; });
+      const body = p.righe.map(l => { const sz = l.tool ? (l.cn || '') : (l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  '); const lt = lgTxt(l); return [`${l.n}\n${l.tool ? l.c || l.it : l.it}${lt ? '\nLogo: ' + lt : ''}`, l.tool ? '' : l.cn, sz, fmtNum(pvLineQ(l), 0), l.p != null ? eur(l.p) : '—', num(l.sc) ? fmtNum(num(l.sc), 1).replace(/,0$/, '') + '%' : '', l.p != null ? eur(pvLineTot(l)) : '—']; });
       const FOTO = opt.foto;
       if (FOTO) body.forEach(r => r.unshift(''));
       const head = ['Prodotto', 'Colore', 'Taglie', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale']; if (FOTO) head.unshift('');
@@ -6341,7 +6341,7 @@
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-work')) { pvWorkPdf(); return; }
       if (t.closest('[data-pv3d]')) { const cat = pvCats[pvSup], it = cat && cat.items.find(x => x.id === pvItem); if (it) pv3dOpen(pvSup, it, it.c[0]); return; }
-      const tq = t.closest('[data-pvtq]'); if (tq) { const inp = $('.pv-tqi'); if (inp) { inp.value = Math.max(0, Math.round(num(inp.value)) + Number(tq.dataset.pvtq)) || ''; inp.dispatchEvent(new Event('input', { bubbles: true })); } return; }
+      const tq = t.closest('[data-pvtq]'); if (tq) { const inp = (tq.closest('.pv-tq') || document).querySelector('.pv-tqi'); if (inp) { inp.value = Math.max(0, Math.round(num(inp.value)) + Number(tq.dataset.pvtq)) || ''; inp.dispatchEvent(new Event('input', { bubbles: true })); } return; }
       const lgs = t.closest('[data-pvlgset]'); if (lgs) { pvLogoSet(lgs.dataset.pvlgset); return; }
       const lgd = t.closest('[data-pvlgdel]'); if (lgd) { const p = pvFromForm(); if (!p || !p.loghi) return; const s0 = lgd.dataset.pvlgdel; if (!confirm(`Togliere il logo ${s0 === 'f' ? 'del fronte' : 'della schiena'} da questo preventivo?`)) return; p.loghi[s0] = null; p.righe.forEach(l => { l[s0 === 'f' ? 'lf' : 'lr'] = false; }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
       if (t.closest('[data-pvlgsame]')) { const p = pvFromForm(); if (!p || !p.loghi || !p.loghi.f) return; p.loghi.r = { ...p.loghi.f }; if (!p.righe.some(l => l.lr)) p.righe.forEach(l => { l.lr = pvTop(l); }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); toast('Stesso logo anche sulla schiena'); return; }
