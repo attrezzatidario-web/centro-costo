@@ -2758,10 +2758,10 @@
   }
 
   /* =========================================================
-     PREVENTIVI PAYPER, JRC E DEWALT — catalogo e preventivi
+     PREVENTIVI PAYPER, JRC, DEWALT E STANLEY — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' } };
-  const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt: prezzo utilizzatore)
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' } };
+  const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt, Stanley: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
   async function pvLoad(sup) {
@@ -2807,7 +2807,7 @@
   const pvRefresh = p => { p.righe.forEach(l => { if (!l.man) { const v = pvPub(l.it, l.c); l.p = v; } }); return p; };
 
   function navMore() {
-    const L = [['torental', 'Torental', 'listino kit adesivi'], ['preventivi', 'Preventivi', 'Payper, JRC e DeWalt'], ['impostazioni', 'Impostazioni', 'backup, centri, budget, IA']];
+    const L = [['torental', 'Torental', 'listino kit adesivi'], ['preventivi', 'Preventivi', 'Payper, JRC, DeWalt e Stanley'], ['impostazioni', 'Impostazioni', 'backup, centri, budget, IA']];
     openSheet('Altre sezioni', `<div class="nm-l">${L.map(([h, t, d]) => `<a class="nm-i" href="#${h}" data-close-nav><b>${t}</b><small>${d}</small><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a>`).join('')}</div>`, null, null, 'Chiudi');
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
     $$('#sheet-body [data-close-nav]').forEach(a => a.addEventListener('click', () => setTimeout(closeSheet, 30)));
@@ -2893,7 +2893,7 @@
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
           <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? 'prezzi al pubblico dal listino' : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
-        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
       <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
       <div class="pv-cats">${G.map(card).join('')}</div>
