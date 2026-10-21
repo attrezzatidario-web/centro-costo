@@ -2758,31 +2758,38 @@
   }
 
   /* =========================================================
-     PREVENTIVI PAYPER E JRC — catalogo e preventivi
+     PREVENTIVI PAYPER, JRC E DEWALT — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' } };
+  const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach(c => { if (c[2] != null) pvListPub[it.id] = c[2]; })); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
   const pvRic = () => num(cfg('ppRic')) || 2;
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
   const pvAcq = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
-  const pvPub = (it, col) => { const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
+  const pvPub = (it, col) => { if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
   const pvCode = it => /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
-  const pvImg = (cat, c) => c && c[4] ? (/^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
+  const pvImg = (cat, c) => c && c[4] ? (cat.img ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
+  // foto contenute nei file del catalogo (DeWalt): caricate a blocchi solo quando servono
+  const pvChunk = {};
+  function pvCimg(u) { const [, sup, code, size = 'f'] = String(u).split(':'), cat = pvCats[sup]; const i = cat && cat.img && cat.img[size] && cat.img[size][code]; if (i == null) return Promise.resolve(null); const key = `${sup}-${size}${i}`; if (!pvChunk[key]) pvChunk[key] = fetch(`${cat.imgFile || 'dw-'}${size}${i}.json`).then(r => r.ok ? r.json() : {}).catch(() => { delete pvChunk[key]; return {}; }); return pvChunk[key].then(m => m[code] || null); }
+  const pvImgTag = (u, size, extra = '') => u.startsWith('cimg:') ? `<img data-csrc="${esc(u)}:${size}" alt=""${extra}>` : `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer"${extra}>`;
+  function pvFillImgs() { $$('img[data-csrc]').forEach(im => { if (im._ld) return; im._ld = 1; pvCimg(im.dataset.csrc).then(d => { if (d) im.src = d; else { const b = im.closest('.pv-img, .pv-cat-img'); if (b) b.classList.remove('has'); im.remove(); } }); }); }
+  try { new MutationObserver(() => { if (document.querySelector('img[data-csrc]:not([src])')) pvFillImgs(); }).observe(document.documentElement, { childList: true, subtree: true }); } catch {}
   // colori: tinta indicativa dal nome
   const PV_COL = [['GIALLO FLUO', '#e4ff1a'], ['ARANCIONE FLUO', '#ff6a13'], ['FUCSIA FLUO', '#ff2aa6'], ['VERDE FLUO', '#5dff3a'], ['ROSA FLUO', '#ff5fb0'], ['GRIGIO MELANGE', '#a8aaad'], ['LIGHT BLU ROYAL', '#4f6fd6'], ['BLU ROYAL', '#2643a6'], ['BLU NAVY', '#1d2b4c'], ['BLU ATOLLO', '#1493c9'], ['BLU JEANS', '#3d5a80'], ['AZZURRO', '#79c1ee'], ['VERDE MILITARE', '#4b5320'], ['VERDE ACIDO', '#a3d12f'], ['JELLY GREEN', '#3fbf62'], ['EMERALD GREEN', '#009b77'], ['VERDE BOTTIGLIA', '#0f4d2c'], ['LIME LIGHT', '#f3ea8f'], ['AQUAMARINE', '#5fd3c4'], ['SUMMER VIOLET', '#8e6fc1'], ['HOT CORAL', '#f2545b'], ['ROSA SHADOW', '#f1b7c8'], ['ANTRACITE', '#3b3e42'], ['SMOKE', '#5b5e62'], ['BORDEAUX', '#7a1f2b'], ['ARANCIONE', '#f47b20'], ['GIALLO', '#f7d417'], ['ROSSO', '#c8102e'], ['VERDE', '#1f8a3b'], ['BIANCO', '#ffffff'], ['NERO', '#151515'], ['GRIGIO', '#8a8d91'], ['FUCSIA', '#d6247b'], ['ROSA', '#f4a6c0'], ['MARRONE', '#6b4226'], ['BEIGE', '#d8c7a3'], ['SABBIA', '#d9c9a0'], ['KAKI', '#8f8455'], ['VIOLA', '#6b3fa0'], ['TURCHESE', '#20b2aa'], ['CELESTE', '#a6d4f2'], ['ORO', '#c9a227'], ['ARGENTO', '#c0c0c0'], ['NATURALE', '#efe6d2'], ['CORDA', '#cbb994'], ['MIMETICO', 'linear-gradient(135deg,#4b5320 0 33%,#8f8455 33% 66%,#3b2f1e 66%)'],
     ['YELLOW FLUO', '#e4ff1a'], ['YELLOWFLUO', '#e4ff1a'], ['ORANGE FLUO', '#ff6a13'], ['GREEN FLUO', '#5dff3a'], ['FUCSIA FLUO', '#ff2aa6'], ['CAMOUFLAG', 'linear-gradient(135deg,#4b5320 0 33%,#8f8455 33% 66%,#3b2f1e 66%)'], ['ARMY GREE', '#4b5320'], ['DARK GREEN', '#0f4d2c'], ['FOREST', '#1f4d2b'], ['IRISH GREEN', '#1f9a4a'], ['MEDIUM GREEN', '#2e8b57'], ['LIGHT GREEN', '#8fd18b'], ['SUNNY LIME', '#d4e157'], ['LIME', '#a3d12f'], ['DARK MELANGE', '#6d7075'], ['LIGHT MELANGE', '#c9cbce'], ['VULCAN', '#3b3e42'], ['MELANGE', '#a8aaad'], ['LIGHT GREY', '#c4c6c9'], ['COOL GREY', '#9ea2a8'], ['MEDIUM GREY', '#7d8186'], ['DARK GREY', '#4a4d51'], ['DARK NAVY', '#141d33'], ['NAVY', '#1d2b4c'], ['ROYAL', '#2643a6'], ['LIGHT SKY', '#a6d4f2'], ['SKY', '#79c1ee'], ['LIGHT BLUE', '#a6d4f2'], ['AVIO', '#5d7fa3'], ['DENIM', '#3d5a80'], ['INDIGO', '#2e3a6b'], ['BLUE', '#24439a'], ['BLACK', '#151515'], ['WHITE OFF', '#f3efe4'], ['WHITE', '#ffffff'], ['DARK RED', '#8b1a1a'], ['RED MINERAL', '#9e2a2b'], ['RASPBERRY', '#c22a5a'], ['RED', '#c8102e'], ['BURGUNDY', '#7a1f2b'], ['ORANGE', '#f47b20'], ['MUSTARD', '#d9a321'], ['YELLOW', '#f7d417'], ['GREEN', '#1f8a3b'], ['GREY', '#8a8d91'], ['KHAKI', '#8f8455'], ['SAND', '#d9c9a0'], ['BROWN', '#6b4226'], ['CHOCOLATE', '#4a2c1d'], ['TOBACCO', '#7b5230'], ['DRIFTWOOD', '#8b7d6b'], ['PINK', '#f4a6c0'], ['LIGHT VIOLET', '#b9a6dd'], ['LAVANDER', '#b9a6dd'], ['VIOLET', '#6b3fa0'], ['CORAL', '#f2545b'], ['CREAM', '#f1e7cf'], ['ICE', '#dfeff6'], ['STELLAR', '#2b3a55']];
   const pvHex = name => { const N = amNorm(name), parts = N.split('/').map(s => s.trim()).filter(Boolean); const one = p => { const h = PV_COL.find(([k]) => p.includes(k)); return h ? h[1] : '#c9ccd1'; }; if (parts.length > 1) { const a = one(parts[0]), b = one(parts[1]); return a.startsWith('linear') ? a : `linear-gradient(135deg,${a} 0 55%,${b} 55%)`; } return one(N); };
   const pvSw = name => `<i class="pv-sw" style="background:${pvHex(name)}" title="${esc(name)}"></i>`;
-  const pvThumb = (cat, it, c, cls = '') => { const cc = c || it.c[0], u = pvImg(cat, cc), sm = cls === 'sm'; return `<span class="pv-img ${cls}${u ? ' has' : ''}"${sm ? ` style="--sw:${pvHex(cc[1])}"` : ''}>${u ? `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${sm ? '' : `<b>${esc(it.n.split(/\s+/).map(w => w[0]).join('').slice(0, 2))}</b>`}</span>`; };
+  const pvThumb = (cat, it, c, cls = '') => { const cc = c || it.c[0], u = pvImg(cat, cc), sm = cls === 'sm'; return `<span class="pv-img ${cls}${u ? ' has' : ''}"${sm ? ` style="--sw:${pvHex(cc[1])}"` : ''}>${u ? pvImgTag(u, cls === 'big' ? 'f' : 't') : ''}${sm ? '' : `<b>${esc(it.n.split(/\s+/).map(w => w[0]).join('').slice(0, 2))}</b>`}</span>`; };
   // preventivi salvati in Config come «pv:id»
   const pvList = () => Object.keys(db.config || {}).filter(k => k.startsWith('pv:')).map(k => ({ ...cfg(k), key: k })).filter(p => p && p.id).sort((a, b) => String(b.num).localeCompare(String(a.num)));
   const pvGet = id => { const p = cfg('pv:' + id); return p ? JSON.parse(JSON.stringify(p)) : null; };
@@ -2800,7 +2807,7 @@
   const pvRefresh = p => { p.righe.forEach(l => { if (!l.man) { const v = pvPub(l.it, l.c); l.p = v; } }); return p; };
 
   function navMore() {
-    const L = [['torental', 'Torental', 'listino kit adesivi'], ['preventivi', 'Preventivi', 'Payper e JRC'], ['impostazioni', 'Impostazioni', 'backup, centri, budget, IA']];
+    const L = [['torental', 'Torental', 'listino kit adesivi'], ['preventivi', 'Preventivi', 'Payper, JRC e DeWalt'], ['impostazioni', 'Impostazioni', 'backup, centri, budget, IA']];
     openSheet('Altre sezioni', `<div class="nm-l">${L.map(([h, t, d]) => `<a class="nm-i" href="#${h}" data-close-nav><b>${t}</b><small>${d}</small><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a>`).join('')}</div>`, null, null, 'Chiudi');
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
     $$('#sheet-body [data-close-nav]').forEach(a => a.addEventListener('click', () => setTimeout(closeSheet, 30)));
@@ -2810,7 +2817,7 @@
     sub(`${PV_SUP[pvSup].n} · catalogo e preventivi`);
     $$('[data-pvtab]').forEach(b => b.classList.toggle('on', b.dataset.pvtab === pvTab));
     $$('[data-pvsup]').forEach(b => { b.classList.toggle('on', b.dataset.pvsup === pvSup); b.setAttribute('aria-pressed', b.dataset.pvsup === pvSup); });
-    const br = $('.pv-brand'); if (br) br.style.setProperty('--i', pvSup === 'jrc' ? 1 : 0);
+    const br = $('.pv-brand'); if (br) br.style.setProperty('--i', Math.max(0, Object.keys(PV_SUP).indexOf(pvSup)));
     const eye = $('#pv-eye'); if (eye) { eye.classList.toggle('on', pvCli); eye.setAttribute('aria-pressed', pvCli); eye.querySelector('span').textContent = pvCli ? 'Vista cliente' : 'Prezzi d\'acquisto visibili'; }
     document.body.classList.toggle('pv-cli', pvCli);
     const body = $('#pv-body');
@@ -2843,7 +2850,8 @@
   ];
   const pvGroupOf = cl => { const order = ['prof', 'intimo', 'dpi']; const g = [...PV_GROUPS.filter(x => order.includes(x.k)), ...PV_GROUPS.filter(x => !order.includes(x.k))].find(x => x.re.test(cl)); return g ? g.k : 'altro'; };
   let pvGroup = '', pvSort = '';
-  const pvGroupT = k => (PV_GROUPS.find(g => g.k === k) || { t: 'Altro' }).t;
+  const pvGroupsOf = cat => (cat && cat.groups) || PV_GROUPS;
+  const pvGroupT = k => (pvGroupsOf(pvCats[pvSup]).find(g => g.k === k) || { t: 'Altro' }).t;
   const pvMinPub = it => { const v = it.c.map(c => pvPub(it.id, c[0])).filter(x => x != null); return v.length ? Math.min(...v) : null; };
   // colore più «pulito» per la foto di copertina
   const pvCover = it => it.c.find(c => /^(BIANCO|WHITE)$/.test(c[1])) || it.c.find(c => /^(NERO|BLU NAVY|GRIGIO|BLACK|NAVY|GREY)$/.test(c[1])) || it.c[0];
@@ -2869,12 +2877,12 @@
   }
   function pvHome(body, cat) {
     const A = pvAcqMap(), nAcq = cat.items.filter(it => A[it.id] != null).length;
-    const G = PV_GROUPS.map(g => ({ ...g, items: cat.items.filter(it => it.g === g.k) })).filter(g => g.items.length);
+    const G = pvGroupsOf(cat).filter(g => g.k !== 'altro').map(g => ({ ...g, items: cat.items.filter(it => it.g === g.k) })).filter(g => g.items.length);
     const other = cat.items.filter(it => it.g === 'altro'); if (other.length) G.push({ k: 'altro', t: 'Altro', s: 'altri articoli', items: other });
     const nCol = cat.items.reduce((s2, it) => s2 + it.c.length, 0);
     const card = (g, i) => { const rep = g.items.slice().sort((a, b) => (pvImg(cat, pvCover(b)) ? 1 : 0) - (pvImg(cat, pvCover(a)) ? 1 : 0) || b.c.length - a.c.length)[0], ps = g.items.map(pvMinPub).filter(v => v != null);
       return `<button type="button" class="pv-cat" data-pvgroup="${g.k}" style="--d:${120 + i * 40}ms">
-        <span class="pv-cat-img">${pvImg(cat, pvCover(rep)) ? `<img src="${esc(pvImg(cat, pvCover(rep)))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="pv-cat-img">${pvImg(cat, pvCover(rep)) ? pvImgTag(pvImg(cat, pvCover(rep)), 't') : ''}</span>
         <span class="pv-cat-t"><b>${esc(g.t)}</b><small>${g.items.length} ${g.items.length === 1 ? 'prodotto' : 'prodotti'}${ps.length ? ` · da ${eur(Math.min(...ps))}` : ''}</small></span>
         <svg class="pv-cat-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </button>`; };
@@ -2883,9 +2891,9 @@
         <div class="pv-hero-l">
           <img class="pv-hero-logo" src="logo-${pvSup}.svg" alt="${esc(cat.nome)}">
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
-          <p>${fmtNum(cat.items.length, 0)} prodotti · ${fmtNum(nCol, 0)} colori · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
+          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? 'prezzi al pubblico dal listino' : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
-        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)" value="" autocomplete="off"></div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
       <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
       <div class="pv-cats">${G.map(card).join('')}</div>
@@ -2895,8 +2903,8 @@
     return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
       ${pvThumb(cat, it, c0)}
       <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(pvCode(it))} · ${esc(it.cl.toLowerCase())}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
-        <span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>
-        <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${eur(acq)}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>`}</span></span>
+        ${cat.tool ? (it.uv > 1 ? `<span class="pv-tl">confezione da ${it.uv} pz</span>` : '') : `<span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>`}
+        <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${acq != null ? eur(acq) : 'da inserire'}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>`}</span></span>
     </button>`; };
   function pvCatRes(cat) {
     cat = cat || pvCats[pvSup]; const box = $('#pv-res'); if (!cat || !box) return;
@@ -2921,6 +2929,7 @@
     const q = pvGridQ[it.id] = pvGridQ[it.id] || {};
     const cell = (c, si) => { if (!c[3].includes(si)) return '<td class="pv-na"></td>'; const k = c[0] + '|' + it.sz[si], pub = pvPub(it.id, c[0]); return `<td><input class="pv-qi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" aria-label="${esc(c[1])} taglia ${esc(it.sz[si])}"><small>${pub != null ? eur(pub) : '—'}</small></td>`; };
     const quotes = pvList().filter(p => p.stato === 'bozza' || p.stato === 'inviato');
+    if (cat.tool) return pvDetailTool(body, cat, it, base, q, quotes);
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc) : ''}</span></div>
       <div class="card pv-hd">
@@ -2949,6 +2958,35 @@
         <button type="button" class="btn primary" id="pv-add">Aggiungi al preventivo</button></div>`;
     pvSumUpd(it);
   }
+  // scheda di un attrezzo (DeWalt): niente taglie e colori, solo la quantità
+  const pvSpecTool = it => [['Codice', it.id], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].filter(x => x[1]);
+  function pvDetailTool(body, cat, it, base, q, quotes) {
+    const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]), lordo = it.pl && it.pl[0], acq = base === '' ? null : num(base);
+    body.innerHTML = `${pvBanner()}
+      <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(pvGroupT(it.g))}</span></div>
+      <div class="card pv-hd">
+        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}</div>
+        <div class="pv-hi">
+          <span class="pv-code">${esc(it.id)}</span>
+          <h2>${esc(it.n)}</h2>
+          <p>${esc(it.d)}</p>
+          <div class="pv-spec">${pvSpecTool(it).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
+        </div>
+        <div class="pv-prices">${pvCli ? `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${pub != null ? eur(pub) : '—'}</b><small>a pezzo · IVA esclusa</small></div>` : `
+          <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
+          <div class="pv-pf"><span>Prezzo al pubblico</span><b>${pub != null ? eur(pub) : '—'}</b><small>prezzo utilizzatore ${esc(cat.nome)}${acq && pub ? ` · margine ${fmtNum((pub - acq) / pub * 100, 0)}%` : ''}</small></div>
+          ${lordo ? `<div class="pv-pf"><span>Listino lordo</span><b>${eur(lordo)}</b><small>${pub ? `sconto utilizzatore ${fmtNum((1 - pub / lordo) * 100, 0)}%` : 'prezzo di listino'}</small></div>` : ''}`}
+        </div>
+      </div>
+      <div class="card pv-mx">
+        <div class="card-h"><h3>Quantità</h3><span class="muted small">${it.uv > 1 ? `confezione da ${it.uv} pezzi · ` : ''}${pub != null ? `${eur(pub)} cad. al pubblico` : 'prezzo da definire'}</span></div>
+        <div class="pv-tq"><button type="button" class="pv-tqb" data-pvtq="-1" aria-label="Meno">−</button><input class="pv-qi pv-tqi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" placeholder="0" aria-label="Quantità"><button type="button" class="pv-tqb" data-pvtq="1" aria-label="Più">+</button></div>
+      </div>
+      <div class="pv-bar"><span id="pv-sum"></span>
+        <select id="pv-dest" aria-label="Preventivo">${pvTarget && pvGet(pvTarget) ? '' : '<option value="">+ Nuovo preventivo</option>'}${quotes.map(p => `<option value="${esc(p.id)}"${p.id === pvTarget ? ' selected' : ''}>${esc(p.num)}${p.cliente && p.cliente.nome ? ' · ' + esc(p.cliente.nome) : ''}</option>`).join('')}${pvTarget && pvGet(pvTarget) ? '<option value="">+ Nuovo preventivo</option>' : ''}</select>
+        <button type="button" class="btn primary" id="pv-add">Aggiungi al preventivo</button></div>`;
+    pvSumUpd(it);
+  }
   function pvSumUpd(it) {
     const q = pvGridQ[it.id] || {}; let pz = 0, tot = 0, miss = 0;
     it.c.forEach(c => { let n = 0; it.sz.forEach(s => { n += num(q[c[0] + '|' + s]); }); const td = $(`[data-pvrt="${CSS.escape(c[0])}"]`); if (td) td.textContent = n ? fmtNum(n, 0) : '—'; pz += n; const p = pvPub(it.id, c[0]); if (n && p == null) miss += n; tot += n * (p || 0); });
@@ -2957,7 +2995,7 @@
   function pvAddToQuote() {
     const cat = pvCats[pvSup], it = cat && cat.items.find(x => x.id === pvItem); if (!it) return;
     const q = pvGridQ[it.id] || {}, lines = [];
-    it.c.forEach(c => { const qq = {}; it.sz.forEach(s => { const v = num(q[c[0] + '|' + s]); if (v > 0) qq[s] = v; }); if (Object.keys(qq).length) lines.push({ sup: pvSup, it: it.id, n: it.n, cl: it.cl, c: c[0], cn: c[1], sz: it.sz, q: qq, p: pvPub(it.id, c[0]), man: false, sc: 0 }); });
+    it.c.forEach(c => { const qq = {}; it.sz.forEach(s => { const v = num(q[c[0] + '|' + s]); if (v > 0) qq[s] = v; }); if (Object.keys(qq).length) lines.push({ sup: pvSup, it: it.id, n: it.n, cl: it.cl, c: c[0], cn: c[1], sz: it.sz, q: qq, p: pvPub(it.id, c[0]), man: false, sc: 0, ...(cat.tool ? { tool: 1 } : {}) }); });
     if (!lines.length) return toast('Scrivi almeno una quantità');
     const dest = $('#pv-dest').value;
     const p = dest ? pvGet(dest) : pvNew(); if (!p) return;
@@ -3014,7 +3052,7 @@
         out[e.it.id] = Object.keys(ex).length ? { '*': base, ...ex } : base;
       });
       const prev = pvAcqMap(), changed = Object.keys(out).filter(k => JSON.stringify(prev[k]) !== JSON.stringify(out[k])).length;
-      if (!confirm(`File «${file.name}»\n${fmtNum(n, 0)} prezzi letti → ${fmtNum(acc.size, 0)} prodotti del catalogo ${cat.nome} (${fmtNum(changed, 0)} nuovi o cambiati).\n${miss.length ? `${miss.length} righe non trovate nel catalogo (es. ${[...new Set(miss)].slice(0, 3).join(', ')}).\n` : ''}I prezzi si salvano nel tuo Foglio Google (privato), non sul sito. Il prezzo al pubblico diventa il doppio.\nImportare?`)) return;
+      if (!confirm(`File «${file.name}»\n${fmtNum(n, 0)} prezzi letti → ${fmtNum(acc.size, 0)} prodotti del catalogo ${cat.nome} (${fmtNum(changed, 0)} nuovi o cambiati).\n${miss.length ? `${miss.length} righe non trovate nel catalogo (es. ${[...new Set(miss)].slice(0, 3).join(', ')}).\n` : ''}I prezzi si salvano nel tuo Foglio Google (privato), non sul sito. ${cat.pubMode === 'list' ? 'Il prezzo al pubblico resta il prezzo utilizzatore del listino.' : 'Il prezzo al pubblico diventa il doppio.'}\nImportare?`)) return;
       write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify({ ...prev, ...out }) } }, { action: 'upsert', sheet: 'Config', row: { chiave: pvInfoKey(), valore: JSON.stringify({ data: today(), file: file.name, n: acc.size, miss: miss.length }) } }]);
       toast(`Prezzi d'acquisto caricati per ${fmtNum(acc.size, 0)} prodotti`);
     } catch (e) { busy(); toast(e.message); }
@@ -3051,7 +3089,7 @@
         </div>
         <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
-            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${esc(l.cn)} · ${esc(l.it)}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}"></td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? `<td><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>` : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
+            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc(l.it) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}"></td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td><span class="muted small">—</span></td>' : `<td><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
         </div>
         ${pvLogoCard(p)}
@@ -3103,7 +3141,9 @@
   const pvToJpeg = (src, max = 520) => new Promise(res => { const im = new Image(); im.onload = () => { try { const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight)), w = Math.round(im.naturalWidth * k), h = Math.round(im.naturalHeight * k), cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.imageSmoothingQuality = 'high'; x.drawImage(im, 0, 0, w, h); res({ d: cv.toDataURL('image/jpeg', max > 800 ? .93 : .86), w, h }); } catch { res(null); } }; im.onerror = () => res(null); im.src = src; });
   async function pvPhotos(urls, max = 520) {
     const K = u => max + '|' + u;
-    const todo = [...new Set(urls.filter(u => u && !pvImgCache.has(K(u))))];
+    const todo0 = [...new Set(urls.filter(u => u && !pvImgCache.has(K(u))))];
+    await Promise.all(todo0.filter(u => u.startsWith('cimg:')).map(async u => { const d = await pvCimg(u + ':f'); const j = d && await pvToJpeg(d, max); if (j) pvImgCache.set(K(u), j); }));
+    const todo = todo0.filter(u => !u.startsWith('cimg:'));
     // 1) diretto dal browser
     await Promise.all(todo.map(async u => { try { const r = await fetch(u, { mode: 'cors', referrerPolicy: 'no-referrer' }); if (!r.ok) throw 0; const b = await r.blob(), ou = URL.createObjectURL(b), j = await pvToJpeg(ou, max); URL.revokeObjectURL(ou); if (j) pvImgCache.set(K(u), j); } catch {} }));
     // 2) tramite lo script Google (cdc-1.9) per quelle che il sito non lascia scaricare
@@ -3135,7 +3175,7 @@
   const pvLoadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Immagine non leggibile')); im.src = src; });
   const pvWithIm = async o => o && (o.im ? o : { ...o, im: await pvLoadImg(o.d) });
   // capi «sopra» (maglie, polo, felpe, giacche, gilet): logo sul petto e sulla schiena
-  const pvTop = l => !/PANTALON|BERMUDA|DENIM|TUTE|SCARPE|GUANTI|CALZ|BOXER|SLIP|COSTUM|CAPPELL|COPRICAPO|BERRETT|ZAINI|SACCHE|ACCESSORI|VISIERA|INTIMO|MERCHANDISING/i.test(String(l.cl || ''));
+  const pvTop = l => !l.tool && !/PANTALON|BERMUDA|DENIM|TUTE|SCARPE|GUANTI|CALZ|BOXER|SLIP|COSTUM|CAPPELL|COPRICAPO|BERRETT|ZAINI|SACCHE|ACCESSORI|VISIERA|INTIMO|MERCHANDISING/i.test(String(l.cl || ''));
   const pvKind = l => { const c = `${l.cl || ''} ${l.sc || ''}`; if (/CAPPELL|BERRETT|COPRICAPO|VISIERA/i.test(c)) return 'cap'; if (/PANTALON|BERMUDA|DENIM|TUTE|SALOPETTE/i.test(c)) return 'pant'; if (/SCARPE|GUANTI|CALZ|ZAINI|SACCHE|ACCESSORI|MERCHANDISING/i.test(c)) return 'altro'; if (/GILET/i.test(c)) return 'gilet'; return /FELPE|PILE|GIUBB|GIACC|SOFT|CAMICI|MAGLION|MAGLIERIA|4-SEASON|M\/LUNGA|M\/L\b/i.test(`${c} ${l.n}`) ? 'lunga' : 'corta'; };
   const pvGrp = k => k === 'cap' ? 'cap' : k === 'pant' ? 'pant' : k === 'altro' ? 'altro' : 'top';
   // nomi delle posizioni per tipo di capo
@@ -3608,7 +3648,7 @@
       fill(C.navy); doc.rect(0, 0, W, 40, 'F');
       fill(C.orange); doc.rect(0, 40, W, 1.4, 'F');
       if (logo) { fill(C.white); doc.roundedRect(M, 9, 11, 11, 2.4, 2.4, 'F'); doc.addImage(logo, 'PNG', M + .6, 9.6, 9.8, 9.8); }
-      color(C.white); font('bold', 8.5); doc.text('SOLUZIONE VEICOLARE S.R.L. · DIVISIONE ABBIGLIAMENTO', M + 15, 14); font('normal', 7.5); doc.text('Documento interno di produzione · non contiene prezzi', M + 15, 18.5);
+      color(C.white); font('bold', 8.5); doc.text(p.righe.every(l => l.tool) ? 'SOLUZIONE VEICOLARE S.R.L.' : p.righe.some(l => l.tool) ? 'SOLUZIONE VEICOLARE S.R.L. · ABBIGLIAMENTO E ATTREZZATURA' : 'SOLUZIONE VEICOLARE S.R.L. · DIVISIONE ABBIGLIAMENTO', M + 15, 14); font('normal', 7.5); doc.text('Documento interno di produzione · non contiene prezzi', M + 15, 18.5);
       font('bold', 21); doc.text('Scheda di lavoro', M, 32);
       font('normal', 9); doc.text(`Preventivo ${p.num} del ${dIt} · scheda creata il ${oggi}`, M, 37.2);
       // riquadro consegna
@@ -3626,14 +3666,14 @@
       y += 28;
       // ---- numeri ----
       const nArt = new Set(p.righe.map(l => l.it)).size, nPers = p.righe.filter(l => (l.lf && LG.f) || (l.lr && LG.r)).reduce((s, l) => s + LQ(l), 0);
-      const K = [['Pezzi totali', fmtNum(totPz, 0)], ['Articoli', String(nArt)], ['Righe colore', String(p.righe.length)], ['Pezzi da personalizzare', fmtNum(nPers, 0)]], kw = (CW - 9) / 4;
+      const K = [['Pezzi totali', fmtNum(totPz, 0)], ['Articoli', String(nArt)], [p.righe.some(l => l.tool) ? 'Righe' : 'Righe colore', String(p.righe.length)], ['Pezzi da personalizzare', fmtNum(nPers, 0)]], kw = (CW - 9) / 4;
       K.forEach(([a, b], i) => { const x = M + i * (kw + 3); stroke(C.line); doc.setLineWidth(.3); fill(C.white); doc.roundedRect(x, y, kw, 16, 2, 2, 'FD'); color(C.muted); font('normal', 7); doc.text(a.toUpperCase(), x + 4, y + 5.5); color(C.navy); font('bold', 14); doc.text(b, x + 4, y + 12.8); });
       y += 23;
       // ---- capi da preparare: matrice taglie ----
-      y = sec('Capi da preparare', y, `${p.righe.length} righe · ${fmtNum(totPz, 0)} pezzi`);
+      y = sec(p.righe.every(l => l.tool) ? 'Articoli da preparare' : p.righe.some(l => l.tool) ? 'Capi e articoli da preparare' : 'Capi da preparare', y, `${p.righe.length} righe · ${fmtNum(totPz, 0)} pezzi`);
       const SZ = pvSzSort(p.righe.flatMap(l => Object.keys(l.q || {}).filter(s => num(l.q[s]) > 0))), MATRIX = SZ.length <= 9;
       const head = ['', 'Articolo', 'Colore', ...(MATRIX ? SZ : ['Taglie']), 'Tot.', 'Logo', 'OK'];
-      const body = p.righe.map(l => { const it = itemOf(l), sup = (cats[l.sup || 'payper'] || {}).nome || (l.sup === 'jrc' ? 'JRC' : 'Payper'); const lg = [l.lf && LG.f ? pvPos(l, 'f') : '', l.lr && LG.r ? pvPos(l, 'r') : ''].filter(Boolean).join('\n'); return ['', `${l.n}\n${sup} · ${pvCode(it || { id: l.it })}${it && it.cl ? '\n' + it.cl.toLowerCase() : ''}`, `${l.cn}\ncod. ${l.c}`, ...(MATRIX ? SZ.map(s => num(l.q[s]) ? fmtNum(num(l.q[s]), 0) : '') : [pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  ')]), fmtNum(LQ(l), 0), lg || '—', '']; });
+      const body = p.righe.map(l => { const it = itemOf(l), sup = (cats[l.sup || 'payper'] || {}).nome || (l.sup === 'jrc' ? 'JRC' : 'Payper'); const lg = [l.lf && LG.f ? pvPos(l, 'f') : '', l.lr && LG.r ? pvPos(l, 'r') : ''].filter(Boolean).join('\n'); return ['', `${l.n}\n${sup} · ${pvCode(it || { id: l.it })}${it && it.cl ? '\n' + it.cl.toLowerCase() : ''}`, l.tool ? '—' : `${l.cn}\ncod. ${l.c}`, ...(MATRIX ? SZ.map(s => num(l.q[s]) ? fmtNum(num(l.q[s]), 0) : '') : [pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  ')]), fmtNum(LQ(l), 0), lg || '—', '']; });
       const foot = [['', 'Totale', '', ...(MATRIX ? SZ.map(s => { const v = p.righe.reduce((a, l) => a + num(l.q[s]), 0); return v ? fmtNum(v, 0) : ''; }) : ['']), fmtNum(totPz, 0), '', '']];
       const nS = MATRIX ? SZ.length : 1, iTot = 3 + nS, iLogo = iTot + 1, iOk = iLogo + 1;
       const colSt = { 0: { cellWidth: 17 }, 1: { cellWidth: MATRIX ? 40 : 46, fontStyle: 'bold' }, 2: { cellWidth: 27 }, [iTot]: { halign: 'center', fontStyle: 'bold', cellWidth: 11 }, [iLogo]: { cellWidth: 16, fontSize: 7.2 }, [iOk]: { cellWidth: 9 } };
@@ -3649,7 +3689,7 @@
         didDrawCell: d => {
           if (d.section !== 'body' || d.row.index < 0) return; const l = p.righe[d.row.index]; if (!l) return;
           if (d.column.index === 0) { const im = ph.get(urlOf(l)); if (im) fitImg(im, d.cell.x + 1, d.cell.y + 1, d.cell.width - 2, d.cell.height - 2); }
-          if (d.column.index === 2) { const c0 = hex2rgb(pvHex(l.cn)); fill(c0); stroke(C.line); doc.setLineWidth(.25); doc.circle(d.cell.x + 3.3, d.cell.y + d.cell.height / 2, 1.9, 'FD'); }
+          if (d.column.index === 2 && !l.tool) { const c0 = hex2rgb(pvHex(l.cn)); fill(c0); stroke(C.line); doc.setLineWidth(.25); doc.circle(d.cell.x + 3.3, d.cell.y + d.cell.height / 2, 1.9, 'FD'); }
           if (d.column.index === iOk) cbox(d.cell.x + (d.cell.width - 3.6) / 2, d.cell.y + (d.cell.height - 3.6) / 2);
         }
       });
@@ -3663,7 +3703,7 @@
         doc.autoTable({
           startY: y + 3, margin: { left: M, right: M, top: 18, bottom: 16 }, theme: 'grid', rowPageBreak: 'avoid',
           head: [['Cod. articolo', 'Articolo', 'Cod. colore', 'Colore', 'Taglie e quantità', 'Pezzi', 'Arrivato']],
-          body: ls.map(l => [pvCode(itemOf(l) || { id: l.it }), l.n, l.c, l.cn, pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s} × ${fmtNum(num(l.q[s]), 0)}`).join('   '), fmtNum(LQ(l), 0), '']),
+          body: ls.map(l => l.tool ? [l.it, l.n, '—', '—', '—', fmtNum(LQ(l), 0), ''] : [pvCode(itemOf(l) || { id: l.it }), l.n, l.c, l.cn, pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s} × ${fmtNum(num(l.q[s]), 0)}`).join('   '), fmtNum(LQ(l), 0), '']),
           styles: { font: FF, fontSize: 8, textColor: C.ink, lineColor: C.line, lineWidth: .2, cellPadding: 1.8, valign: 'middle' },
           headStyles: { fillColor: C.soft, textColor: C.navy, fontStyle: 'bold', fontSize: 7.4 },
           columnStyles: { 0: { cellWidth: 24, fontStyle: 'bold' }, 1: { cellWidth: 34 }, 2: { cellWidth: 20 }, 3: { cellWidth: 26 }, 5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' }, 6: { cellWidth: 15 } },
@@ -3794,7 +3834,7 @@
       doc.text([cl.email, cl.tel].filter(Boolean).join(' · '), W - M - 6, y + 20, { align: 'right' });
       y += 34;
       const fitImg = (im, x, y, w, h) => { const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k; doc.addImage(im.d, 'JPEG', x + (w - iw) / 2, y + (h - ih) / 2, iw, ih, undefined, 'FAST'); };
-      const body = p.righe.map(l => { const sz = (l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  '); const lt = lgTxt(l); return [`${l.n}\n${l.it}${lt ? '\nLogo: ' + lt : ''}`, l.cn, sz, fmtNum(pvLineQ(l), 0), l.p != null ? eur(l.p) : '—', num(l.sc) ? fmtNum(num(l.sc), 1).replace(/,0$/, '') + '%' : '', l.p != null ? eur(pvLineTot(l)) : '—']; });
+      const body = p.righe.map(l => { const sz = l.tool ? '' : (l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  '); const lt = lgTxt(l); return [`${l.n}\n${l.it}${lt ? '\nLogo: ' + lt : ''}`, l.cn, sz, fmtNum(pvLineQ(l), 0), l.p != null ? eur(l.p) : '—', num(l.sc) ? fmtNum(num(l.sc), 1).replace(/,0$/, '') + '%' : '', l.p != null ? eur(pvLineTot(l)) : '—']; });
       const FOTO = opt.foto;
       if (FOTO) body.forEach(r => r.unshift(''));
       const head = ['Prodotto', 'Colore', 'Taglie', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale']; if (FOTO) head.unshift('');
@@ -3841,15 +3881,17 @@
         else { color([170, 180, 196]); font('bold', 30); doc.text(String(l0.n).split(/\s+/).map(w0 => w0[0]).join('').slice(0, 2), M + bw / 2, yy + bh / 2 + 4, { align: 'center' }); }
         const rx = M + bw + 8, rw = W - M - rx;
         color(C.muted); font('bold', 8); doc.text(`${l0.it}${it ? ' · ' + it.cl + (it.sc ? ' · ' + it.sc : '') : ''}`.slice(0, 70), rx, yy + 5);
-        color(C.navy); font('bold', 20); doc.text(l0.n, rx, yy + 14);
-        color(C.ink2); font('normal', 9); const dl = doc.splitTextToSize(it ? it.d : '', rw); doc.text(dl.slice(0, 12), rx, yy + 21);
-        let sy = yy + 21 + Math.min(dl.length, 12) * 4.1 + 4;
+        font('bold', 20); let tl = doc.splitTextToSize(l0.n, rw); if (tl.length > 1) { font('bold', 15); tl = doc.splitTextToSize(l0.n, rw).slice(0, 2); }
+        color(C.navy); doc.text(tl, rx, yy + 14); const ty0 = yy + 21 + (tl.length - 1) * 6.2;
+        color(C.ink2); font('normal', 9); const dl = doc.splitTextToSize(it ? it.d : '', rw); doc.text(dl.slice(0, 12), rx, ty0);
+        let sy = ty0 + Math.min(dl.length, 12) * 4.1 + 4;
         if (it) {
-          const spec = [['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
+          const spec = it.uv != null ? pvSpecTool(it).concat(it.pl && it.pl[0] ? [['Listino lordo', eur(it.pl[0])]] : []) : [['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
           doc.autoTable({ startY: Math.max(sy, yy), margin: { left: rx, right: M }, body: spec, theme: 'plain', styles: { font: FF, fontSize: 8.6, textColor: C.ink, cellPadding: { top: 1.8, bottom: 1.8, left: 0, right: 2 }, lineColor: C.line, lineWidth: { bottom: .2 } }, columnStyles: { 0: { textColor: C.muted, cellWidth: 34 }, 1: { fontStyle: 'bold' } } });
           sy = doc.lastAutoTable.finalY;
         }
         yy = Math.max(yy + bh, sy) + 10;
+        if (lines.every(l => l.tool)) { color(C.navy); font('bold', 11); doc.text(`Quantità in questo preventivo: ${fmtNum(lines.reduce((s2, l) => s2 + pvLineQ(l), 0), 0)} pz`, M, yy); return; }
         color(C.navy); font('bold', 11); doc.text('Colori e taglie in questo preventivo', M, yy); stroke(C.line); doc.setLineWidth(.3); doc.line(M, yy + 2.4, W - M, yy + 2.4); yy += 6;
         lines.forEach(l => {
           if (yy + 20 > H - 22) { doc.addPage(); yy = 22; }
@@ -5849,7 +5891,7 @@
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
       if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; continue; }
-      if (c === '"') q = true; else if (c === sep) { row.push(f); f = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; } else f += c;
+      if (c === '"' && f === '') q = true; else if (c === sep) { row.push(f); f = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; } else f += c;
     }
     if (f !== '' || row.length) { row.push(f); rows.push(row); }
     return rows.filter(r => r.some(x => String(x).trim() !== ''));
@@ -6179,10 +6221,11 @@
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-work')) { pvWorkPdf(); return; }
+      const tq = t.closest('[data-pvtq]'); if (tq) { const inp = $('.pv-tqi'); if (inp) { inp.value = Math.max(0, Math.round(num(inp.value)) + Number(tq.dataset.pvtq)) || ''; inp.dispatchEvent(new Event('input', { bubbles: true })); } return; }
       const lgs = t.closest('[data-pvlgset]'); if (lgs) { pvLogoSet(lgs.dataset.pvlgset); return; }
       const lgd = t.closest('[data-pvlgdel]'); if (lgd) { const p = pvFromForm(); if (!p || !p.loghi) return; const s0 = lgd.dataset.pvlgdel; if (!confirm(`Togliere il logo ${s0 === 'f' ? 'del fronte' : 'della schiena'} da questo preventivo?`)) return; p.loghi[s0] = null; p.righe.forEach(l => { l[s0 === 'f' ? 'lf' : 'lr'] = false; }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
       if (t.closest('[data-pvlgsame]')) { const p = pvFromForm(); if (!p || !p.loghi || !p.loghi.f) return; p.loghi.r = { ...p.loghi.f }; if (!p.righe.some(l => l.lr)) p.righe.forEach(l => { l.lr = pvTop(l); }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); toast('Stesso logo anche sulla schiena'); return; }
-      if (t.closest('[data-pvlgall]')) { const p = pvFromForm(); if (!p) return; const L = p.loghi || {}; p.righe.forEach(l => { if (L.f) l.lf = true; if (L.r) l.lr = true; }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
+      if (t.closest('[data-pvlgall]')) { const p = pvFromForm(); if (!p) return; const L = p.loghi || {}; p.righe.forEach(l => { if (l.tool) return; if (L.f) l.lf = true; if (L.r) l.lr = true; }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
       if (t.closest('#pv-lgprev')) { pvLogoPreview(); return; }
       if (t.closest('[data-pvmkall]')) { const on = !$$('#sheet-body [name="mk"]').every(x => x.checked); $$('#sheet-body [name="mk"]').forEach(x => { x.checked = on; }); return; }
       const mkd = t.closest('[data-pvmkdl]'); if (mkd) { pvMockDownload(mkd.dataset.pvmkdl); return; }
