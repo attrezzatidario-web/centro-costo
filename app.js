@@ -2872,7 +2872,6 @@
     const G = PV_GROUPS.map(g => ({ ...g, items: cat.items.filter(it => it.g === g.k) })).filter(g => g.items.length);
     const other = cat.items.filter(it => it.g === 'altro'); if (other.length) G.push({ k: 'altro', t: 'Altro', s: 'altri articoli', items: other });
     const nCol = cat.items.reduce((s2, it) => s2 + it.c.length, 0);
-    const used = [...new Map(pvList().flatMap(p => p.righe).filter(l => (l.sup || 'payper') === pvSup).map(l => [l.it, l])).keys()].map(id => cat.items.find(it => it.id === id)).filter(Boolean).slice(0, 8);
     const card = (g, i) => { const rep = g.items.slice().sort((a, b) => (pvImg(cat, pvCover(b)) ? 1 : 0) - (pvImg(cat, pvCover(a)) ? 1 : 0) || b.c.length - a.c.length)[0], ps = g.items.map(pvMinPub).filter(v => v != null);
       return `<button type="button" class="pv-cat" data-pvgroup="${g.k}" style="--d:${120 + i * 40}ms">
         <span class="pv-cat-img">${pvImg(cat, pvCover(rep)) ? `<img src="${esc(pvImg(cat, pvCover(rep)))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
@@ -2890,7 +2889,6 @@
       </section>
       <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
       <div class="pv-cats">${G.map(card).join('')}</div>
-      ${used.length ? `<div class="pv-sh"><h3>Usati di recente nei preventivi</h3></div><div class="pv-grid pv-recent">${used.map((it, i) => pvCardHtml(cat, it, i)).join('')}</div>` : ''}
       ${!pvCli && cfg(pvInfoKey()) ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg(pvInfoKey()).file || '')}» il ${esc(shortDate(cfg(pvInfoKey()).data))} · ${fmtNum(cfg(pvInfoKey()).n || 0, 0)} prodotti</div>` : ''}`;
   }
   const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]), multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
