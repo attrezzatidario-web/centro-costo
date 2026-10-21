@@ -2767,7 +2767,7 @@
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.c.map(c => c[0]).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
@@ -2775,12 +2775,13 @@
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
   const pvAcq = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
   const pvPub = (it, col) => { if (col != null && pvListPub[it + '|' + col] != null) return pvListPub[it + '|' + col]; if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
-  const pvCode = it => /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
+  const pvCode = it => it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
-  const pvImg = (cat, c) => c && c[4] ? (cat.img ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
+  const pvImg = (cat, c) => c && c[4] ? (/^(cimg:|data:)/.test(c[4]) ? c[4] : cat.img ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
   // foto contenute nei file del catalogo (DeWalt): caricate a blocchi solo quando servono
   const pvChunk = {};
-  function pvCimg(u) { const [, sup, code, size = 'f'] = String(u).split(':'), cat = pvCats[sup]; const i = cat && cat.img && cat.img[size] && cat.img[size][code]; if (i == null) return Promise.resolve(null); const key = `${sup}-${size}${i}`; if (!pvChunk[key]) pvChunk[key] = fetch(`${cat.imgFile || 'dw-'}${size}${i}.json`).then(r => r.ok ? r.json() : {}).catch(() => { delete pvChunk[key]; return {}; }); return pvChunk[key].then(m => m[code] || null); }
+  const pvDrv = {};
+  function pvCimg(u) { const [, sup, code, size = 'f'] = String(u).split(':'), cat = pvCats[sup]; if (sup === 'drv') { if (!pvDrv[code]) { let d = null; try { d = localStorage.getItem('cdc_drv_' + code); } catch {} pvDrv[code] = d ? Promise.resolve(d) : isLocal() ? Promise.resolve(null) : api('getDoc', { id: code }).then(r => { const v = `data:${r.mime || 'image/jpeg'};base64,${r.data}`; try { localStorage.setItem('cdc_drv_' + code, v); } catch {} return v; }).catch(() => { delete pvDrv[code]; return null; }); } return pvDrv[code]; } const i = cat && cat.img && cat.img[size] && cat.img[size][code]; if (i == null) return Promise.resolve(null); const key = `${sup}-${size}${i}`; if (!pvChunk[key]) pvChunk[key] = fetch(`${cat.imgFile || 'dw-'}${size}${i}.json`).then(r => r.ok ? r.json() : {}).catch(() => { delete pvChunk[key]; return {}; }); return pvChunk[key].then(m => m[code] || null); }
   const pvImgTag = (u, size, extra = '') => u.startsWith('cimg:') ? `<img data-csrc="${esc(u)}:${size}" alt=""${extra}>` : `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer"${extra}>`;
   function pvFillImgs() { $$('img[data-csrc]').forEach(im => { if (im._ld) return; im._ld = 1; pvCimg(im.dataset.csrc).then(d => { if (d) im.src = d; else { const b = im.closest('.pv-img, .pv-cat-img'); if (b) b.classList.remove('has'); im.remove(); } }); }); }
   try { new MutationObserver(() => { if (document.querySelector('img[data-csrc]:not([src])')) pvFillImgs(); }).observe(document.documentElement, { childList: true, subtree: true }); } catch {}
@@ -2826,7 +2827,9 @@
     if (!PV_SUP[pvSup].file) { body.innerHTML = `<div class="card pv-empty"><img class="pv-elogo" src="logo-${pvSup}.svg" alt="${esc(PV_SUP[pvSup].n)}"><h3>Catalogo ${esc(PV_SUP[pvSup].n)} in arrivo</h3><p>Mandami il listino ${esc(PV_SUP[pvSup].n)} (Excel o CSV) e lo carico come quello di Payper: ricerca, taglie, colori e prezzi.</p></div>`; return; }
     let cat = pvCats[pvSup];
     if (!cat) { body.innerHTML = '<div class="card"><div class="empty">Carico il catalogo…</div></div>'; try { cat = await pvLoad(pvSup); } catch (e) { body.innerHTML = `<div class="card"><div class="empty">Catalogo non caricato: ${esc(e.message)}</div></div>`; return; } if (view !== 'preventivi') return; }
+    pvMergeExtra(pvSup);
     pvItem ? pvDetail(body, cat) : pvCatalog(body, cat);
+    if (pvItem) pvExtraBar(cat);
   }
   function pvBanner() {
     const p = pvTarget && pvGet(pvTarget); if (!p) return '';
@@ -2895,14 +2898,14 @@
         </div>
         <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
-      <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
+      <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<span class="pv-sha"><button type="button" class="btn sm primary" id="pv-linkadd"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Aggiungi prodotto da link</button><button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button></span>`}</div>
       <div class="pv-cats">${G.map(card).join('')}</div>
       ${!pvCli && cfg(pvInfoKey()) ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg(pvInfoKey()).file || '')}» il ${esc(shortDate(cfg(pvInfoKey()).data))} · ${fmtNum(cfg(pvInfoKey()).n || 0, 0)} prodotti</div>` : ''}`;
   }
   const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]), multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
     return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
       ${pvThumb(cat, it, c0)}
-      <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(pvCode(it))} · ${esc(it.cl.toLowerCase())}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
+      <span class="pv-cm"><b>${it.x ? '<i class="pv-new">nuovo</i>' : ''}${esc(it.n)}</b><small>${esc(pvCode(it))} · ${esc(it.cl.toLowerCase())}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
         ${cat.tool ? (it.uv > 1 ? `<span class="pv-tl">confezione da ${it.uv} pz</span>` : '') : `<span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>`}
         <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${acq != null ? eur(acq) : 'da inserire'}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>`}</span></span>
     </button>`; };
@@ -2938,7 +2941,7 @@
           <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
           <p>${esc(it.d)}</p>
-          <div class="pv-spec">${[['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? `${it.pk} pz` : ''], ['Cartone', it.ct ? `${it.ct} pz` : ''], ['Taglie', it.sz.join(' · ')], ['Colori', String(it.c.length)]].filter(x => x[1]).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
+          <div class="pv-spec">${[['Marca', it.x ? it.marca || '' : ''], ['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? `${it.pk} pz` : ''], ['Cartone', it.ct ? `${it.ct} pz` : ''], ['Taglie', it.sz.join(' · ')], ['Colori', String(it.c.length)]].filter(x => x[1]).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
         </div>
         <div class="pv-prices">${pvCli ? (() => { const ps = [...new Set(it.c.map(c => pvPub(it.id, c[0])).filter(v => v != null))].sort((a, b) => a - b); return `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${ps.length ? (ps.length > 1 ? `${eur(ps[0])} – ${eur(ps[ps.length - 1])}` : eur(ps[0])) : '—'}</b><small>a pezzo · IVA esclusa</small></div>`; })() : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
@@ -2959,7 +2962,7 @@
     pvSumUpd(it);
   }
   // scheda di un attrezzo (DeWalt): niente taglie e colori, solo la quantità
-  const pvSpecTool = it => [['Codice', it.c.length > 1 ? `${it.c.length} codici, uno per taglia` : it.id], ['Modello', it.mod || ''], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].filter(x => x[1]);
+  const pvSpecTool = it => [['Codice', it.c.length > 1 ? `${it.c.length} codici, uno per taglia` : it.x ? (it.code || it.id) : it.id], ['Marca', it.x ? it.marca || '' : ''], ['Modello', it.mod || ''], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].filter(x => x[1]);
   function pvDetailTool(body, cat, it, base, q, quotes) {
     const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]), lordo = it.pl && it.pl[0], acq = base === '' ? null : num(base);
     body.innerHTML = `${pvBanner()}
@@ -2967,7 +2970,7 @@
       <div class="card pv-hd">
         <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pv3dIds(pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])]).length ? '' : ' <em>IA</em>'}</button>` : ''}</div>
         <div class="pv-hi">
-          <span class="pv-code">${esc(it.id)}</span>
+          <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
           <p>${esc(it.d)}</p>
           <div class="pv-spec">${pvSpecTool(it).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
@@ -3056,6 +3059,160 @@
       write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify({ ...prev, ...out }) } }, { action: 'upsert', sheet: 'Config', row: { chiave: pvInfoKey(), valore: JSON.stringify({ data: today(), file: file.name, n: acc.size, miss: miss.length }) } }]);
       toast(`Prezzi d'acquisto caricati per ${fmtNum(acc.size, 0)} prodotti`);
     } catch (e) { busy(); toast(e.message); }
+  }
+  /* ---------- v62: prodotti nuovi da un link (per ogni fornitore, dopo l'approvazione) ---------- */
+  // salvati nel Foglio Google in Config «pvExtra» = { fornitore: [scheda, …] }; foto nel Drive (cimg:drv:id)
+  const pvExtraAll = () => pvCfgMap('pvExtra');
+  const pvExtraOf = (sup, id) => (pvExtraAll()[sup] || []).find(e => e.id === id);
+  function pvExtraItem(cat, e) {
+    const g = e.g || 'altro', gt = ((pvGroupsOf(cat).find(x => x.k === g) || { t: 'Altro' }).t);
+    if (cat.tool) return { id: e.id, n: e.n, d: e.d || '', cl: e.cl || gt, g, sc: '', sz: ['Pz'], c: [[e.code || e.id, '', e.pub != null ? e.pub : null, [0], e.img || '']], pl: [null, e.pub != null ? e.pub : null], uv: 1, peso: null, dim: [null, null, null], mod: e.mod || '', x: 1, url: e.url || '', code: e.code || e.id, marca: e.marca || '' };
+    const sz = e.sz && e.sz.length ? e.sz : ['UNICA'], cols = e.col && e.col.length ? e.col : ['UNICO'];
+    return { id: e.id, n: e.n, d: e.d || '', cl: (e.cl || gt).toUpperCase(), g, sc: '', comp: '', gsm: '', mi: '', ct: '', pk: '', um: 'NR', sz,
+      c: cols.map((cn, i) => [cols.length > 1 ? `${e.code || e.id}-${i + 1}` : (e.code || e.id), String(cn).toUpperCase(), e.list != null ? e.list : null, sz.map((_, j) => j), e.img || '']), x: 1, url: e.url || '', code: e.code || e.id, marca: e.marca || '' };
+  }
+  function pvMergeExtra(sup) {
+    const cat = pvCats[sup]; if (!cat) return;
+    const L = pvExtraAll()[sup] || [], sig = JSON.stringify(L);
+    if (cat._xsig === sig) return;
+    (cat._xids || []).forEach(id => { Object.keys(pvListPub).forEach(k => { if (k === id || k.startsWith(id + '|')) delete pvListPub[k]; }); });
+    cat._xsig = sig; cat._xids = L.map(e => e.id);
+    cat.items = cat.items.filter(it => !it.x);
+    L.slice().reverse().forEach(e => {
+      const it = pvExtraItem(cat, e);
+      it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${e.marca || ''} ${e.mod || ''} ${it.c.map(c => c[0]).join(' ')}`);
+      cat.items.unshift(it);
+      if (cat.tool && e.pub != null) { pvListPub[it.id] = e.pub; it.c.forEach(c => { pvListPub[it.id + '|' + c[0]] = e.pub; }); }
+    });
+  }
+  const PVX_IVA = 1.22;
+  let pvX = null; // bozza in revisione
+  function pvLinkStart() {
+    const cat = pvCats[pvSup]; if (!cat) return;
+    openSheet(`Nuovo prodotto ${cat.nome}`, `
+      <p class="pvx-intro">Incolla il link della pagina del prodotto (sito del fornitore o di un negozio). Leggo la pagina e preparo la scheda con nome, codice, descrizione, prezzo e foto: <b>la controlli e la approvi tu</b> prima che entri nel catalogo.</p>
+      <label class="f"><span>Link del prodotto</span><input name="url" type="url" inputmode="url" required data-focus placeholder="https://…"></label>
+      ${aiReady() ? '' : '<p class="pvx-warn">Per leggere i link serve l\'intelligenza artificiale (Impostazioni › Intelligenza artificiale). Intanto puoi inserire i dati a mano.</p>'}
+      <button type="button" class="link" id="pvx-manual">Oppure inserisci i dati a mano</button>`, async fd => {
+      const url = String(fd.get('url') || '').trim();
+      if (!/^https?:\/\/\S+\.\S+/i.test(url)) { toast('Incolla un link completo che inizia con https://'); return; }
+      if (!aiReady()) { toast('Collega l\'intelligenza artificiale nelle Impostazioni, oppure inserisci i dati a mano'); return; }
+      if (db.v && db.v < 'cdc-2.6') { toast('Per leggere i link aggiorna lo script Google alla versione cdc-2.6'); return; }
+      const G = pvGroupsOf(cat).map(g => `${g.k}: ${g.t}${g.s ? ' (' + g.s + ')' : ''}`);
+      let r;
+      try { busy('Leggo la pagina del prodotto…'); r = await api('ai', { task: 'prodottoLink', url, fornitore: cat.nome, abbigliamento: !cat.tool, gruppi: G }); }
+      catch (e) { busy(); toast(e.message); return; }
+      busy();
+      if (!r || !r.nome) toast('Non ho trovato un prodotto in quella pagina: controlla i dati o scrivili a mano');
+      pvLinkForm(cat, null, r || { url });
+    }, null, 'Analizza il link');
+    $('#sheet-form').classList.add('wide');
+  }
+  function pvLinkForm(cat, e0, r) {
+    const edit = !!e0; r = r || {};
+    const price = amNum(r.prezzo), net = price > 0 ? r2(r.iva_inclusa ? price / PVX_IVA : price) : null;
+    const G = pvGroupsOf(cat).filter(g => g.k !== 'altro');
+    const gk = edit ? e0.g : (G.find(g => g.k === r.categoria) || G.find(g => amNorm(g.t) === amNorm(r.categoria || '')) || { k: cat.tool ? 'altro' : pvGroupOf(String(r.nome || '').toUpperCase()) }).k;
+    const e = edit ? { ...e0 } : { id: '', n: String(r.nome || '').slice(0, 90), d: r.descrizione || '', code: String(r.codice || '').trim(), mod: r.modello || '', marca: r.marca || '', g: gk, url: r.url || '',
+      pub: cat.tool ? net : null, list: cat.tool ? null : net, col: (r.colori || []).map(String).filter(Boolean), sz: (r.taglie || []).map(String).filter(Boolean), img: '' };
+    const acq0 = edit ? pvAcq(e.id, (pvExtraItem(cat, e).c[0] || [])[0]) : null;
+    pvX = { sup: pvSup, edit, e, photos: (r.foto || []).map(f => ({ d: `data:${f.mime || 'image/jpeg'};base64,${f.data}`, url: f.url })), sel: 0 };
+    if (edit && e.img) pvX.photos.unshift({ keep: e.img });
+    const K = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const dup = e.code && cat.items.find(it => !it.x && it.c.some(c => K(c[0]) === K(e.code)));
+    const opts = [...G, { k: 'altro', t: 'Altro' }].map(g => `<option value="${esc(g.k)}"${g.k === e.g ? ' selected' : ''}>${esc(g.t)}</option>`).join('');
+    openSheet(edit ? `Modifica prodotto ${cat.nome}` : `Controlla il nuovo prodotto ${cat.nome}`, `
+      ${e.url ? `<div class="pvx-src"><span>Letto da</span><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 70))}</a></div>` : ''}
+      ${r.dubbi ? `<p class="pvx-warn">Da controllare: ${esc(r.dubbi)}</p>` : ''}
+      ${dup ? `<p class="pvx-warn">Il codice ${esc(e.code)} c'è già nel catalogo: «${esc(dup.n)}». Approva solo se è davvero un prodotto diverso.</p>` : ''}
+      <div class="pvx-ph"><span class="pvx-l">Foto</span><div id="pvx-phs"></div></div>
+      <label class="f"><span>Nome del prodotto</span><input name="n" required data-focus maxlength="90" value="${esc(e.n)}" placeholder="Es. Trapano avvitatore 18V"></label>
+      <div class="f-row">
+        <label class="f"><span>Codice articolo</span><input name="code" maxlength="40" value="${esc(e.code)}" placeholder="codice del fornitore"></label>
+        <label class="f"><span>Categoria</span><select name="g">${opts}</select></label>
+      </div>
+      <div class="f-row">
+        <label class="f"><span>Marca</span><input name="marca" maxlength="40" value="${esc(e.marca || '')}"></label>
+        <label class="f"><span>Modello</span><input name="mod" maxlength="60" value="${esc(e.mod || '')}"></label>
+      </div>
+      <label class="f"><span>Descrizione</span><textarea name="d" rows="3" maxlength="900">${esc(e.d)}</textarea></label>
+      ${cat.tool ? `<div class="f-row">
+        <label class="f"><span>Prezzo al pubblico € (IVA esclusa)</span><input name="pub" inputmode="decimal" value="${esc(fmtIn(e.pub))}" placeholder="0,00"></label>
+        ${pvCli ? '' : `<label class="f"><span>Prezzo d'acquisto € (privato)</span><input name="acq" inputmode="decimal" value="${esc(fmtIn(acq0))}" placeholder="facoltativo"></label>`}
+      </div>` : `<div class="f-row">
+        <label class="f"><span>Prezzo di listino € (IVA esclusa)</span><input name="list" inputmode="decimal" value="${esc(fmtIn(e.list))}" placeholder="0,00"></label>
+        ${pvCli ? '' : `<label class="f"><span>Prezzo d'acquisto € (privato)</span><input name="acq" inputmode="decimal" value="${esc(fmtIn(acq0))}" placeholder="il prezzo al pubblico = acquisto × ${fmtNum(pvRic(), 2).replace(/,00$/, '')}"></label>`}
+      </div>
+      <label class="f"><span>Colori (separati da virgola)</span><input name="col" value="${esc((e.col || []).join(', '))}" placeholder="BIANCO, NERO, BLU NAVY"></label>
+      <label class="f"><span>Taglie (separate da virgola)</span><input name="sz" value="${esc((e.sz || []).join(', '))}" placeholder="S, M, L, XL, XXL"></label>`}
+      ${!edit && price > 0 ? `<p class="pvx-note">Prezzo trovato sulla pagina: ${eur(price)}${r.iva_inclusa ? ` IVA inclusa → ${eur(net)} IVA esclusa` : r.iva_inclusa === false ? ' IVA esclusa' : ' (IVA non indicata: controlla)'}.</p>` : ''}`, fd => pvLinkSave(cat, fd), edit ? () => pvExtraDel(cat, e.id) : null, edit ? 'Salva le modifiche' : 'Approva e aggiungi al catalogo');
+    $('#sheet-form').classList.add('wide');
+    pvXPhotos();
+  }
+  function pvXPhotos() {
+    const box = $('#pvx-phs'); if (!box || !pvX) return;
+    box.innerHTML = `${pvX.photos.map((p, i) => `<button type="button" class="pvx-p${i === pvX.sel ? ' on' : ''}" data-pvxph="${i}" aria-pressed="${i === pvX.sel}">${p.keep ? pvImgTag(p.keep, 't') : `<img src="${esc(p.d)}" alt="">`}</button>`).join('')}
+      <button type="button" class="pvx-p add" id="pvx-up" title="Carica una foto dal computer o dal telefono"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Carica</span></button>
+      ${pvX.photos.length ? `<button type="button" class="pvx-p none${pvX.sel < 0 ? ' on' : ''}" data-pvxph="-1"><span>Senza foto</span></button>` : ''}`;
+  }
+  async function pvLinkSave(cat, fd) {
+    const X = pvX; if (!X) return true;
+    const L = s => String(fd.get(s) || '').trim(), list = s => L(s).split(/[,;\n]+/).map(x => x.trim()).filter(Boolean);
+    const e = { ...X.e, n: L('n'), code: L('code'), g: L('g') || 'altro', marca: L('marca'), mod: L('mod'), d: L('d') };
+    if (!e.n) { toast('Scrivi il nome del prodotto'); return; }
+    if (cat.tool) { const v = L('pub'); e.pub = v ? amNum(v) : null; delete e.list; e.col = []; e.sz = []; }
+    else { const v = L('list'); e.list = v ? amNum(v) : null; delete e.pub; e.col = list('col').map(x => x.toUpperCase()); e.sz = list('sz').map(x => x.toUpperCase()); }
+    const all = pvExtraAll(), mine = all[X.sup] || [];
+    if (!e.id) { const base = 'N' + (e.code ? e.code.toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 30) : uid().slice(0, 8)); let id = base, k = 2; while (mine.some(x => x.id === id) || cat.items.some(it => it.id === id)) id = `${base}-${k++}`; e.id = id; }
+    const ph = X.sel >= 0 ? X.photos[X.sel] : null;
+    try {
+      if (!ph) e.img = '';
+      else if (ph.keep) e.img = ph.keep;
+      else {
+        busy('Preparo la foto…');
+        const j = await pvToJpeg(ph.d, isLocal() ? 600 : 1000);
+        if (!j) throw new Error('Foto non leggibile: scegline un\'altra');
+        if (isLocal()) e.img = j.d;
+        else { busy('Salvo la foto nel tuo Drive…'); const id = await api('uploadDoc', { name: `Prodotto ${cat.nome} ${e.code || e.n}.jpg`.replace(/[\\/]/g, '-'), mime: 'image/jpeg', data: j.d.split(',')[1] }); e.img = 'cimg:drv:' + id; try { localStorage.setItem('cdc_drv_' + id, j.d); } catch {} }
+        busy();
+      }
+    } catch (err) { busy(); toast(err.message); return; }
+    e.agg = e.agg || today(); e.mod2 = today();
+    all[X.sup] = X.edit ? mine.map(x => x.id === e.id ? e : x) : [...mine, e];
+    const ops = [{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvExtra', valore: JSON.stringify(all) } }];
+    if (!pvCli && fd.has('acq')) {
+      const A = pvAcqMap(), v = L('acq');
+      if (v && amNum(v) > 0) A[e.id] = amNum(v); else delete A[e.id];
+      ops.push({ action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify(A) } });
+    }
+    pvX = null; pvItem = e.id; pvAnim = true;
+    write(ops);
+    toast(X.edit ? 'Prodotto aggiornato' : `«${e.n}» aggiunto al catalogo ${cat.nome}`);
+    return true;
+  }
+  function pvExtraDel(cat, id) {
+    const e = pvExtraOf(pvSup, id); if (!e) return;
+    if (!confirm(`Eliminare «${e.n}» dal catalogo ${cat.nome}?\nI preventivi che lo contengono restano come sono.`)) return;
+    const all = pvExtraAll(); all[pvSup] = (all[pvSup] || []).filter(x => x.id !== id);
+    const A = pvAcqMap(); delete A[id];
+    pvItem = '';
+    write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvExtra', valore: JSON.stringify(all) } }, { action: 'upsert', sheet: 'Config', row: { chiave: 'ppAcq', valore: JSON.stringify(A) } }]);
+    toast('Prodotto eliminato');
+    return true;
+  }
+  function pvExtraBar(cat) {
+    const it = cat.items.find(x => x.id === pvItem); if (!it || !it.x || pvCli) return;
+    const e = pvExtraOf(pvSup, it.id) || {}, hd = $('#pv-body .pv-hd'); if (!hd || $('#pv-body .pvx-bar')) return;
+    hd.insertAdjacentHTML('afterend', `<div class="pvx-bar"><span><b>Prodotto aggiunto da te</b>${e.agg ? ` il ${esc(shortDate(e.agg))}` : ''}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">pagina di origine</a>` : ''}</span><span class="pvx-ba"><button type="button" class="btn sm" data-pvxedit="${esc(it.id)}">Modifica</button><button type="button" class="btn sm" data-pvxdel="${esc(it.id)}">Elimina</button></span></div>`);
+  }
+  function pvLinkClick(t) {
+    if (t.closest('#pv-linkadd')) { pvLoad(pvSup).then(pvLinkStart); return true; }
+    if (t.closest('#pvx-manual')) { const cat = pvCats[pvSup]; if (cat) pvLinkForm(cat, null, {}); return true; }
+    const ph = t.closest('[data-pvxph]'); if (ph && pvX) { pvX.sel = Number(ph.dataset.pvxph); pvXPhotos(); return true; }
+    if (t.closest('#pvx-up') && pvX) { pickFile('image/*').then(f => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(f); })).then(d => { pvX.photos.push({ d }); pvX.sel = pvX.photos.length - 1; pvXPhotos(); }).catch(() => {}); return true; }
+    const ed = t.closest('[data-pvxedit]'); if (ed) { const cat = pvCats[pvSup], e = pvExtraOf(pvSup, ed.dataset.pvxedit); if (cat && e) pvLinkForm(cat, e, { url: e.url }); return true; }
+    const dl = t.closest('[data-pvxdel]'); if (dl) { const cat = pvCats[pvSup]; if (cat) pvExtraDel(cat, dl.dataset.pvxdel); return true; }
+    return false;
   }
   /* ---------- elenco e scheda del preventivo ---------- */
   function pvQuotes(body) {
@@ -4005,7 +4162,7 @@
         color(C.ink2); font('normal', 9); const dl = doc.splitTextToSize(it ? it.d : '', rw); doc.text(dl.slice(0, 12), rx, ty0);
         let sy = ty0 + Math.min(dl.length, 12) * 4.1 + 4;
         if (it) {
-          const spec = it.uv != null ? pvSpecTool(it).concat(it.pl && it.pl[0] ? [['Listino lordo', eur(it.pl[0])]] : []) : [['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
+          const spec = it.uv != null ? pvSpecTool(it).concat(it.pl && it.pl[0] ? [['Listino lordo', eur(it.pl[0])]] : []) : [['Marca', it.x ? it.marca || '' : ''], ['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
           doc.autoTable({ startY: Math.max(sy, yy), margin: { left: rx, right: M }, body: spec, theme: 'plain', styles: { font: FF, fontSize: 8.6, textColor: C.ink, cellPadding: { top: 1.8, bottom: 1.8, left: 0, right: 2 }, lineColor: C.line, lineWidth: { bottom: .2 } }, columnStyles: { 0: { textColor: C.muted, cellWidth: 34 }, 1: { fontStyle: 'bold' } } });
           sy = doc.lastAutoTable.finalY;
         }
@@ -6357,6 +6514,7 @@
       if (t.closest('#pv-prlist')) { pvPersListEdit(); return; }
       const lgt = t.closest('[data-pvlogo]'); if (lgt && !lgt.disabled) { const p = pvFromForm(); if (!p) return; const [i0, s0] = lgt.dataset.pvlogo.split(':'), l = p.righe[+i0]; if (!l) return; const k = s0 === 'f' ? 'lf' : 'lr'; l[k] = !l[k]; if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
       if (t.closest('#pv-impacq')) { pvImportAcq(); return; }
+      if (pvLinkClick(t)) return;
       const pvg = t.closest('[data-pvgroup]'); if (pvg) { pvGroup = pvg.dataset.pvgroup; pvCl = ''; if (!pvg.dataset.keepq) pvQ = ''; pvLimit = 48; pvAnim = true; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-home')) { pvGroup = ''; pvQ = ''; pvCl = ''; pvAnim = true; renderPv(); return; }
       const pvc = t.closest('[data-pvcl]'); if (pvc) { pvCl = pvc.dataset.pvcl; pvLimit = 48; $$('[data-pvcl]').forEach(b => b.classList.toggle('on', b === pvc)); pvCatRes(); return; }

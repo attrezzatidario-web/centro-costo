@@ -2028,3 +2028,26 @@ body.has-sel .fab { display: none; }
 .pv-vrow .pv-tq { padding: 0; gap: 6px; }
 .pv-vrow .pv-tqb { width: 36px; height: 36px; font-size: 19px; border-radius: 10px; }
 .pv-vrow .pv-tqi { width: 64px !important; height: 36px !important; font-size: 16px !important; }
+/* v62: prodotti nuovi da link */
+.pv-sha { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+.pv-sha .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; margin-right: 6px; vertical-align: -3px; }
+.pv-new { display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: #fff; background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px; }
+.pvx-intro { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.pvx-warn { margin: 0 0 12px; padding: 9px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: #fff6e6; color: #8a5300; border: 1px solid #f3d7a6; }
+.pvx-note { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.pvx-src { display: flex; gap: 8px; align-items: baseline; margin: 0 0 12px; font-size: 13px; min-width: 0; }
+.pvx-src span { color: var(--ink-2); flex: none; }
+.pvx-src a { color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pvx-ph { margin: 0 0 14px; }
+.pvx-l { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+#pvx-phs { display: flex; gap: 8px; flex-wrap: wrap; }
+.pvx-p { width: 92px; height: 92px; border-radius: 12px; border: 2px solid var(--line); background: #fff; padding: 4px; cursor: pointer; display: grid; place-items: center; overflow: hidden; transition: border-color .2s, box-shadow .2s; }
+.pvx-p img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.pvx-p.on { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.pvx-p.add, .pvx-p.none { background: var(--bg); color: var(--ink-2); font-size: 12px; font-weight: 600; gap: 2px; align-content: center; }
+.pvx-p.add svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.pvx-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: -4px 0 14px; padding: 10px 14px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); font-size: 13px; color: var(--ink-2); }
+.pvx-bar b { color: var(--ink); }
+.pvx-bar a { color: var(--accent); }
+.pvx-ba { display: inline-flex; gap: 8px; }
+@media (max-width: 520px) { .pvx-p { width: 74px; height: 74px; } .pv-sha { gap: 10px; } }
