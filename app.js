@@ -286,7 +286,7 @@
     if (view === 'lyreco') lyAnim = true;
     if (view === 'amazon') amAnim = true;
     if (view === 'piazzali') pzAnim = true;
-    if (view === 'preventivi') pvAnim = true;
+    if (view === 'preventivi') { pvAnim = true; if (prevView !== 'preventivi') { pvTab = 'cat'; pvSup = 'payper'; pvItem = ''; pvGroup = ''; pvQ = ''; pvCl = ''; pvEdit = ''; } }
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
@@ -2761,7 +2761,7 @@
      PREVENTIVI PAYPER E JRC — catalogo e preventivi
      ========================================================= */
   const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: '' } };
-  let pvTab = 'prev', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
+  let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
@@ -2822,33 +2822,93 @@
     const p = pvTarget && pvGet(pvTarget); if (!p) return '';
     return `<div class="pv-target"><span><b>Stai aggiungendo prodotti al preventivo ${esc(p.num)}</b>${p.cliente.nome ? ' · ' + esc(p.cliente.nome) : ''} · ${p.righe.length} righe</span><button type="button" class="btn sm primary" data-pvopen="${esc(p.id)}">Torna al preventivo</button></div>`;
   }
+  // macro-categorie del catalogo (le classi del listino raggruppate)
+  const PV_GROUPS = [
+    { k: 'tshirt', t: 'T-shirt', s: 'manica corta, lunga, canotte', re: /^T-SHIRT$/ },
+    { k: 'polo', t: 'Polo', s: 'manica corta e lunga', re: /^POLO/ },
+    { k: 'felpe', t: 'Felpe e pile', s: 'zip, cappuccio, girocollo, pile', re: /^FELPE|^PILE|^MAGLION|^MAGLIERIA/ },
+    { k: 'camicie', t: 'Camicie', s: 'lavoro e ufficio', re: /^CAMICIE/ },
+    { k: 'giacche', t: 'Giacche e giubbotti', s: 'soft-shell, imbottiti, antipioggia', re: /^GIUBBOTTI|^SOFT-SHELL|^4-SEASON|^SET ANTI PIOGGIA|^GIACCHE PROFESSIONALI/ },
+    { k: 'gilet', t: 'Gilet', s: 'imbottiti e da lavoro', re: /^GILET/ },
+    { k: 'pantaloni', t: 'Pantaloni e bermuda', s: 'lavoro, felpa, denim, tute', re: /^PANTALONI(?! TERMICI)|^BERMUDA|^DENIM|^TUTE/ },
+    { k: 'prof', t: 'Abbigliamento professionale', s: 'camici, casacche, cucina', re: /^CAMICI|^CASACCHE|^GIACCHE DA CUOCO|^GREMBIULI|^T-SHIRT PROFESSIONALI/ },
+    { k: 'scarpe', t: 'Scarpe di sicurezza', s: 'S1, S2, S3', re: /^SCARPE/ },
+    { k: 'guanti', t: 'Guanti', s: 'antitaglio, spalmati, pelle', re: /^GUANTI/ },
+    { k: 'dpi', t: 'DPI e protezione', s: 'saldatura, protezione, visiere', re: /^ACCESSORI (PROTEZIONE|DI PROTEZIONE|ANTITAGLIO|PER SALDATURE)|^VISIERA/ },
+    { k: 'intimo', t: 'Intimo e termico', s: 'maglie termiche, calzini, boxer', re: /^MAGLIE TERMICHE|^PANTALONI TERMICI|^BOXER|^SLIP|^COSTUMI|^CALZINI/ },
+    { k: 'acc', t: 'Cappellini e accessori', s: 'cappellini, zaini, sacche', re: /^CAPPELLINI|^COPRICAPO|^BERRETTI|^ZAINI|^SACCHE|^ACCESSORI$|^MERCHANDISING/ }
+  ];
+  const pvGroupOf = cl => { const order = ['prof', 'intimo', 'dpi']; const g = [...PV_GROUPS.filter(x => order.includes(x.k)), ...PV_GROUPS.filter(x => !order.includes(x.k))].find(x => x.re.test(cl)); return g ? g.k : 'altro'; };
+  let pvGroup = '', pvSort = '';
+  const pvGroupT = k => (PV_GROUPS.find(g => g.k === k) || { t: 'Altro' }).t;
+  const pvMinPub = it => { const v = it.c.map(c => pvPub(it.id, c[0])).filter(x => x != null); return v.length ? Math.min(...v) : null; };
+  // colore più «pulito» per la foto di copertina
+  const pvCover = it => it.c.find(c => /^BIANCO$/.test(c[1])) || it.c.find(c => /^(NERO|BLU NAVY|GRIGIO)/.test(c[1])) || it.c[0];
   function pvCatalog(body, cat) {
-    const A = pvAcqMap(), cls = [...new Set(cat.items.map(it => it.cl))].sort(), nAcq = cat.items.filter(it => A[it.id] != null).length;
+    cat.items.forEach(it => { if (!it.g) it.g = pvGroupOf(it.cl); });
+    if (!pvQ && !pvGroup) return pvHome(body, cat);
+    const A = pvAcqMap(), inG = pvGroup ? cat.items.filter(it => it.g === pvGroup) : cat.items;
+    const cls = [...new Set(inG.map(it => it.cl))].sort(), nAcq = inG.filter(it => A[it.id] != null).length;
+    if (pvCl && !cls.includes(pvCl)) pvCl = '';
+    const title = pvGroup ? pvGroupT(pvGroup) : 'Risultati della ricerca';
     body.innerHTML = `${pvBanner()}
-      <div class="card pv-search">
-        <div class="pv-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)" value="${esc(pvQ)}" autocomplete="off"></div>
-        <div class="pv-fl"><select id="pv-cl" aria-label="Categoria"><option value="">Tutte le categorie (${cls.length})</option>${cls.map(c => `<option${c === pvCl ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
-          <div class="tr-seg">${[['', 'Tutti'], ['acq', `Con prezzo (${nAcq})`], ['no', 'Senza prezzo']].map(([k, l]) => `<button type="button" data-pvonly="${k}" class="${pvOnly === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-          <span class="muted small" id="pv-cnt"></span>${pvCli ? '' : `<span class="pv-sp"></span><button type="button" class="btn sm" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
-        ${!pvCli && cfg('ppAcqInfo') ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg('ppAcqInfo').file || '')}» il ${esc(shortDate(cfg('ppAcqInfo').data))} · ${fmtNum(cfg('ppAcqInfo').n || 0, 0)} prezzi su ${fmtNum(nAcq, 0)} prodotti</div>` : ''}
+      <div class="pv-crumb"><button type="button" class="pv-cb" id="pv-home"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Catalogo ${esc(cat.nome)}</button>${pvGroup ? `<span>/</span><b>${esc(title)}</b>` : ''}</div>
+      <div class="pv-lh"><div><h2>${esc(title)}</h2><p class="muted small" id="pv-cnt"></p></div>
+        <div class="pv-sb sm"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${pvGroup ? `Cerca in ${esc(title.toLowerCase())}…` : 'Cerca un prodotto…'}" value="${esc(pvQ)}" autocomplete="off"></div></div>
+      <div class="pv-fl">
+        ${!pvGroup ? '<div class="pv-chips" id="pv-gchips"></div>' : cls.length > 1 ? `<div class="pv-chips"><button type="button" data-pvcl="" class="${pvCl ? '' : 'on'}">Tutti</button>${cls.map(c => `<button type="button" data-pvcl="${esc(c)}" class="${pvCl === c ? 'on' : ''}">${esc(c.charAt(0) + c.slice(1).toLowerCase())}</button>`).join('')}</div>` : ''}
+        <span class="pv-sp"></span>
+        ${pvCli ? '' : `<div class="tr-seg">${[['', 'Tutti'], ['acq', `Con prezzo (${nAcq})`], ['no', 'Senza prezzo']].map(([k, l]) => `<button type="button" data-pvonly="${k}" class="${pvOnly === k ? 'on' : ''}">${l}</button>`).join('')}</div>`}
+        <select id="pv-sort" aria-label="Ordina"><option value="">Ordina: rilevanza</option><option value="n"${pvSort === 'n' ? ' selected' : ''}>Nome A–Z</option><option value="p"${pvSort === 'p' ? ' selected' : ''}>Prezzo crescente</option><option value="pd"${pvSort === 'pd' ? ' selected' : ''}>Prezzo decrescente</option><option value="c"${pvSort === 'c' ? ' selected' : ''}>Più colori</option></select>
       </div>
       <div id="pv-res"></div>`;
     pvCatRes(cat);
   }
+  function pvHome(body, cat) {
+    const A = pvAcqMap(), nAcq = cat.items.filter(it => A[it.id] != null).length;
+    const G = PV_GROUPS.map(g => ({ ...g, items: cat.items.filter(it => it.g === g.k) })).filter(g => g.items.length);
+    const other = cat.items.filter(it => it.g === 'altro'); if (other.length) G.push({ k: 'altro', t: 'Altro', s: 'altri articoli', items: other });
+    const nCol = cat.items.reduce((s2, it) => s2 + it.c.length, 0);
+    const used = [...new Map(pvList().flatMap(p => p.righe).filter(l => (l.sup || 'payper') === pvSup).map(l => [l.it, l])).keys()].map(id => cat.items.find(it => it.id === id)).filter(Boolean).slice(0, 8);
+    const card = (g, i) => { const rep = g.items.slice().sort((a, b) => (pvImg(cat, pvCover(b)) ? 1 : 0) - (pvImg(cat, pvCover(a)) ? 1 : 0) || b.c.length - a.c.length)[0], ps = g.items.map(pvMinPub).filter(v => v != null);
+      return `<button type="button" class="pv-cat" data-pvgroup="${g.k}" style="--d:${120 + i * 40}ms">
+        <span class="pv-cat-img">${pvImg(cat, pvCover(rep)) ? `<img src="${esc(pvImg(cat, pvCover(rep)))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="pv-cat-t"><b>${esc(g.t)}</b><small>${g.items.length} ${g.items.length === 1 ? 'prodotto' : 'prodotti'}${ps.length ? ` · da ${eur(Math.min(...ps))}` : ''}</small></span>
+        <svg class="pv-cat-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </button>`; };
+    body.innerHTML = `${pvBanner()}
+      <section class="pv-hero">
+        <div class="pv-hero-l">
+          <img class="pv-hero-logo" src="logo-${pvSup}.svg" alt="${esc(cat.nome)}">
+          <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
+          <p>${fmtNum(cat.items.length, 0)} prodotti · ${fmtNum(nCol, 0)} colori · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
+        </div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)" value="" autocomplete="off"></div>
+      </section>
+      <div class="pv-sh"><h3>Categorie</h3>${pvCli ? '' : `<button type="button" class="link" id="pv-impacq">Importa prezzi d'acquisto</button>`}</div>
+      <div class="pv-cats">${G.map(card).join('')}</div>
+      ${used.length ? `<div class="pv-sh"><h3>Usati di recente nei preventivi</h3></div><div class="pv-grid pv-recent">${used.map((it, i) => pvCardHtml(cat, it, i)).join('')}</div>` : ''}
+      ${!pvCli && cfg('ppAcqInfo') && pvSup === 'payper' ? `<div class="pv-acqinfo">Prezzi d'acquisto caricati da «${esc(cfg('ppAcqInfo').file || '')}» il ${esc(shortDate(cfg('ppAcqInfo').data))} · ${fmtNum(cfg('ppAcqInfo').n || 0, 0)} prodotti</div>` : ''}`;
+  }
+  const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]), multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
+    return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
+      ${pvThumb(cat, it, c0)}
+      <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(it.id)} · ${esc(it.cl.toLowerCase())}${it.sc ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
+        <span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>
+        <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${eur(acq)}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>`}</span></span>
+    </button>`; };
   function pvCatRes(cat) {
     cat = cat || pvCats[pvSup]; const box = $('#pv-res'); if (!cat || !box) return;
     const A = pvAcqMap(), q = amNorm(pvQ).split(/\s+/).filter(Boolean);
-    const L = cat.items.filter(it => (!pvCl || it.cl === pvCl) && (!pvOnly || (pvOnly === 'acq' ? A[it.id] != null : A[it.id] == null)) && q.every(w => it.k.includes(w)));
-    if (q.length) L.sort((a, b) => (amNorm(a.n).startsWith(q[0]) ? 0 : 1) - (amNorm(b.n).startsWith(q[0]) ? 0 : 1) || a.n.length - b.n.length);
-    $('#pv-cnt').textContent = `${fmtNum(L.length, 0)} prodotti · listino ${cat.nome} ${cat.v || ''}`;
+    const L = cat.items.filter(it => (!pvGroup || it.g === pvGroup) && (!pvCl || it.cl === pvCl) && (!pvOnly || (pvOnly === 'acq' ? A[it.id] != null : A[it.id] == null)) && q.every(w => it.k.includes(w)));
+    if (pvSort === 'n') L.sort((a, b) => a.n.localeCompare(b.n));
+    else if (pvSort === 'p' || pvSort === 'pd') L.sort((a, b) => { const x = pvMinPub(a), y = pvMinPub(b); if (x == null) return 1; if (y == null) return -1; return pvSort === 'p' ? x - y : y - x; });
+    else if (pvSort === 'c') L.sort((a, b) => b.c.length - a.c.length);
+    else if (q.length) L.sort((a, b) => (amNorm(a.n).startsWith(q[0]) ? 0 : 1) - (amNorm(b.n).startsWith(q[0]) ? 0 : 1) || a.n.length - b.n.length);
+    const gc = $('#pv-gchips'); if (gc) { const by = new Map(); cat.items.filter(it => q.every(w => it.k.includes(w))).forEach(it => by.set(it.g, (by.get(it.g) || 0) + 1)); gc.innerHTML = [...by].sort((a, b) => b[1] - a[1]).map(([g, n]) => `<button type="button" data-pvgroup="${g}" data-keepq="1">${esc(pvGroupT(g))} <em>${n}</em></button>`).join(''); }
+    const cnt = $('#pv-cnt'); if (cnt) cnt.textContent = `${fmtNum(L.length, 0)} ${L.length === 1 ? 'prodotto' : 'prodotti'}${pvQ ? ` per «${pvQ}»` : ''}`;
     const sh = L.slice(0, pvLimit);
-    box.innerHTML = sh.length ? `<div class="pv-grid">${sh.map((it, i) => { const pub = pvPub(it.id, it.c[0][0]), acq = pvAcq(it.id, it.c[0][0]);
-        return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
-          ${pvThumb(cat, it, it.c[0])}
-          <span class="pv-cm"><b>${esc(it.n)}</b><small>${esc(it.id)} · ${esc(it.cl.toLowerCase())}${it.sc ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
-            <span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>
-            <span class="pv-pr">${pub != null ? `<strong>${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${eur(acq)}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(it.c[0][2])}</small>`}</span></span>
-        </button>`; }).join('')}</div>${L.length > pvLimit ? `<div class="more-row"><button class="btn sm" id="pv-more">Mostra altri (${fmtNum(L.length - pvLimit, 0)})</button></div>` : ''}` : '<div class="card"><div class="empty">Nessun prodotto trovato</div></div>';
+    box.innerHTML = sh.length ? `<div class="pv-grid">${sh.map((it, i) => pvCardHtml(cat, it, i)).join('')}</div>${L.length > pvLimit ? `<div class="more-row"><button class="btn sm" id="pv-more">Mostra altri (${fmtNum(L.length - pvLimit, 0)})</button></div>` : ''}` : '<div class="card"><div class="empty">Nessun prodotto trovato</div></div>';
   }
   let pvGridQ = {};
   const pvPerCol = new Set();
@@ -2861,7 +2921,7 @@
     const cell = (c, si) => { if (!c[3].includes(si)) return '<td class="pv-na"></td>'; const k = c[0] + '|' + it.sz[si], pub = pvPub(it.id, c[0]); return `<td><input class="pv-qi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" aria-label="${esc(c[1])} taglia ${esc(it.sz[si])}"><small>${pub != null ? eur(pub) : '—'}</small></td>`; };
     const quotes = pvList().filter(p => p.stato === 'bozza' || p.stato === 'inviato');
     body.innerHTML = `${pvBanner()}
-      <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ Catalogo</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc ? ' · ' + esc(it.sc) : ''}</span></div>
+      <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc ? ' · ' + esc(it.sc) : ''}</span></div>
       <div class="card pv-hd">
         <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}</div>
         <div class="pv-hi">
@@ -5473,7 +5533,7 @@
       if (t.closest('#pz-cdc') || t.closest('#pz-cdc3')) { lyCdcForm(); return; }
       // ---- preventivi ----
       const pvt = t.closest('[data-pvtab]'); if (pvt) { pvTab = pvt.dataset.pvtab; if (pvTab === 'cat') pvEdit = ''; else pvItem = ''; pvAnim = true; renderPv(); return; }
-      const pvs = t.closest('[data-pvsup]'); if (pvs) { pvSup = pvs.dataset.pvsup; pvTab = 'cat'; pvItem = ''; pvAnim = true; renderPv(); return; }
+      const pvs = t.closest('[data-pvsup]'); if (pvs) { pvSup = pvs.dataset.pvsup; pvTab = 'cat'; pvItem = ''; pvGroup = ''; pvQ = ''; pvCl = ''; pvAnim = true; renderPv(); return; }
       const pvo = t.closest('[data-pvonly]'); if (pvo) { pvOnly = pvo.dataset.pvonly; pvLimit = 48; $$('[data-pvonly]').forEach(b => b.classList.toggle('on', b === pvo)); pvCatRes(); return; }
       if (t.closest('#pv-more')) { pvLimit += 48; pvCatRes(); return; }
       const pvi = t.closest('[data-pvitem]'); if (pvi) { pvItem = pvi.dataset.pvitem; renderPv(); window.scrollTo(0, 0); return; }
@@ -5486,6 +5546,9 @@
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-impacq')) { pvImportAcq(); return; }
+      const pvg = t.closest('[data-pvgroup]'); if (pvg) { pvGroup = pvg.dataset.pvgroup; pvCl = ''; if (!pvg.dataset.keepq) pvQ = ''; pvLimit = 48; pvAnim = true; renderPv(); window.scrollTo(0, 0); return; }
+      if (t.closest('#pv-home')) { pvGroup = ''; pvQ = ''; pvCl = ''; pvAnim = true; renderPv(); return; }
+      const pvc = t.closest('[data-pvcl]'); if (pvc) { pvCl = pvc.dataset.pvcl; pvLimit = 48; $$('[data-pvcl]').forEach(b => b.classList.toggle('on', b === pvc)); pvCatRes(); return; }
       if (t.closest('#pv-eye')) { pvCli = !pvCli; try { localStorage.setItem('cdc_pvcli', pvCli ? '1' : '0'); } catch {} if ($('#pv-ed')) pvQuiet(pvFromForm()); renderPv(); toast(pvCli ? 'Vista cliente: prezzi d\'acquisto nascosti' : 'Prezzi d\'acquisto visibili'); return; }
       if (t.closest('#pv-dup')) { const p = pvFromForm(); if (!p) return; const n = { ...JSON.parse(JSON.stringify(p)), id: uid(), num: pvNextNum(), data: today(), stato: 'bozza' }; pvEdit = n.id; pvSave(n); toast(`Creato ${n.num} (copia di ${p.num})`); return; }
       if (t.closest('#pv-del')) { const p = pvGet(pvEdit); if (!p || !confirm(`Eliminare il preventivo ${p.num}?`)) return; pvEdit = ''; if (pvTarget === p.id) pvTarget = ''; write([{ action: 'delete', sheet: 'Config', id: 'pv:' + p.id }]); toast('Preventivo eliminato'); return; }
@@ -5579,11 +5642,11 @@
     $('#fa-per').onchange = e => { faP = e.target.value; faAnim = true; renderFat(); };
     $('#ly-per').onchange = e => { lyP = e.target.value; lyAnim = true; renderLy(); };
     $('#pz-per').onchange = e => { pzP = e.target.value; pzAnim = true; renderPz(); };
-    document.addEventListener('error', e => { const el = e.target; if (el && el.tagName === 'IMG' && el.closest('.pv-img')) el.remove(); }, true);
+    document.addEventListener('error', e => { const el = e.target; if (!el || el.tagName !== 'IMG') return; const box = el.closest('.pv-img, .pv-cat-img'); if (box) { box.classList.remove('has'); el.remove(); } }, true);
     let pvDeb;
     document.addEventListener('input', e => {
       const el = e.target;
-      if (el.id === 'pv-q') { clearTimeout(pvDeb); pvDeb = setTimeout(() => { pvQ = el.value; pvLimit = 48; pvCatRes(); }, 160); return; }
+      if (el.id === 'pv-q') { clearTimeout(pvDeb); pvDeb = setTimeout(() => { const was = !!(pvQ || pvGroup); pvQ = el.value; pvLimit = 48; if (!$('#pv-res') || (!pvQ && !pvGroup) !== !was) { renderPv(); const i2 = $('#pv-q'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } } else pvCatRes(); }, 180); return; }
       if (el.classList && el.classList.contains('pv-qi')) { const it = pvItem, k = el.dataset.pvq, v = Math.max(0, Math.round(num(el.value))); (pvGridQ[it] = pvGridQ[it] || {})[k] = v; const cat = pvCats[pvSup], o = cat && cat.items.find(x => x.id === it); if (o) pvSumUpd(o); return; }
       if (el.id === 'pv-acq') { const b = $('#pv-pub'); if (b) b.textContent = String(el.value).trim() ? eur(r2(num(el.value) * pvRic())) : '—'; return; }
       if (el.closest && el.closest('#pv-ed') && (el.dataset.pvf || el.dataset.pvlp || el.dataset.pvls)) pvTotUpd();
@@ -5591,6 +5654,7 @@
     document.addEventListener('change', e => {
       const el = e.target;
       if (el.id === 'pv-cl') { pvCl = el.value; pvLimit = 48; pvCatRes(); return; }
+      if (el.id === 'pv-sort') { pvSort = el.value; pvCatRes(); return; }
       if (el.id === 'pv-acq' || el.dataset.pvacqc) { pvSaveAcq(pvItem); toast('Prezzo d\'acquisto salvato'); return; }
       if (el.id === 'pv-percol') { if (el.checked) pvPerCol.add(pvItem); else pvPerCol.delete(pvItem); if (!el.checked) pvSaveAcq(pvItem); else renderPv(); return; }
       if (el.closest && el.closest('#pv-ed')) { pvQuiet(pvFromForm()); if (el.dataset.pvf === 'stato') renderPv(); }

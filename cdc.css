@@ -1835,3 +1835,55 @@ body.has-sel .fab { display: none; }
 .pv-big { font-size: 26px !important; color: var(--accent); }
 .pv-acqinfo { font-size: 12px; color: var(--muted); padding-top: 2px; }
 .pv-int[hidden] { display: none; }
+
+/* ===== Catalogo: homepage con categorie — v47 ===== */
+.pv-hero { position: relative; display: grid; gap: 18px; padding: 26px; border-radius: 22px; background: linear-gradient(135deg, var(--surface) 0%, color-mix(in srgb, var(--accent) 5%, var(--surface)) 100%); border: 1px solid var(--line); overflow: hidden; }
+.pv-hero::after { content: ""; position: absolute; right: -80px; top: -120px; width: 320px; height: 320px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%); pointer-events: none; }
+@media (min-width: 980px) { .pv-hero { grid-template-columns: minmax(0, 1fr) minmax(380px, 1.1fr); align-items: center; gap: 32px; padding: 30px 32px; } }
+.pv-hero-l { display: flex; align-items: center; gap: 18px; position: relative; z-index: 1; }
+.pv-hero-logo { width: 64px; height: auto; max-height: 74px; border-radius: 10px; box-shadow: 0 14px 28px -16px rgba(0, 0, 0, .45); animation: pvpop .7s cubic-bezier(.34, 1.56, .5, 1) both; }
+.pv-hero h2 { margin: 2px 0 2px; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+.pv-hero p { margin: 0; font-size: 13px; color: var(--muted); }
+.pv-hero-s { position: relative; z-index: 1; height: 56px; background: var(--surface); box-shadow: 0 10px 30px -18px rgba(15, 23, 42, .35); }
+.pv-sh { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.pv-sh h3 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.pv-cats { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 700px) { .pv-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .pv-cats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1500px) { .pv-cats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.pv-cat { position: relative; display: grid; grid-template-rows: auto auto; text-align: left; padding: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; cursor: pointer; font: inherit; color: inherit; transition: transform .3s cubic-bezier(.2, .8, .2, 1), box-shadow .3s, border-color .3s; }
+.pv-cat:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); box-shadow: 0 22px 40px -26px rgba(15, 23, 42, .45); }
+.cc-anim .pv-cat { animation: rise .55s var(--d) var(--out) both; }
+.pv-cat-img { position: relative; display: block; aspect-ratio: 4 / 3; background: linear-gradient(180deg, #f6f7f9, #eceef2); overflow: hidden; }
+.pv-cat-img img { position: absolute; inset: 10% 16%; width: 68%; height: 80%; object-fit: contain; mix-blend-mode: multiply; transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.pv-cat:hover .pv-cat-img img { transform: scale(1.06); }
+.pv-cat-t { display: grid; gap: 2px; padding: 12px 40px 14px 16px; }
+.pv-cat-t b { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.pv-cat-t small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pv-cat-go { position: absolute; right: 14px; bottom: 18px; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; transition: transform .25s, stroke .25s; }
+.pv-cat:hover .pv-cat-go { transform: translateX(3px); stroke: var(--accent); }
+:root[data-theme="dark"] .pv-cat-img { background: linear-gradient(180deg, #2a2c30, #232528); }
+:root[data-theme="dark"] .pv-cat-img img { mix-blend-mode: normal; border-radius: 10px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pv-cat-img { background: linear-gradient(180deg, #2a2c30, #232528); } :root:not([data-theme="light"]) .pv-cat-img img { mix-blend-mode: normal; border-radius: 10px; } }
+/* pagina della categoria */
+.pv-crumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.pv-crumb b { color: var(--ink); font-weight: 600; }
+.pv-cb { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; padding: 4px 6px 4px 0; }
+.pv-cb svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+.pv-lh { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pv-lh h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.pv-lh p { margin: 2px 0 0; }
+.pv-sb.sm { height: 44px; width: 380px; max-width: 100%; border-radius: 12px; }
+.pv-sb.sm input { font-size: 14.5px; }
+.pv-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pv-chips button { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: all .2s; }
+.pv-chips button:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--ink); }
+.pv-chips button.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+#pv-sort { height: 36px; min-height: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; padding: 0 10px; width: auto; }
+.pv-pr strong em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--muted); }
+.pv-card .pv-img img { mix-blend-mode: multiply; background: transparent; }
+.pv-card .pv-img { background: linear-gradient(180deg, #f6f7f9, #eceef2); }
+.pv-img.has > b { display: none; }
+.pv-sh .link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.pv-sh .link:hover { text-decoration: underline; }
+.pv-chips button em { font-style: normal; font-size: 11px; color: var(--muted); margin-left: 3px; } .pv-chips button.on em { color: inherit; opacity: .7; }
