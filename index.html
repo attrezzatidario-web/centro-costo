@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=63">
-  <link rel="stylesheet" href="cdc.css?v=63">
+  <link rel="stylesheet" href="style.css?v=64">
+  <link rel="stylesheet" href="cdc.css?v=64">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -371,10 +371,12 @@
             </section>
 
             <section class="st-sec" id="st-ai">
-              <div class="st-sh"><h2>Intelligenza artificiale</h2><p>Gemini legge le fatture, classifica gli articoli e analizza le spese.</p></div>
+              <div class="st-sh"><h2>Intelligenza artificiale</h2><p>L'IA (Gemini o ChatGPT) legge le fatture, classifica gli articoli e analizza le spese.</p></div>
               <div class="card st-card">
                 <div class="st-row"><div class="st-l"><b>Stato</b><small id="s-ai-st"></small></div><span class="st-pill" id="s-ai-pill"></span></div>
-                <div class="st-row st-col"><div class="st-l"><b>Chiave API di Gemini</b><small>Gratuita su aistudio.google.com → «Get API key». Resta salvata nello script Google, non sul telefono.</small></div><div class="inline-add st-key"><input id="s-key" type="password" placeholder="Incolla la chiave"><button class="btn sm primary" id="s-key-go">Salva</button></div></div>
+                <div class="st-row st-col"><div class="st-l"><b>Chiave API di Gemini (Google)</b><small>Su aistudio.google.com → «Get API key». Resta salvata nello script Google, non sul telefono.</small></div><div class="inline-add st-key"><input id="s-key" type="password" placeholder="Incolla la chiave"><button class="btn sm primary" id="s-key-go">Salva</button></div></div>
+                <div class="st-row st-col"><div class="st-l"><b>Chiave API di ChatGPT (OpenAI)</b><small>Su platform.openai.com → «API keys» → «Create new secret key» (inizia con sk-). Serve credito su platform.openai.com › Billing. Resta salvata nello script Google, non sul telefono.</small></div><div class="inline-add st-key"><input id="s-okey" type="password" placeholder="Incolla la chiave sk-…"><button class="btn sm primary" id="s-okey-go">Salva</button></div></div>
+                <div class="st-row"><div class="st-l"><b>IA da usare per prima</b><small>Se dà errore (credito finito, sovraccarico) si passa da sola all'altra.</small></div><div class="ai-first" id="s-aifirst" role="group" aria-label="IA da usare per prima"><i></i><button type="button" data-aifirst="gemini">Gemini</button><button type="button" data-aifirst="openai">ChatGPT</button></div></div>
                 <div class="st-row" id="s-classify-row"><div class="st-l"><b>Classifica le voci in «Altro»</b><small>L'IA assegna una categoria agli acquisti di attrezzatura che non ne hanno una.</small></div><button class="btn sm" id="s-classify">Classifica</button></div>
               </div>
             </section>
@@ -418,6 +420,6 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="app.js?v=63"></script>
+  <script src="app.js?v=64"></script>
 </body>
 </html>

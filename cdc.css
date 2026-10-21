@@ -2051,3 +2051,10 @@ body.has-sel .fab { display: none; }
 .pvx-bar a { color: var(--accent); }
 .pvx-ba { display: inline-flex; gap: 8px; }
 @media (max-width: 520px) { .pvx-p { width: 74px; height: 74px; } .pv-sha { gap: 10px; } }
+/* v64: scelta dell'IA */
+.ai-first { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface); isolation: isolate; }
+.ai-first i { position: absolute; z-index: -1; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 8px; background: var(--ink); transition: transform .35s var(--spring); }
+.ai-first.oa i { transform: translateX(100%); }
+.ai-first button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; color: var(--muted); cursor: pointer; transition: color .25s; white-space: nowrap; }
+.ai-first button.on { color: var(--bg); }
+.ai-first button:disabled { cursor: default; opacity: .5; }

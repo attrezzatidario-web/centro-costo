@@ -245,7 +245,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) };
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -876,7 +876,10 @@
       + stat('Acquisti attrezzatura', fmtNum(db.movimenti.length, 0), nd ? `${fmtNum(nd, 0)} senza data` : 'tutti con data')
       + stat('Ordini e fatture', fmtNum(amOrd().length + new Set(lyRows().map(r => r.fattura)).size + faRows().length, 0), 'Amazon, Lyreco, fornitori');
     $('#s-pull').closest('.st-row').hidden = isLocal();
-    $('#s-ai-st').textContent = isLocal() ? 'Disponibile solo con il Foglio Google collegato.' : db.ai ? 'Chiave Gemini attiva: puoi sostituirla incollandone una nuova.' : 'Nessuna chiave: le funzioni IA sono spente.';
+    { const K = db.aik || { gemini: !!db.ai }, on = [K.gemini && 'Gemini', K.openai && 'ChatGPT'].filter(Boolean);
+      $('#s-ai-st').textContent = isLocal() ? 'Disponibile solo con il Foglio Google collegato.' : on.length ? `Chiavi attive: ${on.join(' e ')}${on.length > 1 ? ` · si usa prima ${db.aiFirst === 'openai' ? 'ChatGPT' : 'Gemini'}, l'altra se dà errore` : ''}.` : 'Nessuna chiave: le funzioni IA sono spente.';
+      const sw = $('#s-aifirst'); if (sw) { sw.innerHTML = `<i></i><button type="button" data-aifirst="gemini" class="${db.aiFirst !== 'openai' ? 'on' : ''}">Gemini</button><button type="button" data-aifirst="openai" class="${db.aiFirst === 'openai' ? 'on' : ''}">ChatGPT</button>`; sw.classList.toggle('oa', db.aiFirst === 'openai'); $$('button', sw).forEach(b => { b.disabled = isLocal() || !(K.gemini && K.openai); }); }
+      $('#s-okey').disabled = $('#s-okey-go').disabled = isLocal(); }
     $('#s-ai-pill').className = 'st-pill ' + (db.ai && !isLocal() ? 'on' : 'off'); $('#s-ai-pill').textContent = db.ai && !isLocal() ? 'Attiva' : 'Non attiva';
     $('#s-key').disabled = $('#s-key-go').disabled = isLocal();
     $('#s-classify-row').hidden = !aiReady();
@@ -3110,7 +3113,7 @@
       const G = pvGroupsOf(cat).map(g => `${g.k}: ${g.t}${g.s ? ' (' + g.s + ')' : ''}`);
       let r;
       try { busy('Leggo la pagina del prodotto…'); r = await api('ai', { task: 'prodottoLink', url, fornitore: cat.nome, abbigliamento: !cat.tool, gruppi: G }); }
-      catch (e) { busy(); toast(e.message); if (/Gemini|IA|leggere|blocca/i.test(e.message)) pvLinkForm(cat, null, { url, dubbi: e.message + ' Intanto puoi compilare la scheda a mano.' }); return; }
+      catch (e) { busy(); toast(e.message); if (/Gemini|ChatGPT|IA|leggere|blocca|credito/i.test(e.message)) pvLinkForm(cat, null, { url, dubbi: e.message + ' Intanto puoi compilare la scheda a mano.' }); return; }
       busy();
       if (!r || !r.nome) toast('Non ho trovato un prodotto in quella pagina: controlla i dati o scrivili a mano');
       pvLinkForm(cat, null, r || { url });
@@ -6660,7 +6663,16 @@
     $('#s-pull').onclick = () => pull(true);
     $('#s-key-go').onclick = async () => {
       const k = $('#s-key').value.trim(); if (!k) return;
-      try { busy('Salvo la chiave…'); await api('setKey', { key: k }); db.ai = true; save(); $('#s-key').value = ''; toast('Chiave Gemini salvata'); render(); } catch (e) { toast(e.message); } finally { busy(); }
+      try { busy('Salvo la chiave…'); const K = await api('setKey', { key: k }); db.ai = true; if (K && typeof K === 'object') db.aik = K; else db.aik = { ...(db.aik || {}), gemini: true }; save(); $('#s-key').value = ''; toast('Chiave Gemini salvata'); render(); } catch (e) { toast(e.message); } finally { busy(); }
+    };
+    $('#s-okey-go').onclick = async () => {
+      const k = $('#s-okey').value.trim(); if (!k) return;
+      if (db.v && db.v < 'cdc-2.7') return toast('Per usare ChatGPT aggiorna prima lo script Google alla versione cdc-2.7');
+      try { busy('Salvo la chiave…'); const K = await api('setKey', { kind: 'openai', key: k }); db.aik = K; db.ai = !!(K.gemini || K.openai); save(); $('#s-okey').value = ''; toast('Chiave ChatGPT salvata'); render(); } catch (e) { toast(e.message); } finally { busy(); }
+    };
+    $('#s-aifirst').onclick = async e => {
+      const b = e.target.closest('[data-aifirst]'); if (!b || b.disabled || b.dataset.aifirst === db.aiFirst) return;
+      try { await api('setKey', { kind: 'pref', value: b.dataset.aifirst }); db.aiFirst = b.dataset.aifirst; save(); toast(`Ora si usa prima ${db.aiFirst === 'openai' ? 'ChatGPT' : 'Gemini'}`); render(); } catch (er) { toast(er.message); }
     };
     $('#s-classify').onclick = classifyAI;
     $('#s-imp-add').onclick = () => importExcel(false);
