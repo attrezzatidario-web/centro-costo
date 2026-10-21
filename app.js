@@ -3039,7 +3039,7 @@
       <div class="pv-ed" id="pv-ed" data-id="${esc(p.id)}">
         <div class="card pv-eh">
           <div class="pv-eht"><div><span class="pv-code">Preventivo</span><h2>${esc(p.num)}</h2></div>
-            <div class="pv-ehb"><button type="button" class="btn sm" id="pv-addp">+ Aggiungi prodotti</button><button type="button" class="btn sm tr-pdfbtn" id="pv-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><span>PDF</span></button><button type="button" class="btn sm primary" id="pv-save">Salva</button></div></div>
+            <div class="pv-ehb"><button type="button" class="btn sm" id="pv-addp">+ Aggiungi prodotti</button><button type="button" class="btn sm" id="pv-work" title="Scheda di lavoro per la produzione (senza prezzi)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM7 5.5H5.5A1.5 1.5 0 0 0 4 7v12.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H17M8 12l2 2 4-4M8 17h8"/></svg><span>Scheda lavoro</span></button><button type="button" class="btn sm tr-pdfbtn" id="pv-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><span>PDF</span></button><button type="button" class="btn sm primary" id="pv-save">Salva</button></div></div>
           <div class="pv-ef">
             <label class="f"><span>Cliente / ragione sociale</span><input data-pvf="cliente.nome" value="${esc(cl.nome || '')}" placeholder="Es. Rossi Trasporti S.r.l."></label>
             <label class="f"><span>Referente</span><input data-pvf="cliente.ref" value="${esc(cl.ref || '')}"></label>
@@ -3572,6 +3572,176 @@
       <div class="pv-lgs">${slot('f')}${slot('r')}</div>
       ${(L.f || L.r) && p.righe.length ? `<div class="pv-lgb"><span class="muted small">Nella tabella scegli cosa personalizzare: <b>Cuore / Fronte</b> e <b>Schiena / Retro</b> su ogni riga, anche pantaloni e cappellini.</span><span class="pv-lgba"><button type="button" class="btn sm" data-pvlgall="1">Su tutti i capi</button><button type="button" class="btn sm primary" id="pv-lgprev">Anteprima sui capi</button></span></div>` : ''}
     </div>`;
+  }
+  /* ---------- SCHEDA DI LAVORO (per la produzione: niente prezzi) ---------- */
+  const PV_SZ = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL', '6XL', 'U', 'TU', 'UNICA'];
+  const pvSzSort = list => [...new Set(list)].sort((a, b) => { const ia = PV_SZ.indexOf(String(a).toUpperCase()), ib = PV_SZ.indexOf(String(b).toUpperCase()); if (ia >= 0 && ib >= 0) return ia - ib; const na = parseFloat(a), nb = parseFloat(b); if (!isNaN(na) && !isNaN(nb)) return na - nb; if (ia >= 0) return -1; if (ib >= 0) return 1; return String(a).localeCompare(String(b)); });
+  async function pvWorkPdf() {
+    const p = pvFromForm() || pvGet(pvEdit); if (!p) return;
+    if (!p.righe.length) return toast('Il preventivo non ha prodotti');
+    pvQuiet(p);
+    try {
+      busy('Preparo la scheda di lavoro…');
+      const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoad(sup); } catch { cats[sup] = null; } }
+      const itemOf = l => { const c = cats[l.sup || 'payper']; return c ? c.items.find(x => x.id === l.it) : null; };
+      const urlOf = l => { const c = cats[l.sup || 'payper'], it = itemOf(l), cc = it && it.c.find(x => x[0] === l.c); return c && cc ? pvImg(c, cc) : ''; };
+      const U = [...new Set(p.righe.map(urlOf).filter(Boolean))], ph = new Map();
+      if (U.length) { busy('Scarico le foto dei capi…'); const R = await pvPhotos(U, 700); U.forEach((u, i) => ph.set(u, R[i])); }
+      const LG = p.loghi || {}, hasLg = p.righe.some(l => (l.lf && LG.f) || (l.lr && LG.r));
+      let mocks = [], LGF = null, LGR = null;
+      if (hasLg) { try { mocks = (await pvMockPrepare(p)).mocks; } catch (e) { if (e instanceof AuthError) throw e; } LGF = LG.f ? await pvLogoGet(LG.f) : null; LGR = LG.r ? await pvLogoGet(LG.r) : null; }
+      busy('Preparo la scheda di lavoro…');
+      const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true }); let FF = 'helvetica';
+      if (fonts) { fonts.forEach(([w, data]) => { doc.addFileToVFS(`Inter-${w}.ttf`, data); doc.addFont(`Inter-${w}.ttf`, 'Inter', w === 'regular' ? 'normal' : w); }); FF = 'Inter'; }
+      const W = 210, H = 297, M = 14, CW = W - 2 * M;
+      const C = { navy: [23, 54, 109], blue: [51, 98, 171], orange: [235, 104, 52], ink: [31, 36, 48], ink2: [74, 81, 96], muted: [120, 128, 142], line: [214, 219, 228], soft: [245, 247, 251], white: [255, 255, 255], warm: [253, 243, 237] };
+      const fill = c => doc.setFillColor(...c), stroke = c => doc.setDrawColor(...c), color = c => doc.setTextColor(...c);
+      const font = (st, sz) => { doc.setFont(FF, FF === 'helvetica' && st === 'semibold' ? 'bold' : st); doc.setFontSize(sz); };
+      const fitImg = (im, x, y, w, h) => { const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k; doc.addImage(im.d, 'JPEG', x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); };
+      const fitPng = (im, x, y, w, h) => { const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k; doc.addImage(im.d, 'PNG', x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); };
+      const cbox = (x, y, s = 3.6) => { stroke(C.ink2); doc.setLineWidth(.3); fill(C.white); doc.roundedRect(x, y, s, s, .6, .6, 'FD'); };
+      const hex2rgb = h => { const m = String(h || '').match(/#([0-9a-f]{6})/i); if (!m) return [200, 204, 209]; const v = parseInt(m[1], 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; };
+      const cl = p.cliente || {}, dIt = rpD(p.data), oggi = rpD(today()), LQ = l => pvLineQ(l), totPz = p.righe.reduce((s, l) => s + LQ(l), 0);
+      const pageHead = () => { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.orange); font('bold', 8); doc.text('SCHEDA DI LAVORO', M, 10); color(C.muted); font('normal', 8); doc.text(`${p.num}${cl.nome ? ' · ' + cl.nome : ''}`, W - M, 10, { align: 'right' }); };
+      const need = (y, h) => { if (y + h > H - 16) { doc.addPage(); pageHead(); return 18; } return y; };
+      const sec = (t, y, sub) => { color(C.navy); font('bold', 11.5); doc.text(t, M, y); if (sub) { color(C.muted); font('normal', 8); doc.text(sub, W - M, y, { align: 'right' }); } stroke(C.navy); doc.setLineWidth(.5); doc.line(M, y + 2, W - M, y + 2); return y + 7; };
+      // ---- intestazione ----
+      fill(C.navy); doc.rect(0, 0, W, 40, 'F');
+      fill(C.orange); doc.rect(0, 40, W, 1.4, 'F');
+      if (logo) { fill(C.white); doc.roundedRect(M, 9, 11, 11, 2.4, 2.4, 'F'); doc.addImage(logo, 'PNG', M + .6, 9.6, 9.8, 9.8); }
+      color(C.white); font('bold', 8.5); doc.text('SOLUZIONE VEICOLARE S.R.L. · DIVISIONE ABBIGLIAMENTO', M + 15, 14); font('normal', 7.5); doc.text('Documento interno di produzione · non contiene prezzi', M + 15, 18.5);
+      font('bold', 21); doc.text('Scheda di lavoro', M, 32);
+      font('normal', 9); doc.text(`Preventivo ${p.num} del ${dIt} · scheda creata il ${oggi}`, M, 37.2);
+      // riquadro consegna
+      fill(C.white); doc.roundedRect(W - M - 62, 8, 62, 27, 2, 2, 'F');
+      color(C.muted); font('bold', 6.8); doc.text('STATO', W - M - 58, 14.5); doc.text('CONSEGNA PREVISTA', W - M - 58, 25);
+      color(C.ink); font('bold', 9.5); doc.text((PV_ST[p.stato] || PV_ST.bozza)[0], W - M - 58, 19.5);
+      stroke(C.line); doc.setLineWidth(.3); doc.line(W - M - 58, 30, W - M - 6, 30); color(C.muted); font('normal', 5.8); doc.text('5–10 gg lavorativi dalla conferma', W - M - 58, 32.6);
+      let y = 48;
+      // ---- cliente ----
+      fill(C.soft); doc.roundedRect(M, y, CW, 22, 2, 2, 'F');
+      color(C.muted); font('bold', 6.8); doc.text('CLIENTE', M + 5, y + 6); doc.text('CONTATTI', M + CW / 2 + 2, y + 6);
+      color(C.ink); font('bold', 11.5); doc.text(doc.splitTextToSize(cl.nome || '—', CW / 2 - 8)[0], M + 5, y + 12.5);
+      color(C.ink2); font('normal', 8.4); doc.text(doc.splitTextToSize([cl.ind, cl.ref ? 'Ref. ' + cl.ref : ''].filter(Boolean).join(' · ') || '—', CW / 2 - 8).slice(0, 2), M + 5, y + 17.5);
+      doc.text([cl.tel ? 'Tel. ' + cl.tel : '', cl.email].filter(Boolean).join('\n') || '—', M + CW / 2 + 2, y + 11.5);
+      y += 28;
+      // ---- numeri ----
+      const nArt = new Set(p.righe.map(l => l.it)).size, nPers = p.righe.filter(l => (l.lf && LG.f) || (l.lr && LG.r)).reduce((s, l) => s + LQ(l), 0);
+      const K = [['Pezzi totali', fmtNum(totPz, 0)], ['Articoli', String(nArt)], ['Righe colore', String(p.righe.length)], ['Pezzi da personalizzare', fmtNum(nPers, 0)]], kw = (CW - 9) / 4;
+      K.forEach(([a, b], i) => { const x = M + i * (kw + 3); stroke(C.line); doc.setLineWidth(.3); fill(C.white); doc.roundedRect(x, y, kw, 16, 2, 2, 'FD'); color(C.muted); font('normal', 7); doc.text(a.toUpperCase(), x + 4, y + 5.5); color(C.navy); font('bold', 14); doc.text(b, x + 4, y + 12.8); });
+      y += 23;
+      // ---- capi da preparare: matrice taglie ----
+      y = sec('Capi da preparare', y, `${p.righe.length} righe · ${fmtNum(totPz, 0)} pezzi`);
+      const SZ = pvSzSort(p.righe.flatMap(l => Object.keys(l.q || {}).filter(s => num(l.q[s]) > 0))), MATRIX = SZ.length <= 9;
+      const head = ['', 'Articolo', 'Colore', ...(MATRIX ? SZ : ['Taglie']), 'Tot.', 'Logo', 'OK'];
+      const body = p.righe.map(l => { const it = itemOf(l), sup = (cats[l.sup || 'payper'] || {}).nome || (l.sup === 'jrc' ? 'JRC' : 'Payper'); const lg = [l.lf && LG.f ? pvPos(l, 'f') : '', l.lr && LG.r ? pvPos(l, 'r') : ''].filter(Boolean).join('\n'); return ['', `${l.n}\n${sup} · ${pvCode(it || { id: l.it })}${it && it.cl ? '\n' + it.cl.toLowerCase() : ''}`, `${l.cn}\ncod. ${l.c}`, ...(MATRIX ? SZ.map(s => num(l.q[s]) ? fmtNum(num(l.q[s]), 0) : '') : [pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  ')]), fmtNum(LQ(l), 0), lg || '—', '']; });
+      const foot = [['', 'Totale', '', ...(MATRIX ? SZ.map(s => { const v = p.righe.reduce((a, l) => a + num(l.q[s]), 0); return v ? fmtNum(v, 0) : ''; }) : ['']), fmtNum(totPz, 0), '', '']];
+      const nS = MATRIX ? SZ.length : 1, iTot = 3 + nS, iLogo = iTot + 1, iOk = iLogo + 1;
+      const colSt = { 0: { cellWidth: 17 }, 1: { cellWidth: MATRIX ? 40 : 46, fontStyle: 'bold' }, 2: { cellWidth: 27 }, [iTot]: { halign: 'center', fontStyle: 'bold', cellWidth: 11 }, [iLogo]: { cellWidth: 16, fontSize: 7.2 }, [iOk]: { cellWidth: 9 } };
+      for (let k = 0; k < nS; k++) colSt[3 + k] = MATRIX ? { halign: 'center', cellWidth: 'auto', fontSize: 9, fontStyle: 'bold' } : { fontSize: 7.6 };
+      doc.autoTable({
+        startY: y, head: [head], body, foot, margin: { left: M, right: M, top: 18, bottom: 16 }, theme: 'grid', rowPageBreak: 'avoid', showFoot: 'lastPage',
+        styles: { font: FF, fontSize: 8, textColor: C.ink, lineColor: C.line, lineWidth: .2, cellPadding: { top: 1.8, bottom: 1.8, left: 1.8, right: 1.8 }, valign: 'middle', minCellHeight: 17 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.4, halign: 'center', minCellHeight: 0 },
+        footStyles: { fillColor: C.soft, textColor: C.navy, fontStyle: 'bold', fontSize: 8.6, halign: 'center', minCellHeight: 0 },
+        columnStyles: colSt,
+        willDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > 1) pageHead(); },
+        didParseCell: d => { if (d.section === 'body' && d.column.index === 2) d.cell.styles.cellPadding = { top: 1.8, bottom: 1.8, left: 6.6, right: 1.5 }; if (d.section !== 'body' && d.column.index <= 2) d.cell.styles.halign = 'left'; },
+        didDrawCell: d => {
+          if (d.section !== 'body' || d.row.index < 0) return; const l = p.righe[d.row.index]; if (!l) return;
+          if (d.column.index === 0) { const im = ph.get(urlOf(l)); if (im) fitImg(im, d.cell.x + 1, d.cell.y + 1, d.cell.width - 2, d.cell.height - 2); }
+          if (d.column.index === 2) { const c0 = hex2rgb(pvHex(l.cn)); fill(c0); stroke(C.line); doc.setLineWidth(.25); doc.circle(d.cell.x + 3.3, d.cell.y + d.cell.height / 2, 1.9, 'FD'); }
+          if (d.column.index === iOk) cbox(d.cell.x + (d.cell.width - 3.6) / 2, d.cell.y + (d.cell.height - 3.6) / 2);
+        }
+      });
+      y = doc.lastAutoTable.finalY + 9;
+      // ---- ordine ai fornitori ----
+      const bySup = groupBy(p.righe, l => l.sup || 'payper');
+      y = need(y, 30); y = sec('Ordine ai fornitori', y, 'codici da ordinare');
+      bySup.forEach((ls, sup) => {
+        const nm = (cats[sup] || {}).nome || (sup === 'jrc' ? 'JRC' : 'Payper'), pz = ls.reduce((s, l) => s + LQ(l), 0);
+        y = need(y, 22); color(C.ink); font('bold', 9.5); doc.text(nm.toUpperCase(), M, y + 1); color(C.muted); font('normal', 7.8); doc.text(`${ls.length} righe · ${fmtNum(pz, 0)} pezzi · ordinato il ____/____/______  · rif. ordine ______________`, M + doc.getTextWidth(nm.toUpperCase()) + 4, y + 1);
+        doc.autoTable({
+          startY: y + 3, margin: { left: M, right: M, top: 18, bottom: 16 }, theme: 'grid', rowPageBreak: 'avoid',
+          head: [['Cod. articolo', 'Articolo', 'Cod. colore', 'Colore', 'Taglie e quantità', 'Pezzi', 'Arrivato']],
+          body: ls.map(l => [pvCode(itemOf(l) || { id: l.it }), l.n, l.c, l.cn, pvSzSort(Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s} × ${fmtNum(num(l.q[s]), 0)}`).join('   '), fmtNum(LQ(l), 0), '']),
+          styles: { font: FF, fontSize: 8, textColor: C.ink, lineColor: C.line, lineWidth: .2, cellPadding: 1.8, valign: 'middle' },
+          headStyles: { fillColor: C.soft, textColor: C.navy, fontStyle: 'bold', fontSize: 7.4 },
+          columnStyles: { 0: { cellWidth: 24, fontStyle: 'bold' }, 1: { cellWidth: 34 }, 2: { cellWidth: 20 }, 3: { cellWidth: 26 }, 5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' }, 6: { cellWidth: 15 } },
+          willDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > 1) pageHead(); },
+          didDrawCell: d => { if (d.section === 'body' && d.column.index === 6) cbox(d.cell.x + (d.cell.width - 3.6) / 2, d.cell.y + (d.cell.height - 3.6) / 2); }
+        });
+        y = doc.lastAutoTable.finalY + 7;
+      });
+      // ---- personalizzazione ----
+      if (hasLg) {
+        y = need(y + 2, 60); y = sec('Personalizzazione', y, 'istruzioni per la stampa');
+        const PR = p.pers || [];
+        const ISTR = { f: 'Petto lato cuore (sinistra di chi indossa): centro del logo a metà tra abbottonatura/cerniera e cucitura laterale, circa 18–20 cm sotto la cucitura della spalla. Larghezza indicativa 8–9 cm.', r: 'Schiena: logo centrato, circa 8–10 cm sotto il colletto o l\'attaccatura del cappuccio. Larghezza indicativa 25–28 cm.' };
+        ['f', 'r'].forEach(s0 => {
+          const L0 = s0 === 'f' ? LGF : LGR, meta = LG[s0]; if (!meta) return;
+          const ls = p.righe.filter(l => l[s0 === 'f' ? 'lf' : 'lr']); if (!ls.length) return;
+          const lav = PR.filter(r => r.slot === s0).map(r => String(r.d || '').replace(/ · (fronte lato cuore|retro)$/, '')).join(' · ') || 'da definire';
+          const an = meta.an, cols = (an && an.cols) || [];
+          const extra = ls.some(l => pvGrp(pvKind(l)) !== 'top') ? (s0 === 'f' ? ' Pantaloni: gamba sinistra sotto la tasca. Cappellini: pannello frontale centrato.' : ' Pantaloni: sotto la cintura al centro. Cappellini: pannello posteriore.') : '';
+          const txt = doc.splitTextToSize(ISTR[s0] + extra, CW - 66);
+          const hh = Math.max(46, 30 + txt.length * 3.8);
+          y = need(y, hh + 4);
+          stroke(C.line); doc.setLineWidth(.3); fill(C.white); doc.roundedRect(M, y, CW, hh, 2, 2, 'FD');
+          // logo su sfondo a scacchi chiaro
+          fill(C.soft); doc.roundedRect(M + 4, y + 4, 52, hh - 8, 1.5, 1.5, 'F'); if (L0) fitPng(L0, M + 7, y + 7, 46, hh - 20);
+          color(C.muted); font('normal', 6.5); doc.text(doc.splitTextToSize(meta.nome || 'logo', 48)[0], M + 30, y + hh - 6, { align: 'center' });
+          const x = M + 62;
+          color(C.orange); font('bold', 7.5); doc.text(s0 === 'f' ? 'FRONTE · LATO CUORE' : 'RETRO · SCHIENA', x, y + 7);
+          color(C.ink); font('bold', 10.5); doc.text(doc.splitTextToSize(lav, CW - 66)[0], x, y + 12.5);
+          color(C.ink2); font('normal', 8); doc.text(`${ls.length} ${ls.length === 1 ? 'riga' : 'righe'} · ${fmtNum(ls.reduce((s, l) => s + LQ(l), 0), 0)} pezzi · ${an ? pvAnTxt(an) : 'colori da verificare'}`, x, y + 17.5);
+          let cx = x; cols.forEach(h => { fill(hex2rgb(h)); stroke(C.line); doc.setLineWidth(.25); doc.roundedRect(cx, y + 20, 7, 4.2, .8, .8, 'FD'); color(C.muted); font('normal', 5.8); doc.text(h.toUpperCase(), cx + 3.5, y + 27.2, { align: 'center' }); cx += 13; });
+          color(C.ink2); font('normal', 7.8); doc.text(txt, x, y + (cols.length ? 32 : 24));
+          y += hh + 4;
+        });
+        const imp = PR.filter(r => !r.slot && r.d);
+        if (imp.length) { y = need(y, 8); color(C.ink2); font('normal', 8); doc.text('Altro: ' + imp.map(r => `${String(r.d)} (${fmtNum(pvPersQ(p, r), 0)})`).join(' · '), M, y + 2); y += 7; }
+        // anteprime
+        const tiles = []; p.righe.forEach((l, i) => { const m = mocks[i]; if (!m) return; if (m.f) tiles.push([l, m.f, pvPosLong(l, 'f')]); if (m.r) tiles.push([l, m.r, pvPosLong(l, 'r') + (m.rk === 'flat' ? ' (sagoma)' : '')]); });
+        if (tiles.length) {
+          y = need(y + 3, 80); y = sec('Anteprime di riferimento', y, 'posizione indicativa del logo');
+          const tw = (CW - 8) / 3, th = 62;
+          tiles.forEach(([l, im, lab], k) => {
+            const col = k % 3; if (col === 0 && k) y += th + 13;
+            if (col === 0) y = need(y, th + 12);
+            const x = M + col * (tw + 4);
+            stroke(C.line); doc.setLineWidth(.25); fill(C.white); doc.roundedRect(x, y, tw, th, 1.5, 1.5, 'FD'); fitImg(im, x + 1, y + 1, tw - 2, th - 2);
+            color(C.ink); font('bold', 7.6); doc.text(doc.splitTextToSize(`${l.n} · ${l.cn}`, tw)[0], x, y + th + 4); color(C.muted); font('normal', 6.8); doc.text(lab, x, y + th + 8);
+          });
+          y += th + 14;
+        }
+      }
+      // ---- fasi di lavoro ----
+      y = need(y + 2, 80); y = sec('Fasi di lavoro', y, 'spunta e firma ogni fase');
+      const F = ['Ordine del materiale ai fornitori', 'Materiale arrivato e controllato (quantità, taglie, colori)', ...(hasLg ? ['Preparazione grafica e impianto', ...(p.righe.some(l => l.lf && LG.f) ? ['Personalizzazione fronte / lato cuore'] : []), ...(p.righe.some(l => l.lr && LG.r) ? ['Personalizzazione retro / schiena'] : [])] : []), 'Controllo qualità finale', 'Imballo ed etichettatura', 'Consegna / ritiro del cliente'];
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M, top: 18, bottom: 16 }, theme: 'grid', rowPageBreak: 'avoid',
+        head: [['#', 'Fase', 'Fatto', 'Data', 'Operatore', 'Firma']], body: F.map((f, i) => [String(i + 1), f, '', '', '', '']),
+        styles: { font: FF, fontSize: 8.4, textColor: C.ink, lineColor: C.line, lineWidth: .2, cellPadding: 2, valign: 'middle', minCellHeight: 9 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.4, minCellHeight: 0 },
+        columnStyles: { 0: { cellWidth: 8, halign: 'center', textColor: C.muted }, 1: { cellWidth: 72 }, 2: { cellWidth: 13 }, 3: { cellWidth: 24 }, 4: { cellWidth: 30 } },
+        willDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > 1) pageHead(); },
+        didDrawCell: d => { if (d.section === 'body' && d.column.index === 2) cbox(d.cell.x + (d.cell.width - 3.6) / 2, d.cell.y + (d.cell.height - 3.6) / 2); }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+      // ---- note ----
+      y = need(y, 42); y = sec('Note', y);
+      stroke(C.line); doc.setLineWidth(.3); doc.roundedRect(M, y, CW, 32, 2, 2, 'S');
+      let ny = y + 6; if (p.note) { color(C.ink2); font('normal', 8.4); const nl = doc.splitTextToSize(p.note, CW - 8).slice(0, 3); doc.text(nl, M + 4, ny); ny += nl.length * 4 + 2; }
+      stroke([230, 233, 239]); doc.setLineWidth(.2); for (let ly = ny + 3; ly < y + 30; ly += 6.5) doc.line(M + 4, ly, W - M - 4, ly);
+      // piè di pagina
+      const N = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 11, W - M, H - 11); color(C.muted); font('normal', 7.2); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM) · uso interno', M, H - 6.5); doc.text(`Scheda di lavoro ${p.num}`, W / 2, H - 6.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 6.5, { align: 'right' }); }
+      doc.setProperties({ title: `Scheda di lavoro ${p.num}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      doc.save(`Scheda_lavoro_${p.num}${cl.nome ? '_' + pvSlug(cl.nome) : ''}.pdf`);
+      busy(); toast('Scheda di lavoro scaricata');
+    } catch (e) { busy(); console.error(e); toast('Scheda non creata: ' + e.message); }
   }
   /* ---------- PDF del preventivo (per il cliente) ---------- */
   async function pvPdf(opt = { foto: true, scheda: false }) {
@@ -6010,6 +6180,7 @@
       if (t.closest('#pv-save')) { pvQuiet(pvFromForm()); toast('Preventivo salvato'); return; }
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
+      if (t.closest('#pv-work')) { pvWorkPdf(); return; }
       const lgs = t.closest('[data-pvlgset]'); if (lgs) { pvLogoSet(lgs.dataset.pvlgset); return; }
       const lgd = t.closest('[data-pvlgdel]'); if (lgd) { const p = pvFromForm(); if (!p || !p.loghi) return; const s0 = lgd.dataset.pvlgdel; if (!confirm(`Togliere il logo ${s0 === 'f' ? 'del fronte' : 'della schiena'} da questo preventivo?`)) return; p.loghi[s0] = null; p.righe.forEach(l => { l[s0 === 'f' ? 'lf' : 'lr'] = false; }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
       if (t.closest('[data-pvlgsame]')) { const p = pvFromForm(); if (!p || !p.loghi || !p.loghi.f) return; p.loghi.r = { ...p.loghi.f }; if (!p.righe.some(l => l.lr)) p.righe.forEach(l => { l.lr = pvTop(l); }); if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); toast('Stesso logo anche sulla schiena'); return; }
