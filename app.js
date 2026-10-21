@@ -2933,7 +2933,7 @@
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(it.cl)}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc) : ''}</span></div>
       <div class="card pv-hd">
-        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])] ? '' : ' <em>IA</em>'}</button>` : ''}</div>
+        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pv3dIds(pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])]).length ? '' : ' <em>IA</em>'}</button>` : ''}</div>
         <div class="pv-hi">
           <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
@@ -2965,7 +2965,7 @@
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(pvGroupT(it.g))}</span></div>
       <div class="card pv-hd">
-        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])] ? '' : ' <em>IA</em>'}</button>` : ''}</div>
+        <div class="pv-hm">${pvThumb(cat, it, it.c[0], 'big')}${pvImg(cat, it.c[0]) ? `<button type="button" class="pv-3dbtn" data-pv3d="1" title="Vista 3D del prodotto creata con l'IA"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Vista 3D${pv3dIds(pvCfgMap('pv3d')[pv3dKey(pvSup, it, it.c[0])]).length ? '' : ' <em>IA</em>'}</button>` : ''}</div>
         <div class="pv-hi">
           <span class="pv-code">${esc(it.id)}</span>
           <h2>${esc(it.n)}</h2>
@@ -3781,55 +3781,85 @@
       busy(); toast('Scheda di lavoro scaricata');
     } catch (e) { busy(); console.error(e); toast('Scheda non creata: ' + e.message); }
   }
-  /* ---------- VISTA 3D: l'IA crea il prodotto visto tutto intorno (8 viste), qui si ruota trascinando ---------- */
-  const PV3D_ANG = [45, 90, 135, 180, 225, 270, 315];
+  /* ---------- VISTA 3D: l'IA crea il prodotto visto tutto intorno (24 viste, una ogni 15°), qui si ruota trascinando ---------- */
+  const PV3D_N = 24;
   const pv3dMem = new Map();
   const pv3dKey = (sup, it, c) => `${sup}|${it.id}|${c[0]}`;
+  const pv3dIds = v => Array.isArray(v) ? v : [];
+  const pv3dDataUrl = id => api('getDoc', { id }).then(r => `data:${r.mime || 'image/jpeg'};base64,${r.data}`);
+  // stessa inquadratura per tutte le viste: il prodotto resta fermo al centro, alla stessa altezza
+  async function pv3dNorm(frames) {
+    const boxes = await Promise.all(frames.map(async d => { const im = await pvLoadImg(d); return { im, g: pvGBox({ im, w: im.naturalWidth, h: im.naturalHeight }), w: im.naturalWidth, h: im.naturalHeight }; }));
+    const S = 1000, hs = boxes.map(b => (b.g.y1 - b.g.y0) * b.h).sort((a, b) => a - b), ref = hs[Math.floor(hs.length / 2)] || 1;
+    return boxes.map(b => {
+      const gh = (b.g.y1 - b.g.y0) * b.h, gw = (b.g.x1 - b.g.x0) * b.w, k = Math.min(S * .82 / Math.max(gh, ref * .85), S * .94 / Math.max(gw, 1));
+      const cv = document.createElement('canvas'); cv.width = S; cv.height = S; const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, S, S); x.imageSmoothingQuality = 'high';
+      const cx = (b.g.x0 + b.g.x1) / 2 * b.w, cy = (b.g.y0 + b.g.y1) / 2 * b.h;
+      x.drawImage(b.im, S / 2 - cx * k, S / 2 - cy * k, b.w * k, b.h * k);
+      return cv.toDataURL('image/jpeg', .9);
+    });
+  }
+  async function pv3dLoad(sup, it, c) {
+    const key = pv3dKey(sup, it, c); if (pv3dMem.has(key)) return pv3dMem.get(key);
+    const ids = pv3dIds(pvCfgMap('pv3d')[key]); if (!ids.length) return null;
+    busy('Carico la vista 3D…');
+    const [base] = await pvPhotos([pvImg(pvCats[sup], c)], 1024);
+    const rest = await Promise.all(ids.slice(1).map(id => pv3dDataUrl(id).catch(() => null)));
+    busy();
+    if (!base || !rest.every(Boolean)) return null;
+    busy('Preparo la rotazione…'); const frames = await pv3dNorm([base.d, ...rest]); busy();
+    pv3dMem.set(key, frames); return frames;
+  }
   async function pv3dOpen(sup, it, c) {
-    const key = pv3dKey(sup, it, c), M = pvCfgMap('pv3d'), title = `${it.n}${c[1] ? ' · ' + c[1] : ''}`;
-    let frames = pv3dMem.get(key);
-    if (!frames && M[key]) {
-      try {
-        busy('Carico la vista 3D…');
-        const cat = pvCats[sup], [base] = await pvPhotos([pvImg(cat, c)], 1024);
-        const rest = await Promise.all(M[key].slice(1).map(id => api('getDoc', { id }).then(r => `data:${r.mime || 'image/jpeg'};base64,${r.data}`).catch(() => null)));
-        busy();
-        if (base && rest.every(Boolean)) { frames = [base.d, ...rest]; pv3dMem.set(key, frames); }
-      } catch (e) { busy(); if (e instanceof AuthError) throw e; }
-    }
-    if (frames) return pv3dView(title, frames, () => pv3dGen(sup, it, c, true));
+    const title = `${it.n}${c[1] ? ' · ' + c[1] : ''}`;
+    let frames = null; try { frames = await pv3dLoad(sup, it, c); } catch (e) { busy(); if (e instanceof AuthError) throw e; }
+    if (frames) return pv3dView(title, frames, { regen: () => pv3dGen(sup, it, c, true), fluid: frames.length < PV3D_N ? () => pv3dGen(sup, it, c, false, true) : null });
     if (isLocal()) return toast('La vista 3D funziona con il Foglio Google collegato');
     if (!aiReady()) return toast('Per la vista 3D attiva l\'IA in Impostazioni (chiave Gemini)');
-    if (db.v && db.v < 'cdc-2.4') return toast('Per la vista 3D aggiorna lo script Google alla versione cdc-2.4');
+    if (db.v && db.v < 'cdc-2.5') return toast('Per la vista 3D aggiorna lo script Google alla versione cdc-2.5');
     openSheet('Crea la vista 3D', `<div class="pv3d-ask"><div class="pv3d-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg></div>
-      <p><b>${esc(title)}</b></p><p class="muted small">L'IA guarda la foto del prodotto e crea altre 7 viste, girandogli intorno come su un piatto girevole. Poi puoi ruotarlo trascinando, anche davanti al cliente.</p>
-      <p class="muted small">Ci vuole circa un minuto e costa pochi centesimi sulla tua chiave Gemini. Dopo resta salvata e si apre subito, anche nei prossimi preventivi.</p></div>`,
+      <p><b>${esc(title)}</b></p><p class="muted small">L'IA guarda la foto e crea il prodotto visto tutto intorno, una vista ogni 15° (24 in tutto), come su un piatto girevole. Poi lo ruoti in modo fluido trascinandolo, anche davanti al cliente.</p>
+      <p class="muted small">La prima volta ci vogliono circa 4–5 minuti e qualche centesimo sulla tua chiave Gemini: puoi lasciare la pagina aperta e fare altro. Dopo resta salvata e si apre subito.</p></div>`,
       () => { setTimeout(() => pv3dGen(sup, it, c), 250); return true; }, null, 'Crea la vista 3D');
   }
-  async function pv3dGen(sup, it, c, again) {
+  // crea le viste che mancano: prima le 8 principali (ogni 45°), poi quelle intermedie (ogni 15°) guardando le due vicine
+  async function pv3dGen(sup, it, c, again, fluid) {
     const cat = pvCats[sup], key = pv3dKey(sup, it, c), title = `${it.n}${c[1] ? ' · ' + c[1] : ''}`;
     if (again && !confirm('Rifare la vista 3D di questo prodotto? Le viste attuali verranno sostituite.')) return;
+    if (db.v && db.v < 'cdc-2.5') return toast('Per la vista 3D fluida aggiorna lo script Google alla versione cdc-2.5');
+    const nome = `${it.n} ${it.cl || ''} ${c[1] || ''}`.trim();
     try {
       busy('Preparo la foto del prodotto…');
       const [base] = await pvPhotos([pvImg(cat, c)], 1024);
       if (!base) { busy(); return toast('Foto del prodotto non disponibile: la vista 3D non si può creare'); }
-      const frames = [base.d], ids = [''], nome = `${it.n} ${it.cl || ''} ${c[1] || ''}`.trim();
-      for (let i = 0; i < PV3D_ANG.length; i++) {
-        busy(`L'IA crea la vista 3D… ${i + 1} di ${PV3D_ANG.length}`);
-        const prev = frames[frames.length - 1];
-        const r = await api('ai', { task: 'vista3d', angolo: PV3D_ANG[i], nome, mime: 'image/jpeg', image: base.d.split(',')[1], image2: i ? prev.split(',')[1] : '' });
+      const F = new Array(PV3D_N).fill(null), I = new Array(PV3D_N).fill(null); F[0] = base.d; I[0] = '';
+      // viste già fatte (8 o 24) da riusare
+      const old = again ? [] : pv3dIds(pvCfgMap('pv3d')[key]);
+      if (old.length) { const st = PV3D_N / old.length; busy('Carico le viste già pronte…'); const ds = await Promise.all(old.slice(1).map(id => pv3dDataUrl(id).catch(() => null))); ds.forEach((d, i) => { if (d) { F[(i + 1) * st] = d; I[(i + 1) * st] = old[i + 1]; } }); }
+      const todo = [];
+      for (let k = 3; k < PV3D_N; k += 3) if (!F[k]) todo.push(k);            // 45°, 90°… 315°
+      for (let k = 1; k < PV3D_N; k++) if (k % 3 && !F[k]) todo.push(k);       // 15°, 30°, 60°…
+      let n = 0;
+      const save = () => { const M = pvCfgMap('pv3d'); const filled = I.every(v => v !== null); const main = [0, 3, 6, 9, 12, 15, 18, 21].every(k => I[k] !== null); if (filled) M[key] = I.slice(); else if (main) M[key] = [0, 3, 6, 9, 12, 15, 18, 21].map(k => I[k]); else return; const ks = Object.keys(M); if (ks.length > 200) ks.slice(0, ks.length - 200).forEach(k2 => delete M[k2]); pvCfgQuiet('pv3d', M); };
+      for (const k of todo) {
+        busy(`L'IA crea la vista 3D… ${++n} di ${todo.length}`);
+        const ang = k * 360 / PV3D_N, main = k % 3 === 0;
+        const prev = main ? F[k - 3] : F[k - (k % 3)], next = main ? null : F[(k - (k % 3) + 3) % PV3D_N];
+        const r = await api('ai', { task: 'vista3d', angolo: ang, nome, mime: 'image/jpeg', image: base.d.split(',')[1], image2: k === 3 ? '' : (prev || '').split(',')[1] || '', ang2: main ? ang - 45 : ang - (k % 3) * 15, image3: next ? next.split(',')[1] : '', ang3: next ? (ang - (k % 3) * 15 + 45) % 360 : '' });
         if (!r || !r.data) throw new Error('l\'IA non ha restituito l\'immagine');
         const j = await pvToJpeg(`data:${r.mime || 'image/png'};base64,${r.data}`, 1024);
         if (!j) throw new Error('immagine non leggibile');
-        frames.push(j.d);
-        ids.push(await api('uploadDoc', { name: `3D ${it.n} ${c[1] || ''} ${PV3D_ANG[i]}.jpg`.replace(/\s+/g, ' '), mime: 'image/jpeg', data: j.d.split(',')[1] }));
+        F[k] = j.d; I[k] = await api('uploadDoc', { name: `3D ${it.n} ${c[1] || ''} ${ang}.jpg`.replace(/\s+/g, ' '), mime: 'image/jpeg', data: j.d.split(',')[1] });
+        if (k === 21 || n === todo.length) save();
       }
-      const M = pvCfgMap('pv3d'); M[key] = ids; const ks = Object.keys(M); if (ks.length > 200) ks.slice(0, ks.length - 200).forEach(k => delete M[k]);
-      pvCfgQuiet('pv3d', M); pv3dMem.set(key, frames);
-      busy(); pv3dView(title, frames, () => pv3dGen(sup, it, c, true));
-    } catch (e) { busy(); if (e instanceof AuthError) throw e; toast('Vista 3D non creata: ' + e.message); }
+      save();
+      busy('Preparo la rotazione…'); const frames = await pv3dNorm(F.filter(Boolean)); busy();
+      pv3dMem.set(key, frames);
+      pv3dView(title, frames, { regen: () => pv3dGen(sup, it, c, true), fluid: null });
+      if (fluid) toast('Vista 3D resa fluida: 24 viste');
+    } catch (e) { busy(); if (e instanceof AuthError) throw e; toast('Vista 3D non completata: ' + e.message + '. Riprova: le viste già fatte restano salvate.'); }
   }
-  function pv3dView(title, frames, regen) {
+  function pv3dView(title, frames, o = {}) {
     const n = frames.length;
     openSheet(`Vista 3D · ${title}`, `<div class="pv3d" id="pv3d" tabindex="0" aria-label="Vista 3D: trascina per ruotare il prodotto">
         <div class="pv3d-st">${frames.map((d, i) => `<img src="${d}" alt="" draggable="false" style="opacity:${i ? 0 : 1}">`).join('')}</div>
@@ -3837,23 +3867,38 @@
         <span class="pv3d-deg" id="pv3d-deg">0°</span>
       </div>
       <div class="pv3d-ctl"><button type="button" class="btn sm" id="pv3d-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg><span>Ruota da solo</span></button>
-        <input type="range" id="pv3d-r" min="0" max="${n * 20 - 1}" value="0" aria-label="Angolo">
-        ${regen ? '<button type="button" class="link" id="pv3d-regen">Rifai con l\'IA</button>' : ''}</div>
+        <input type="range" id="pv3d-r" min="0" max="3599" value="0" aria-label="Angolo">
+        ${o.regen ? '<button type="button" class="link" id="pv3d-regen">Rifai con l\'IA</button>' : ''}</div>
+      ${o.fluid ? `<div class="pv3d-up"><span>Questa vista ha ${n} immagini. Per una rotazione più fluida l'IA può aggiungere quelle intermedie (24 in tutto, circa 3 minuti).</span><button type="button" class="btn sm primary" id="pv3d-fluid">Rendi fluida</button></div>` : ''}
       <p class="muted small" style="margin:10px 0 0">Viste create dall'IA a partire dalla foto: anteprima indicativa, i dettagli nascosti nella foto sono ricostruiti.</p>`, () => true, null, 'Chiudi');
     $('#sheet-form').classList.add('wide');
     const box = $('#pv3d'), imgs = $$('#pv3d img'), rng = $('#pv3d-r'), deg = $('#pv3d-deg');
-    let pos = 0, play = false, last = 0, drag = null;
-    const show = () => { pos = ((pos % n) + n) % n; const a = Math.floor(pos), b = (a + 1) % n, t = pos - a; imgs.forEach((im, i) => { im.style.opacity = i === a ? 1 - t : i === b ? t : 0; }); rng.value = Math.round(pos * 20); deg.textContent = Math.round(pos * 360 / n) + '°'; };
-    const tick = ts => { if (!box.isConnected) return; if (play) { if (last) pos += (ts - last) / 1000 * n / 6; last = ts; show(); requestAnimationFrame(tick); } else last = 0; };
-    const setPlay = v => { play = v; $('#pv3d-play span').textContent = v ? 'Ferma' : 'Ruota da solo'; $('#pv3d-play').classList.toggle('primary', v); if (v) requestAnimationFrame(tick); };
+    let pos = 0, play = false, last = 0, drag = null, vel = 0, shown = [0, 0];
+    // dissolvenza breve al centro del passaggio: l'immagine resta nitida quasi sempre, niente «doppia immagine»
+    const ease = t => { const a = Math.min(1, Math.max(0, (t - .3) / .4)); return a * a * (3 - 2 * a); };
+    const show = () => {
+      pos = ((pos % n) + n) % n; const a = Math.floor(pos), b = (a + 1) % n, t = ease(pos - a);
+      if (shown[0] !== a || shown[1] !== b) { imgs[shown[0]].style.opacity = 0; imgs[shown[1]].style.opacity = 0; shown = [a, b]; }
+      imgs[a].style.opacity = 1; imgs[b].style.opacity = t; imgs[b].style.zIndex = 2; imgs[a].style.zIndex = 1;
+      rng.value = Math.round(pos / n * 3600); deg.textContent = Math.round(pos * 360 / n) % 360 + '°';
+    };
+    const loop = ts => {
+      if (!box.isConnected) return;
+      const dt = last ? Math.min(.05, (ts - last) / 1000) : 0; last = ts;
+      if (play) pos += dt * n / 9;                       // un giro completo in 9 secondi
+      else if (!drag && Math.abs(vel) > .02) { pos += vel * dt; vel *= Math.pow(.04, dt); } // inerzia dopo il trascinamento
+      show(); requestAnimationFrame(loop);
+    };
+    const setPlay = v => { play = v; vel = 0; $('#pv3d-play span').textContent = v ? 'Ferma' : 'Ruota da solo'; $('#pv3d-play').classList.toggle('primary', v); };
     $('#pv3d-play').onclick = () => setPlay(!play);
-    rng.oninput = () => { setPlay(false); pos = +rng.value / 20; show(); };
-    box.onpointerdown = e => { setPlay(false); drag = { x: e.clientX, p: pos }; box.setPointerCapture(e.pointerId); box.classList.add('drag'); };
-    box.onpointermove = e => { if (!drag) return; pos = drag.p - (e.clientX - drag.x) / box.clientWidth * n * 1.1; show(); };
-    box.onpointerup = box.onpointercancel = () => { drag = null; box.classList.remove('drag'); };
-    box.onkeydown = e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setPlay(false); pos += e.key === 'ArrowRight' ? .25 : -.25; show(); } };
-    const rg = $('#pv3d-regen'); if (rg) rg.onclick = () => { closeSheet(); setTimeout(regen, 260); };
-    show(); setTimeout(() => setPlay(true), 400);
+    rng.oninput = () => { setPlay(false); pos = +rng.value / 3600 * n; };
+    box.onpointerdown = e => { setPlay(false); drag = { x: e.clientX, p: pos, t: performance.now(), lx: e.clientX }; vel = 0; box.setPointerCapture(e.pointerId); box.classList.add('drag'); };
+    box.onpointermove = e => { if (!drag) return; const now = performance.now(), k = n * 1.15 / box.clientWidth; pos = drag.p - (e.clientX - drag.x) * k; const dt = (now - drag.t) / 1000; if (dt > 0) vel = vel * .6 + (-(e.clientX - drag.lx) * k / dt) * .4; drag.t = now; drag.lx = e.clientX; };
+    box.onpointerup = box.onpointercancel = () => { if (drag && performance.now() - drag.t > 80) vel = 0; drag = null; box.classList.remove('drag'); };
+    box.onkeydown = e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setPlay(false); vel = (e.key === 'ArrowRight' ? 1 : -1) * n / 4; } };
+    const rg = $('#pv3d-regen'); if (rg) rg.onclick = () => { closeSheet(); setTimeout(o.regen, 260); };
+    const fl = $('#pv3d-fluid'); if (fl) fl.onclick = () => { closeSheet(); setTimeout(o.fluid, 260); };
+    show(); requestAnimationFrame(loop); setTimeout(() => { if (box.isConnected && !drag) setPlay(true); }, 500);
   }
   /* ---------- PDF del preventivo (per il cliente) ---------- */
   async function pvPdf(opt = { foto: true, scheda: false }) {

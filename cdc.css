@@ -2015,3 +2015,5 @@ body.has-sel .fab { display: none; }
 .pv3d-ico svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 @media (prefers-reduced-motion: reduce) { .pv-3dbtn { transition: none; } }
 .pv-3dbtn { z-index: 3; }
+.pv3d-up { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 13px; color: var(--ink); }
+.pv3d-st img { will-change: opacity; backface-visibility: hidden; }
