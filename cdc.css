@@ -2058,3 +2058,6 @@ body.has-sel .fab { display: none; }
 .ai-first button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; color: var(--muted); cursor: pointer; transition: color .25s; white-space: nowrap; }
 .ai-first button.on { color: var(--bg); }
 .ai-first button:disabled { cursor: default; opacity: .5; }
+/* v65: 7 fornitori */
+.pv-brand { grid-template-columns: repeat(7, 58px); } .pv-bi { width: 58px; transform: translateX(calc(var(--i, 0) * 62px)); }
+@media (max-width: 520px) { .pv-brand { grid-template-columns: repeat(7, 41px); gap: 3px; } .pv-bi { width: 41px; transform: translateX(calc(var(--i, 0) * 44px)); } .pv-brand img { height: 22px; } }

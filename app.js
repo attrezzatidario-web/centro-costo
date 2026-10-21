@@ -2772,7 +2772,7 @@
   /* =========================================================
      PREVENTIVI PAYPER, JRC, DEWALT, STANLEY E USAG — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' } };
   const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt, Stanley: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
@@ -2919,7 +2919,7 @@
       ${pvThumb(cat, it, c0)}
       <span class="pv-cm"><b>${it.x ? '<i class="pv-new">nuovo</i>' : ''}${esc(it.n)}</b><small>${esc(pvCode(it))} · ${esc(it.cl.toLowerCase())}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
         ${cat.tool ? (it.uv > 1 ? `<span class="pv-tl">confezione da ${it.uv} pz</span>` : '') : `<span class="pv-sws">${it.c.slice(0, 9).map(c => pvSw(c[1])).join('')}${it.c.length > 9 ? `<em>+${it.c.length - 9}</em>` : ''}</span>`}
-        <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${acq != null ? eur(acq) : 'da inserire'}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span><small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>`}</span></span>
+        <span class="pv-pr">${pub != null ? `<strong>${multi ? '<em>da</em> ' : ''}${eur(pub)}</strong><small>${pvCli ? 'IVA esclusa' : `al pubblico · acquisto ${acq != null ? eur(acq) : 'da inserire'}`}</small>` : pvCli ? '<small>prezzo da definire</small>' : `<span class="chip soon">prezzo d'acquisto da inserire</span>${c0[2] != null ? `<small>listino ${esc(cat.nome)} ${eur(c0[2])}</small>` : ''}`}</span></span>
     </button>`; };
   function pvCatRes(cat) {
     cat = cat || pvCats[pvSup]; const box = $('#pv-res'); if (!cat || !box) return;
@@ -2953,12 +2953,12 @@
           <span class="pv-code">${esc(pvCode(it))}</span>
           <h2>${esc(it.n)}</h2>
           <p>${esc(it.d)}</p>
-          <div class="pv-spec">${[['Marca', it.x ? it.marca || '' : ''], ['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? `${it.pk} pz` : ''], ['Cartone', it.ct ? `${it.ct} pz` : ''], ['Taglie', it.sz.join(' · ')], ['Colori', String(it.c.length)]].filter(x => x[1]).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
+          <div class="pv-spec">${[['Marca', it.x ? it.marca || '' : ''], ['Linea', it.lin || ''], ['Normative', it.norm || ''], ['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? `${it.pk} pz` : ''], ['Cartone', it.ct ? `${it.ct} pz` : ''], ['Taglie', it.sz.join(' · ')], ['Colori', String(it.c.length)]].filter(x => x[1]).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
         </div>
         <div class="pv-prices">${pvCli ? (() => { const ps = [...new Set(it.c.map(c => pvPub(it.id, c[0])).filter(v => v != null))].sort((a, b) => a - b); return `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${ps.length ? (ps.length > 1 ? `${eur(ps[0])} – ${eur(ps[ps.length - 1])}` : eur(ps[0])) : '—'}</b><small>a pezzo · IVA esclusa</small></div>`; })() : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
           <div class="pv-pf"><span>Prezzo al pubblico</span><b id="pv-pub">${base !== '' ? eur(r2(num(base) * ric)) : '—'}</b><small>acquisto × ${fmtNum(ric, 2).replace(/,00$/, '')}</small></div>
-          <div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>${it.pl && cat.pl ? it.pl.map((v, i) => v ? `${cat.pl[i]} ${eur(v)}` : '').filter(Boolean).join(' · ') : 'prezzo di riferimento del fornitore'}</small></div>
+          ${it.c.some(c => c[2] != null) ? `<div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]).filter(v => v != null))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>${it.pl && cat.pl ? it.pl.map((v, i) => v ? `${cat.pl[i]} ${eur(v)}` : '').filter(Boolean).join(' · ') : 'prezzo di riferimento del fornitore'}</small></div>` : ''}
           <label class="pv-tgl"><input type="checkbox" id="pv-percol"${perCol ? ' checked' : ''}><span>Prezzo d'acquisto diverso per colore</span></label>`}
         </div>
       </div>
@@ -4174,7 +4174,7 @@
         color(C.ink2); font('normal', 9); const dl = doc.splitTextToSize(it ? it.d : '', rw); doc.text(dl.slice(0, 12), rx, ty0);
         let sy = ty0 + Math.min(dl.length, 12) * 4.1 + 4;
         if (it) {
-          const spec = it.uv != null ? pvSpecTool(it).concat(it.pl && it.pl[0] ? [['Listino lordo', eur(it.pl[0])]] : []) : [['Marca', it.x ? it.marca || '' : ''], ['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
+          const spec = it.uv != null ? pvSpecTool(it).concat(it.pl && it.pl[0] ? [['Listino lordo', eur(it.pl[0])]] : []) : [['Marca', it.x ? it.marca || '' : ''], ['Linea', it.lin || ''], ['Normative', it.norm || ''], ['Composizione', it.comp], ['Grammatura', it.gsm], ['Prodotto in', it.mi], ['Confezione', it.pk ? it.pk + ' pz' : ''], ['Cartone', it.ct ? it.ct + ' pz' : ''], ['Taglie disponibili', it.sz.join(' · ')], ['Colori disponibili', String(it.c.length)]].filter(x => x[1]);
           doc.autoTable({ startY: Math.max(sy, yy), margin: { left: rx, right: M }, body: spec, theme: 'plain', styles: { font: FF, fontSize: 8.6, textColor: C.ink, cellPadding: { top: 1.8, bottom: 1.8, left: 0, right: 2 }, lineColor: C.line, lineWidth: { bottom: .2 } }, columnStyles: { 0: { textColor: C.muted, cellWidth: 34 }, 1: { fontStyle: 'bold' } } });
           sy = doc.lastAutoTable.finalY;
         }
