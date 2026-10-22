@@ -2779,7 +2779,7 @@
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => { pvListSup[it.id] = sup; }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   // dettagli (descrizioni, caratteristiche) in un file a parte per i cataloghi grandi: caricati quando servono
@@ -2789,7 +2789,13 @@
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
   const pvRic = () => num(cfg('ppRic')) || 2;
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
-  const pvAcq = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
+  // v76: sconto rivenditore % sul prezzo di listino (Config «pvSconti», solo nel Foglio Google). FFG, Benman e Hugo condividono lo sconto FF Group
+  const pvListSup = {};
+  const pvScKey = sup => ['ffg', 'benman', 'hugo'].includes(sup) ? 'ffgroup' : sup;
+  const pvSconto = sup => { const m = cfg('pvSconti'), v = m && typeof m === 'object' ? m[pvScKey(sup)] : null; return pvRicOk(v) && num(v) > 0 && num(v) < 100 ? num(v) : null; };
+  const pvAcqSc = (it, col) => { const sup = pvListSup[it], sc = sup && pvSconto(sup); if (!sc) return null; const lp = col != null && pvListPub[it + '|' + col] != null ? pvListPub[it + '|' + col] : pvListPub[it]; return lp != null ? r2(lp * (1 - sc / 100)) : null; };
+  const pvAcqExp = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
+  const pvAcq = (it, col) => { const e = pvAcqExp(it, col); return e != null ? e : pvAcqSc(it, col); };
   const pvPub = (it, col) => { if (col != null && pvListPub[it + '|' + col] != null) return pvListPub[it + '|' + col]; if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
   const pvCode = it => it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
@@ -2915,7 +2921,7 @@
     cat.items.forEach(it => { if (!it.g) it.g = pvGroupOf(it.cl); });
     if (!pvQ && !pvGroup) return pvHome(body, cat);
     const A = pvAcqMap(), inG = pvGroup ? cat.items.filter(it => it.g === pvGroup) : cat.items;
-    const cls = [...new Set(inG.map(it => it.cl))].sort(), nAcq = inG.filter(it => A[it.id] != null).length;
+    const cls = [...new Set(inG.map(it => it.cl))].sort(), nAcq = inG.filter(it => A[it.id] != null || pvAcqSc(it.id, it.c[0][0]) != null).length;
     if (pvCl && !cls.includes(pvCl)) pvCl = '';
     const title = pvGroup ? pvGroupT(pvGroup) : 'Risultati della ricerca';
     body.innerHTML = `${pvBanner()}
@@ -2932,7 +2938,7 @@
     pvCatRes(cat);
   }
   function pvHome(body, cat) {
-    const A = pvAcqMap(), nAcq = cat.items.filter(it => A[it.id] != null).length;
+    const A = pvAcqMap(), nAcq = cat.items.filter(it => A[it.id] != null || pvAcqSc(it.id, it.c[0][0]) != null).length;
     const G = pvGroupsOf(cat).filter(g => g.k !== 'altro').map(g => ({ ...g, items: cat.items.filter(it => it.g === g.k) })).filter(g => g.items.length);
     const other = cat.items.filter(it => it.g === 'altro'); if (other.length) G.push({ k: 'altro', t: 'Altro', s: 'altri articoli', items: other });
     const nCol = cat.items.reduce((s2, it) => s2 + it.c.length, 0);
@@ -2964,7 +2970,7 @@
   function pvCatRes(cat) {
     cat = cat || pvCats[pvSup]; const box = $('#pv-res'); if (!cat || !box) return;
     const A = pvAcqMap(), q = amNorm(pvQ).split(/\s+/).filter(Boolean);
-    const L = cat.items.filter(it => (!pvGroup || it.g === pvGroup) && (!pvCl || it.cl === pvCl) && (!pvOnly || (pvOnly === 'acq' ? A[it.id] != null : A[it.id] == null)) && q.every(w => it.k.includes(w)));
+    const L = cat.items.filter(it => (!pvGroup || it.g === pvGroup) && (!pvCl || it.cl === pvCl) && (!pvOnly || (pvOnly === 'acq' ? (A[it.id] != null || pvAcqSc(it.id, it.c[0][0]) != null) : (A[it.id] == null && pvAcqSc(it.id, it.c[0][0]) == null))) && q.every(w => it.k.includes(w)));
     if (pvSort === 'n') L.sort((a, b) => a.n.localeCompare(b.n));
     else if (pvSort === 'p' || pvSort === 'pd') L.sort((a, b) => { const x = pvMinPub(a), y = pvMinPub(b); if (x == null) return 1; if (y == null) return -1; return pvSort === 'p' ? x - y : y - x; });
     else if (pvSort === 'c') L.sort((a, b) => b.c.length - a.c.length);
@@ -3016,7 +3022,7 @@
   // scheda di un attrezzo (DeWalt): niente taglie e colori, solo la quantità
   const pvSpecTool = it => [['Codice', it.c.length > 1 ? `${it.c.length} codici, ${it.c.every(c => /^taglia/i.test(c[1])) ? 'uno per taglia' : 'uno per versione'}` : it.x ? (it.code || it.id) : it.id], ['Marca', it.x ? it.marca || '' : ''], ['Modello', it.mod || ''], ['Tipo', it.cl], ['Confezione', it.uv > 1 ? `${it.uv} pz` : '1 pz'], ['Peso', it.peso ? `${fmtNum(it.peso, 2).replace(/,?0+$/, '')} kg` : ''], ['Imballo (L×P×H)', it.dim && it.dim.every(Boolean) ? it.dim.map(v => fmtNum(v, 1).replace(/,0$/, '')).join(' × ') + ' cm' : '']].concat((it.sp || []).map(([a, b]) => [esc(a), b])).filter(x => x[1]).slice(0, 14);
   function pvDetailTool(body, cat, it, base, q, quotes) {
-    const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]) ?? pvMinPub(it), lordo = it.pl && it.pl[0], acq = base === '' ? null : num(base);
+    const k = it.c[0][0] + '|Pz', pub = pvPub(it.id, it.c[0][0]) ?? pvMinPub(it), lordo = it.pl && it.pl[0], acqSc = pvAcqSc(it.id, it.c[0][0]), acq = base === '' ? acqSc : num(base);
     body.innerHTML = `${pvBanner()}
       <div class="pv-back"><button type="button" class="btn sm" id="pv-back">‹ ${pvQ || pvGroup ? esc(pvGroup ? pvGroupT(pvGroup) : 'Risultati') : 'Catalogo'}</button><span class="muted small">${esc(cat.nome)} · ${esc(pvGroupT(it.g))}</span></div>
       <div class="card pv-hd">
@@ -3028,7 +3034,7 @@
           <div class="pv-spec">${pvSpecTool(it).map(([a, b]) => `<div><span>${a}</span><b>${esc(String(b))}</b></div>`).join('')}</div>
         </div>
         <div class="pv-prices">${pvCli ? `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${pub != null ? eur(pub) : '—'}</b><small>a pezzo · IVA esclusa</small></div>` : `
-          <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="da inserire"></label>
+          <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="${acqSc != null ? esc(fmtIn(acqSc)) : 'da inserire'}">${acqSc != null && base === '' ? `<small class="pv-scn">listino − ${esc(fmtNum(pvSconto(pvSup), 1).replace(/,0$/, ''))}% (sconto rivenditore)</small>` : ''}</label>
           <div class="pv-pf"><span>Prezzo al pubblico</span><b>${pub != null ? eur(pub) : '—'}</b><small>${cat.f === 'milwaukee' ? 'prezzo consigliato volantino' : ['ffg', 'benman', 'hugo'].includes(cat.f) ? 'prezzo di listino ' + esc(cat.nome) : 'prezzo utilizzatore ' + esc(cat.nome)}${acq && pub ? ` · margine ${fmtNum((pub - acq) / pub * 100, 0)}%` : ''}</small></div>
           ${lordo ? `<div class="pv-pf"><span>Listino lordo</span><b>${eur(lordo)}</b><small>${pub ? `sconto utilizzatore ${fmtNum((1 - pub / lordo) * 100, 0)}%` : 'prezzo di listino'}</small></div>` : ''}`}
         </div>
@@ -3157,8 +3163,24 @@
     m = document.createElement('div'); m.id = 'pv-menu'; m.className = 'pv-menu'; m.setAttribute('role', 'menu');
     m.innerHTML = `<div class="pv-mh">${esc(sup.n)}</div>
       <button type="button" role="menuitem" id="pv-linkadd"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span><b>Aggiungi prodotto da link</b><small>incolla la pagina del prodotto, lo approvi tu</small></span></button>
+      ${pvCli || !(pvCats[pvSup] && pvCats[pvSup].pubMode === 'list') ? '' : `<button type="button" role="menuitem" id="pv-sconto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5 5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/></svg><span><b>Sconto rivenditore</b><small>${pvSconto(pvSup) != null ? `${esc(fmtNum(pvSconto(pvSup), 1).replace(/,0$/, ''))}% sul listino${pvScKey(pvSup) === 'ffgroup' ? ' · FFG, Benman e Hugo' : ''}` : 'prezzo d\'acquisto = listino − sconto %'}</small></span></button>`}
       ${pvCli ? '' : `<button type="button" role="menuitem" id="pv-impacq"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 19h14"/></svg><span><b>Importa prezzi d'acquisto</b><small>${info ? `ultimo: «${esc(info.file || '')}» il ${esc(shortDate(info.data))} · ${fmtNum(info.n || 0, 0)} prodotti` : 'listino Excel o CSV del fornitore'}</small></span></button>`}`;
     b.parentNode.insertBefore(m, b.nextSibling); b.setAttribute('aria-expanded', 'true');
+  }
+  function pvScontoForm() {
+    const k = pvScKey(pvSup), cur = pvSconto(pvSup), grp = k === 'ffgroup' ? 'FFG, Benman e Hugo' : PV_SUP[pvSup].n;
+    openSheet('Sconto rivenditore', `<p class="muted" style="margin:0 0 14px">Il prezzo d'acquisto di tutti i prodotti <b>${esc(grp)}</b> diventa: prezzo di listino − sconto. I prezzi d'acquisto scritti a mano o importati restano e hanno la precedenza. Lo sconto si salva solo nel tuo Foglio Google, non nel sito.</p>
+      <label class="f"><span>Sconto sul prezzo al pubblico (%)</span><input id="pv-sc-in" inputmode="decimal" data-focus value="${cur != null ? esc(fmtIn(cur)) : ''}" placeholder="es. 48"></label>
+      <p class="muted small" id="pv-sc-ex" style="margin:10px 0 0"></p>`, () => {
+      const v = String($('#pv-sc-in').value || '').trim(), n = num(v);
+      if (v !== '' && !(n > 0 && n < 100)) { toast('Scrivi una percentuale tra 0 e 100'); return false; }
+      const m = { ...(cfg('pvSconti') || {}) }; if (v === '') delete m[k]; else m[k] = n;
+      write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvSconti', valore: JSON.stringify(m) } }]);
+      toast(v === '' ? 'Sconto tolto' : `Sconto ${fmtNum(n, 1).replace(/,0$/, '')}% impostato per ${grp}`);
+      return true;
+    }, null, 'Salva');
+    const ex = () => { const n = num($('#pv-sc-in').value); $('#pv-sc-ex').textContent = n > 0 && n < 100 ? `Esempio: listino 100,00 € → acquisto ${eur(r2(100 * (1 - n / 100)))}` : ''; };
+    $('#pv-sc-in').addEventListener('input', ex); ex();
   }
   function pvMenuClick(t) {
     if (t.closest('#pv-tools')) { pvMenuToggle(); return true; }
@@ -6664,6 +6686,7 @@
       if (t.closest('#pv-prlist')) { pvPersListEdit(); return; }
       const lgt = t.closest('[data-pvlogo]'); if (lgt && !lgt.disabled) { const p = pvFromForm(); if (!p) return; const [i0, s0] = lgt.dataset.pvlogo.split(':'), l = p.righe[+i0]; if (!l) return; const k = s0 === 'f' ? 'lf' : 'lr'; l[k] = !l[k]; if (p.persAuto !== false) p.pers = pvPersSuggest(p); pvSave(p); return; }
       if (t.closest('#pv-impacq')) { pvImportAcq(); return; }
+      if (t.closest('#pv-sconto')) { pvScontoForm(); return; }
       if (pvLinkClick(t)) return;
       const pvg = t.closest('[data-pvgroup]'); if (pvg) { pvGroup = pvg.dataset.pvgroup; pvCl = ''; if (!pvg.dataset.keepq) pvQ = ''; pvLimit = 48; pvAnim = true; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-home')) { pvGroup = ''; pvQ = ''; pvCl = ''; pvAnim = true; renderPv(); return; }
