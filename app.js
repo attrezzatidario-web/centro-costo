@@ -3108,7 +3108,7 @@
   }
   // menu «Altro» nella barra dei preventivi
   function pvMenuToggle(force) {
-    let m = $('#pv-menu'); const b = $('#pv-more');
+    let m = $('#pv-menu'); const b = $('#pv-tools');
     if (m && force !== true) { m.remove(); b && b.setAttribute('aria-expanded', 'false'); return; }
     if (m) m.remove();
     const sup = PV_SUP[pvSup], info = cfg(pvInfoKey());
@@ -3119,7 +3119,7 @@
     b.parentNode.insertBefore(m, b.nextSibling); b.setAttribute('aria-expanded', 'true');
   }
   function pvMenuClick(t) {
-    if (t.closest('#pv-more')) { pvMenuToggle(); return true; }
+    if (t.closest('#pv-tools')) { pvMenuToggle(); return true; }
     if (!t.closest('#pv-menu') && $('#pv-menu')) $('#pv-menu').remove();
     if (t.closest('#pv-menu [role="menuitem"]')) setTimeout(() => { const m = $('#pv-menu'); if (m) m.remove(); }, 0);
     return false;
