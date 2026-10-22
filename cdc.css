@@ -2094,9 +2094,9 @@ body.has-sel .fab { display: none; }
 /* v69: chiudi preventivo, prezzi d'acquisto sulle righe, clienti */
 .pv-tgb { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 #pv-close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; margin-right: 6px; vertical-align: -3px; }
-.pv-la { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-2); white-space: nowrap; text-align: right; }
-.pv-la.neg { color: #c2410c; font-weight: 600; }
-body.pv-cli .pv-la { display: none; }
+.pv-lacq { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-2); white-space: nowrap; text-align: right; }
+.pv-lacq.neg { color: #c2410c; font-weight: 600; }
+body.pv-cli .pv-lacq { display: none; }
 .pv-cliric { display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); }
 .pv-cliric small { flex: 1 1 260px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
 .pv-rf { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--ink); }
@@ -2231,7 +2231,7 @@ body.pv-cli .pv-la { display: none; }
   .pv-lt td.pv-c-q { font-size: 18px; font-weight: 700; padding-top: 0 !important; }
   .pv-lt td.pv-c-q::after { content: ""; }
   .pv-lt .pv-c-p input, .pv-lt .pv-c-sc input { width: 100% !important; height: 42px; text-align: right; font-size: 16px; }
-  .pv-lt .pv-c-p small { display: block; margin-top: 4px; white-space: normal; font-size: 11px; }
+  .pv-lt .pv-c-p small.pv-lacq { display: block; margin-top: 4px; white-space: normal; font-size: 11px; }
   .pv-lt td.pv-c-t { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding: 11px 14px !important; border-radius: 12px; background: var(--bg); font-size: 16px; font-weight: 800; }
   .pv-lt td.pv-c-t::before { margin: 0; font-size: 12.5px; }
   .pv-lt td.pv-c-lg { grid-column: 1 / -1; }
@@ -2264,3 +2264,34 @@ body.pv-cli .pv-la { display: none; }
 .pv-scq { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .pv-scq button { border: 1px solid var(--line); background: var(--bg); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .pv-scq button:hover { border-color: var(--accent); color: var(--accent); }
+/* v84: barra fornitori su PC — fila intera sotto le schede, loghi grandi e leggibili */
+@media (min-width: 900px) {
+  #v-preventivi .pv-bar0 { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "tabs act" "brand brand"; gap: 12px 16px; align-items: center; }
+  #v-preventivi .pv-tabs { grid-area: tabs; }
+  #v-preventivi .pv-act { grid-area: act; justify-self: end; margin: 0; }
+  #v-preventivi .pv-brand { grid-area: brand; display: flex; gap: 6px; padding: 6px; overflow-x: auto; scrollbar-width: thin; contain: inline-size; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); }
+  @media (min-width: 1500px) { #v-preventivi .pv-brand { -webkit-mask-image: none; mask-image: none; } }
+  #v-preventivi .pv-bi { display: none; }
+  #v-preventivi .pv-brand button { flex: 1 0 74px; height: 56px; border-radius: 12px; border: 1px solid transparent; background: transparent; transition: background .2s, border-color .2s, box-shadow .2s, transform .15s; }
+  #v-preventivi .pv-brand button:hover { background: var(--bg); }
+  #v-preventivi .pv-brand button:active { transform: scale(.97); }
+  #v-preventivi .pv-brand img { height: 36px; max-width: 86%; object-fit: contain; filter: grayscale(1) contrast(1.15); opacity: .7; transform: none; }
+  #v-preventivi .pv-brand button:hover img { filter: none; opacity: .9; transform: none; }
+  #v-preventivi .pv-brand button.on { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 6px 16px -8px rgba(15, 23, 42, .35); }
+  #v-preventivi .pv-brand button.on img { filter: none; opacity: 1; }
+  #v-preventivi .pv-brand button.on::after { display: none; }
+  #v-preventivi:not([data-tab="cat"]) .pv-brand { display: none !important; }
+}
+/* v84: tabella prodotti del preventivo su schermi medi (PC piccoli, finestre strette) */
+@media (min-width: 700px) and (max-width: 1279px) {
+  .pv-ed .pv-lt th, .pv-ed .pv-lt td { padding-left: 6px; padding-right: 6px; }
+  .pv-ed .pv-lt td.pv-c-sz { min-width: 118px; }
+  .pv-ed .pv-lt .pv-szs { max-width: 170px; }
+  .pv-ed .pv-lgtg { flex-direction: column; align-items: stretch; }
+  .pv-ed .pv-lgtg button { height: 26px; font-size: 11.5px; padding: 0 8px; }
+  .pv-ed .pv-li { width: 78px; } .pv-ed .pv-li.sc { width: 52px; }
+  .pv-ed td.pv-la { white-space: nowrap; }
+  .pv-ed .pv-lt .pv-lb { width: 30px; height: 30px; }
+  .pv-ed .pv-cr small { white-space: normal; }
+}
+.pv-ed .pv-lt td.pv-la { text-align: right; }
