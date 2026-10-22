@@ -2261,3 +2261,6 @@ body.pv-cli .pv-la { display: none; }
 .pv-grid > * { min-width: 0; }
 @media (max-width: 400px) { #v-preventivi .pv-tabs button { font-size: 12.5px; } #v-preventivi .pv-act { gap: 6px; } #v-preventivi .pv-act .pv-eye { width: 40px; height: 40px; border-radius: 12px; } #v-preventivi .pv-tabs { height: 40px; } }
 .pv-scn { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); }
+.pv-scq { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pv-scq button { border: 1px solid var(--line); background: var(--bg); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.pv-scq button:hover { border-color: var(--accent); color: var(--accent); }
