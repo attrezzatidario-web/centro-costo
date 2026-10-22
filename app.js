@@ -2966,7 +2966,7 @@
       <div class="pv-sh"><h3>Categorie</h3></div>
       <div class="pv-cats">${G.map(card).join('')}</div>`;
   }
-  const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]), multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
+  const pvCardHtml = (cat, it, i) => { const pub = pvMinPub(it), c0 = pvCover(it), acq = pvAcq(it.id, c0[0]) ?? it.c.map(c => pvAcq(it.id, c[0])).filter(v => v != null).sort((x, y) => x - y)[0] ?? null, multi = it.c.some(c => pvPub(it.id, c[0]) !== pub);
     return `<button type="button" class="card pv-card" data-pvitem="${esc(it.id)}" style="--d:${Math.min(i, 16) * 30}ms">
       ${pvThumb(cat, it, c0)}
       <span class="pv-cm"><b>${it.x ? '<i class="pv-new">nuovo</i>' : ''}${esc(it.n)}</b><small>${esc(pvCode(it))} · ${esc(it.cl.toLowerCase())}${it.sc && it.sc !== it.cl ? ' · ' + esc(it.sc.toLowerCase()) : ''}</small>
@@ -3009,8 +3009,8 @@
         </div>
         <div class="pv-prices">${pvCli ? (() => { const ps = [...new Set(it.c.map(c => pvPub(it.id, c[0])).filter(v => v != null))].sort((a, b) => a - b); return `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${ps.length ? (ps.length > 1 ? `${eur(ps[0])} – ${eur(ps[ps.length - 1])}` : eur(ps[0])) : '—'}</b><small>a pezzo · IVA esclusa</small></div>`; })() : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="${pvAcqSc(it.id, it.c[0][0]) != null ? esc(fmtIn(pvAcqSc(it.id, it.c[0][0]))) : 'da inserire'}">${pvAcqSc(it.id, it.c[0][0]) != null && base === '' ? `<small class="pv-scn">listino − ${esc(pvScTxt(pvScList(pvSup)))} (sconto rivenditore)</small>` : ''}</label>
-          <div class="pv-pf"><span>Prezzo al pubblico</span><b id="pv-pub">${base !== '' ? eur(r2(num(base) * ric)) : pvAcqSc(it.id, it.c[0][0]) != null ? eur(r2(pvAcqSc(it.id, it.c[0][0]) * ric)) : '—'}</b><small>acquisto × ${fmtNum(ric, 2).replace(/,00$/, '')}</small></div>
-          ${it.c.some(c => c[2] != null) ? `<div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]).filter(v => v != null))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>${it.pl && cat.pl ? it.pl.map((v, i) => v ? `${cat.pl[i]} ${eur(v)}` : '').filter(Boolean).join(' · ') : 'prezzo di riferimento del fornitore'}</small></div>` : ''}
+          ${cat.pubMode === 'list' && it.c.some(c => c[2] != null) ? (() => { const ps = [...new Set(it.c.map(c => c[2]).filter(v => v != null))].sort((x, y) => x - y), a0 = base !== '' ? num(base) : pvAcqSc(it.id, it.c[0][0]); return `<div class="pv-pf"><span>Prezzo al pubblico</span><b>${ps.length > 1 ? `${eur(ps[0])} – ${eur(ps[ps.length - 1])}` : eur(ps[0])}</b><small>${esc(cat.pl && cat.pl[1] ? cat.pl[1] + ' ' + cat.nome : 'listino ' + cat.nome)}${a0 && ps.length === 1 ? ` · margine ${fmtNum((ps[0] - a0) / ps[0] * 100, 0)}%` : ''}</small></div>`; })() : `<div class="pv-pf"><span>Prezzo al pubblico</span><b id="pv-pub">${base !== '' ? eur(r2(num(base) * ric)) : pvAcqSc(it.id, it.c[0][0]) != null ? eur(r2(pvAcqSc(it.id, it.c[0][0]) * ric)) : '—'}</b><small>acquisto × ${fmtNum(ric, 2).replace(/,00$/, '')}</small></div>`}
+          ${cat.pubMode !== 'list' && it.c.some(c => c[2] != null) ? `<div class="pv-pf"><span>Listino ${esc(cat.nome)}</span><b>${[...new Set(it.c.map(c => c[2]).filter(v => v != null))].sort((a, b) => a - b).map(v => eur(v)).slice(0, 3).join(' · ')}</b><small>${it.pl && cat.pl ? it.pl.map((v, i) => v ? `${cat.pl[i]} ${eur(v)}` : '').filter(Boolean).join(' · ') : 'prezzo di riferimento del fornitore'}</small></div>` : ''}
           <label class="pv-tgl"><input type="checkbox" id="pv-percol"${perCol ? ' checked' : ''}><span>Prezzo d'acquisto diverso per colore</span></label>`}
         </div>
       </div>
