@@ -2772,7 +2772,7 @@
   /* =========================================================
      PREVENTIVI PAYPER, JRC, DEWALT, STANLEY E USAG — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' }, portwest: { n: 'Portwest', file: 'cat-portwest.json' } };
   const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt, Stanley: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
@@ -2933,7 +2933,7 @@
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
           <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'dati dal sito ufficiale · prezzi del volantino dove ci sono' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori'} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
-        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : cat.f === 'portwest' ? 'Cerca: nome o codice (es. S775, softshell, gilet HV…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
       <div class="pv-sh"><h3>Categorie</h3></div>
       <div class="pv-cats">${G.map(card).join('')}</div>`;
