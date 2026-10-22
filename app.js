@@ -299,7 +299,7 @@
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
-    const nm = $('#nav-more'); if (nm) nm.classList.toggle('active', ['torental', 'preventivi', 'impostazioni'].includes(view));
+    document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
     $('#fab').hidden = view === 'preventivi' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
@@ -1170,7 +1170,7 @@
     $('#sheet-body').innerHTML = html;
     const ok = $('#sheet-ok'); ok.textContent = okLabel; ok.type = 'submit'; ok.onclick = null; ok.hidden = false;
     $('#sheet-del').hidden = !del;
-    $('#sheet-form').classList.remove('wide', 'xwide');
+    $('#sheet-form').classList.remove('wide', 'xwide', 'dk-sheet');
     onSubmit = submit; onDelete = del;
     clearTimeout(closeSheet._t);
     $('#sheet').classList.remove('closing');
@@ -2841,18 +2841,34 @@
     return JSON.stringify(L) === before ? [] : [{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvClienti', valore: JSON.stringify(L) } }];
   }
 
-  function navMore() {
-    const L = [['torental', 'Torental', 'listino kit adesivi'], ['preventivi', 'Preventivi', 'Payper, JRC, DeWalt, Stanley, USAG'], ['impostazioni', 'Impostazioni', 'backup, centri, budget, IA']];
-    openSheet('Altre sezioni', `<div class="nm-l">${L.map(([h, t, d]) => `<a class="nm-i" href="#${h}" data-close-nav><b>${t}</b><small>${d}</small><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a>`).join('')}</div>`, null, null, 'Chiudi');
-    $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
+  /* ---------- v72: barra sotto (dock) personalizzabile sul telefono ---------- */
+  const DOCK_DEF = ['home', 'preventivi', 'attrezzatura', 'fatture'];
+  const dockSecs = () => $$('.nav a[data-view]').map(a => ({ v: a.dataset.view, a, t: (a.querySelector('.lbl-d') || a.querySelector('span') || a).textContent.trim(), m: (a.querySelector('.lbl-m') || a.querySelector('.lbl-d') || a.querySelector('span') || a).textContent.trim(), ic: (a.querySelector('svg') || {}).outerHTML || '' }));
+  const dockGet = () => { let d = null; try { d = JSON.parse(localStorage.getItem('cdc_dock') || 'null'); } catch {} const ok = dockSecs().map(x => x.v); d = Array.isArray(d) ? d.filter(v => ok.includes(v)) : []; return d.length === 4 ? d : DOCK_DEF.filter(v => ok.includes(v)); };
+  function dockApply() {
+    const d = dockGet(), cur = document.body.dataset.view || '';
+    dockSecs().forEach(x => { const k = d.indexOf(x.v); x.a.classList.toggle('dk-on', k >= 0); x.a.style.setProperty('--dk', k >= 0 ? k : 9); });
+    const nm = $('#nav-more'); if (nm) nm.classList.toggle('active', !!cur && !d.includes(cur));
+  }
+  function navMore(edit = false, sel = null) {
+    const S = dockSecs(), d = sel || dockGet(), cur = document.body.dataset.view || '';
+    const L = edit ? S : S.filter(x => !d.includes(x.v));
+    const tile = x => { const k = d.indexOf(x.v); return edit ? `<button type="button" class="dk-t${k >= 0 ? ' on' : ''}" data-dkpick="${x.v}" aria-pressed="${k >= 0}"><span class="dk-ti">${x.ic}${k >= 0 ? `<em>${k + 1}</em>` : ''}</span><b>${esc(x.t)}</b></button>` : `<a class="dk-t${x.v === cur ? ' cur' : ''}" href="#${x.v}" data-close-nav><span class="dk-ti">${x.ic}</span><b>${esc(x.t)}</b></a>`; };
+    openSheet(edit ? 'Personalizza la barra' : 'Tutte le sezioni', `${edit ? `<p class="dk-hint">Scegli <b>4 sezioni</b> da tenere nella barra in basso, nell'ordine in cui le tocchi. Le altre restano qui in «Altro».</p>` : ''}<div class="dk-grid">${L.map(tile).join('')}</div>${edit ? '' : `<button type="button" class="dk-edit" id="dk-edit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>Personalizza la barra in basso</button>`}`, null, null, edit ? 'Salva' : 'Chiudi');
+    $('#sheet-form').classList.add('dk-sheet');
+    const ok = $('#sheet-ok'); ok.type = 'button';
+    ok.onclick = () => { if (edit) { if (d.length !== 4) { toast('Scegli 4 sezioni'); return; } try { localStorage.setItem('cdc_dock', JSON.stringify(d)); } catch {} dockApply(); toast('Barra aggiornata'); } closeSheet(); };
     $$('#sheet-body [data-close-nav]').forEach(a => a.addEventListener('click', () => setTimeout(closeSheet, 30)));
+    const ed = $('#dk-edit'); if (ed) ed.onclick = () => navMore(true, dockGet().slice());
+    $$('#sheet-body [data-dkpick]').forEach(b => b.onclick = () => { const v = b.dataset.dkpick, k = d.indexOf(v); if (k >= 0) d.splice(k, 1); else if (d.length >= 4) { toast('Massimo 4: togline prima una'); return; } else d.push(v); navMore(true, d); });
   }
   const pvLineThumb = l => { const cat = pvCats[l.sup || 'payper'], it = cat && cat.items.find(x => x.id === l.it), c = it && it.c.find(x => x[0] === l.c); return it && c ? pvThumb(cat, it, c, 'sm') : pvSw(l.cn); };
   async function renderPv() {
     sub(`${PV_SUP[pvSup].n} · catalogo e preventivi`);
     $$('[data-pvtab]').forEach(b => b.classList.toggle('on', b.dataset.pvtab === pvTab));
+    const vpv = $('#v-preventivi'); if (vpv) { vpv.dataset.tab = pvTab; vpv.dataset.mode = pvTab === 'prev' ? (pvEdit ? 'ed' : 'list') : pvTab === 'cat' ? (pvItem ? 'item' : 'cat') : 'cli'; }
     $$('[data-pvsup]').forEach(b => { b.classList.toggle('on', b.dataset.pvsup === pvSup); b.setAttribute('aria-pressed', b.dataset.pvsup === pvSup); });
-    const br = $('.pv-brand'); if (br) br.style.setProperty('--i', Math.max(0, Object.keys(PV_SUP).indexOf(pvSup)));
+    const br = $('.pv-brand'); if (br) { br.style.setProperty('--i', Math.max(0, Object.keys(PV_SUP).indexOf(pvSup))); const bo = br.querySelector('button.on'); if (bo && br.scrollWidth > br.clientWidth + 2) { const x = bo.offsetLeft - (br.clientWidth - bo.offsetWidth) / 2; try { br.scrollTo({ left: x, behavior: reduced() ? 'auto' : 'smooth' }); } catch { br.scrollLeft = x; } } }
     const eye = $('#pv-eye'); if (eye) { eye.classList.toggle('on', pvCli); eye.setAttribute('aria-pressed', pvCli); eye.querySelector('span').textContent = pvCli ? 'Vista cliente' : 'Prezzi d\'acquisto visibili'; }
     document.body.classList.toggle('pv-cli', pvCli);
     const body = $('#pv-body');
@@ -2966,7 +2982,7 @@
     const base = A == null ? '' : typeof A === 'number' ? A : A['*'] != null ? A['*'] : '';
     const ric = pvRic();
     const q = pvGridQ[it.id] = pvGridQ[it.id] || {};
-    const cell = (c, si) => { if (!c[3].includes(si)) return '<td class="pv-na"></td>'; const k = c[0] + '|' + it.sz[si], pub = pvPub(it.id, c[0]); return `<td><input class="pv-qi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" aria-label="${esc(c[1])} taglia ${esc(it.sz[si])}"><small>${pub != null ? eur(pub) : '—'}</small></td>`; };
+    const cell = (c, si) => { if (!c[3].includes(si)) return '<td class="pv-na"></td>'; const k = c[0] + '|' + it.sz[si], pub = pvPub(it.id, c[0]); return `<td class="pv-szc" data-l="${esc(it.sz[si])}"><input class="pv-qi" data-pvq="${esc(k)}" inputmode="numeric" value="${q[k] ? esc(String(q[k])) : ''}" aria-label="${esc(c[1])} taglia ${esc(it.sz[si])}"><small>${pub != null ? eur(pub) : '—'}</small></td>`; };
     const quotes = pvList().filter(p => p.stato === 'bozza' || p.stato === 'inviato');
     if (cat.tool) return pvDetailTool(body, cat, it, base, q, quotes);
     body.innerHTML = `${pvBanner()}
@@ -2989,7 +3005,7 @@
       <div class="card pv-mx">
         <div class="card-h"><h3>Taglie e colori</h3><span class="muted small">scrivi le quantità · sotto ogni casella il prezzo al pubblico</span></div>
         <div class="pv-tw"><table class="pv-t${perCol ? ' pc' : ''}"><thead><tr><th class="pv-ch">Colore</th>${perCol ? '<th class="pv-acqh">Acquisto €</th>' : ''}${it.sz.map(s => `<th>${esc(s)}</th>`).join('')}<th>Pezzi</th></tr></thead><tbody>
-          ${it.c.map(c => `<tr data-pvcol="${esc(c[0])}"><td class="pv-ch"><span class="pv-cr">${pvThumb(cat, it, c, 'sm')}<span><b>${esc(c[1])}</b><small>${esc(c[0])}</small></span></span></td>${perCol ? `<td class="pv-acqc"><input data-pvacqc="${esc(c[0])}" inputmode="decimal" value="${A && typeof A === 'object' && A[c[0]] != null ? esc(fmtIn(A[c[0]])) : ''}" placeholder="${esc(fmtIn(base))}"></td>` : ''}${it.sz.map((s, si) => cell(c, si)).join('')}<td class="pv-rt" data-pvrt="${esc(c[0])}">—</td></tr>`).join('')}
+          ${it.c.map(c => `<tr data-pvcol="${esc(c[0])}"><td class="pv-ch"><span class="pv-cr">${pvThumb(cat, it, c, 'sm')}<span><b>${esc(c[1])}</b><small>${esc(c[0])}</small></span></span></td>${perCol ? `<td class="pv-acqc" data-l="Acquisto €"><input data-pvacqc="${esc(c[0])}" inputmode="decimal" value="${A && typeof A === 'object' && A[c[0]] != null ? esc(fmtIn(A[c[0]])) : ''}" placeholder="${esc(fmtIn(base))}"></td>` : ''}${it.sz.map((s, si) => cell(c, si)).join('')}<td class="pv-rt" data-l="Pezzi" data-pvrt="${esc(c[0])}">—</td></tr>`).join('')}
         </tbody></table></div>
       </div>
       <div class="pv-bar"><span id="pv-sum"></span>
@@ -3377,7 +3393,7 @@
         </div>
         <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
-            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc((l.cn ? l.cn + ' · ' : '') + (l.c || l.it)) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num">${fmtNum(pvLineQ(l), 0)}</td><td class="num"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}">${pvCli ? '' : `<small class="pv-la" data-pvla="${i}"></small>`}</td><td class="num"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td><span class="muted small">—</span></td>' : `<td><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
+            ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td class="pv-c-n"><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc((l.cn ? l.cn + ' · ' : '') + (l.c || l.it)) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td class="pv-c-sz"><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num pv-c-q" data-l="Pezzi">${fmtNum(pvLineQ(l), 0)}</td><td class="num pv-c-p" data-l="Prezzo cad. €"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}">${pvCli ? '' : `<small class="pv-la" data-pvla="${i}"></small>`}</td><td class="num pv-c-sc" data-l="Sconto %"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt pv-c-t" data-l="Totale riga" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td class="pv-c-lg"><span class="muted small">—</span></td>' : `<td class="pv-c-lg" data-l="Logo"><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
         </div>
         ${pvLogoCard(p)}
