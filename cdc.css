@@ -2059,7 +2059,7 @@ body.has-sel .fab { display: none; }
 .ai-first button.on { color: var(--bg); }
 .ai-first button:disabled { cursor: default; opacity: .5; }
 /* v65: 7 fornitori */
-.pv-brand { grid-template-columns: repeat(13, 46px); } .pv-bi { width: 46px; transform: translateX(calc(var(--i, 0) * 50px)); }
+.pv-brand { grid-template-columns: repeat(14, 44px); } .pv-bi { width: 44px; transform: translateX(calc(var(--i, 0) * 48px)); }
 @media (max-width: 520px) { .pv-brand { grid-template-columns: repeat(8, 38px); gap: 3px; } .pv-bi { width: 38px; transform: translateX(calc(var(--i, 0) * 41px)); } .pv-brand img { height: 21px; } }
 /* v67: menu «Altro» e foto ingrandita */
 .pv-act { position: relative; }
