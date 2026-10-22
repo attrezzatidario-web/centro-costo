@@ -2782,6 +2782,10 @@
     if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
+  // dettagli (descrizioni, caratteristiche) in un file a parte per i cataloghi grandi: caricati quando servono
+  const pvDetL = {};
+  function pvLoadDet(sup) { const cat = pvCats[sup]; if (!cat || !cat.det || cat._det) return Promise.resolve(cat); if (!pvDetL[sup]) pvDetL[sup] = fetch(cat.det).then(r => { if (!r.ok) throw new Error('dettagli'); return r.json(); }).then(D => { cat.items.forEach(it => { const x = !it.x && D[it.id]; if (x) Object.assign(it, x); }); cat._det = true; return cat; }).catch(() => { delete pvDetL[sup]; return cat; }); return pvDetL[sup]; }
+  const pvLoadFull = async sup => { const c = await pvLoad(sup); await pvLoadDet(sup); return c; };
   let pvCli = (() => { try { return localStorage.getItem('cdc_pvcli') === '1'; } catch { return false; } })(); // vista cliente: niente prezzi d'acquisto
   const pvRic = () => num(cfg('ppRic')) || 2;
   const pvAcqMap = () => { const c = cfg('ppAcq'); return c && typeof c === 'object' ? c : {}; };
@@ -2794,7 +2798,7 @@
   const pvChunk = {};
   const pvDrv = {};
   function pvCimg(u) { const [, sup, code, size = 'f'] = String(u).split(':'), cat = pvCats[sup]; if (sup === 'drv') { if (!pvDrv[code]) { let d = null; try { d = localStorage.getItem('cdc_drv_' + code); } catch {} pvDrv[code] = d ? Promise.resolve(d) : isLocal() ? Promise.resolve(null) : api('getDoc', { id: code }).then(r => { const v = `data:${r.mime || 'image/jpeg'};base64,${r.data}`; try { localStorage.setItem('cdc_drv_' + code, v); } catch {} return v; }).catch(() => { delete pvDrv[code]; return null; }); } return pvDrv[code]; } const i = cat && cat.img && cat.img[size] && cat.img[size][code]; if (i == null) return Promise.resolve(null); const key = `${sup}-${size}${i}`; if (!pvChunk[key]) pvChunk[key] = fetch(`${cat.imgFile || 'dw-'}${size}${i}.json`).then(r => r.ok ? r.json() : {}).catch(() => { delete pvChunk[key]; return {}; }); return pvChunk[key].then(m => m[code] || null); }
-  const pvImgTag = (u, size, extra = '') => u.startsWith('cimg:') ? `<img data-csrc="${esc(u)}:${size}" alt=""${extra}>` : `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer"${extra}>`;
+  const pvImgTag = (u, size, extra = '') => (u = size === 't' && !u.startsWith('cimg:') ? u.replace(/([?&]width=)\d+/, '$1300') : u, u.startsWith('cimg:')) ? `<img data-csrc="${esc(u)}:${size}" alt=""${extra}>` : `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer"${extra}>`;
   function pvFillImgs() { $$('img[data-csrc]').forEach(im => { if (im._ld) return; im._ld = 1; pvCimg(im.dataset.csrc).then(d => { if (d) im.src = d; else { const b = im.closest('.pv-img, .pv-cat-img'); if (b) b.classList.remove('has'); im.remove(); } }); }); }
   try { new MutationObserver(() => { if (document.querySelector('img[data-csrc]:not([src])')) pvFillImgs(); }).observe(document.documentElement, { childList: true, subtree: true }); } catch {}
   // colori: tinta indicativa dal nome
@@ -2859,6 +2863,8 @@
     let cat = pvCats[pvSup];
     if (!cat) { body.innerHTML = '<div class="card"><div class="empty">Carico il catalogo…</div></div>'; try { cat = await pvLoad(pvSup); } catch (e) { body.innerHTML = `<div class="card"><div class="empty">Catalogo non caricato: ${esc(e.message)}</div></div>`; return; } if (view !== 'preventivi') return; }
     pvMergeExtra(pvSup);
+    if (pvItem && cat.det && !cat._det) { await pvLoadDet(pvSup); if (view !== 'preventivi' || pvTab !== 'cat') return; }
+    else if (cat.det && !cat._det) setTimeout(() => pvLoadDet(pvSup), 1500);
     pvItem ? pvDetail(body, cat) : pvCatalog(body, cat);
     if (pvItem) pvExtraBar(cat);
   }
@@ -3722,7 +3728,7 @@
     draw();
   }
   async function pvMockPrepare(p, only) {
-    const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoad(sup); } catch { cats[sup] = null; } }
+    const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoadFull(sup); } catch { cats[sup] = null; } }
     const urlOf = l => { const c = cats[l.sup || 'payper'], it = c && c.items.find(x => x.id === l.it), cc = it && it.c.find(x => x[0] === l.c); return c && cc ? pvImg(c, cc) : ''; };
     const U = [...new Set(p.righe.filter((l, i) => (l.lf || l.lr) && (!only || only.has(i))).map(urlOf).filter(Boolean))], photos = new Map();
     if (U.length) { busy('Scarico le foto dei capi in alta qualità…'); const R = await pvPhotos(U, 1400); U.forEach((u, i) => R[i] && photos.set(u, R[i])); }
@@ -3903,7 +3909,7 @@
     pvQuiet(p);
     try {
       busy('Preparo la scheda di lavoro…');
-      const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoad(sup); } catch { cats[sup] = null; } }
+      const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoadFull(sup); } catch { cats[sup] = null; } }
       const itemOf = l => { const c = cats[l.sup || 'payper']; return c ? c.items.find(x => x.id === l.it) : null; };
       const urlOf = l => { const c = cats[l.sup || 'payper'], it = itemOf(l), cc = it && it.c.find(x => x[0] === l.c); return c && cc ? pvImg(c, cc) : ''; };
       const U = [...new Set(p.righe.map(urlOf).filter(Boolean))], ph = new Map();
@@ -4191,7 +4197,7 @@
     try {
       busy('Preparo il PDF…');
       // catalogo e foto
-      const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoad(sup); } catch { cats[sup] = null; } }
+      const cats = {}; for (const sup of new Set(p.righe.map(l => l.sup || 'payper'))) { try { cats[sup] = await pvLoadFull(sup); } catch { cats[sup] = null; } }
       const itemOf = l => { const c = cats[l.sup || 'payper']; return c ? c.items.find(x => x.id === l.it) : null; };
       const colOf = (it, code) => it ? it.c.find(x => x[0] === code) : null;
       const urlOf = l => { const c = cats[l.sup || 'payper'], it = itemOf(l), cc = colOf(it, l.c); return c && cc ? pvImg(c, cc) : ''; };
