@@ -2295,3 +2295,15 @@ body.pv-cli .pv-lacq { display: none; }
   .pv-ed .pv-cr small { white-space: normal; }
 }
 .pv-ed .pv-lt td.pv-la { text-align: right; }
+/* v85: rifiniture barra fornitori e pulsanti su PC */
+@media (min-width: 900px) {
+  #v-preventivi .pv-brand button { flex: 1 0 62px; }
+  #v-preventivi .pv-brand img { height: 34px; }
+}
+#v-preventivi .pv-brand button:not(.on) img { filter: grayscale(1) brightness(.82) contrast(1.7); opacity: .78; }
+#v-preventivi .pv-brand button:not(.on):hover img { filter: none; opacity: 1; }
+@media (min-width: 900px) and (max-width: 1199px) {
+  #v-preventivi .pv-act .pv-eye > span { display: none; }
+  #v-preventivi .pv-act .pv-eye { padding: 0 12px; min-width: 40px; justify-content: center; }
+  #v-preventivi .pv-act { flex-wrap: nowrap; }
+}
