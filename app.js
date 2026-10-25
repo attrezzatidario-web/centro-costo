@@ -2779,7 +2779,7 @@
   async function pvLoad(sup) {
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
-    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.tool) j.items.forEach(it => { const f0 = it.c.find(c => c[4]); if (f0) it.c.forEach(c => { if (!c[4]) c[4] = f0[4]; }); }); j.items.forEach(it => { pvListSup[it.id] = sup; it.c.forEach((c, i) => { if (c[2] != null) { if (!i) pvListRaw[it.id] = c[2]; pvListRaw[it.id + '|' + c[0]] = c[2]; } }); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
+    if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.tool) j.items.forEach(it => { const f0 = it.c.find(c => c[4]); if (f0) it.c.forEach(c => { if (!c[4]) c[4] = f0[4]; }); }); j.items.forEach(it => { pvListSup[it.id] = sup; it.c.forEach((c, i) => { const lp = c[5] != null ? c[5] : c[2]; if (lp != null) { if (!i) pvListRaw[it.id] = lp; pvListRaw[it.id + '|' + c[0]] = lp; } }); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
     return pvLoading[sup];
   }
   // dettagli (descrizioni, caratteristiche) in un file a parte per i cataloghi grandi: caricati quando servono
@@ -2792,7 +2792,7 @@
   // v76: sconto rivenditore % sul prezzo di listino (Config «pvSconti», solo nel Foglio Google). FFG, Benman e Hugo condividono lo sconto FF Group
   const pvListSup = {}, pvListRaw = {};
   // v78: sconti in cascata (es. «32+15»), per tutti i fornitori tranne quelli con prezzi d'acquisto propri
-  const PV_NOSC = ['payper', 'dewalt', 'stanley', 'usag'];
+  const PV_NOSC = ['payper', 'dewalt', 'stanley'];
   const pvScKey = sup => ['ffg', 'benman', 'hugo'].includes(sup) ? 'ffgroup' : sup;
   const pvScParse = v => { const L = String(v == null ? '' : v).replace(/%/g, '').split(/[+;/\s]+/).map(x => x.trim()).filter(Boolean).map(num); return L.length && L.every(x => x > 0 && x < 100) ? L : null; };
   const pvScTxt = L => L.map(x => fmtNum(x, 2).replace(/,?0+$/, '')).join(' + ') + '%';
@@ -2806,7 +2806,7 @@
   const pvPub = (it, col) => { if (col != null && pvListPub[it + '|' + col] != null) return pvListPub[it + '|' + col]; if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
   const pvCode = it => it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
-  const pvImg = (cat, c) => c && c[4] ? (/^(cimg:|data:)/.test(c[4]) ? c[4] : cat.img ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4]) : '';
+  const pvImg = (cat, c) => c && c[4] ? (/^(cimg:|data:)/.test(c[4]) ? c[4] : cat.img && (!cat.imgPre || (cat.img.t && cat.img.t[c[4]] != null)) ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4] + (cat.imgSuf || '')) : '';
   // foto contenute nei file del catalogo (DeWalt): caricate a blocchi solo quando servono
   const pvChunk = {};
   const pvDrv = {};
@@ -3042,8 +3042,8 @@
         </div>
         <div class="pv-prices">${pvCli ? `<div class="pv-pf"><span>Prezzo</span><b class="pv-big">${pub != null ? eur(pub) : '—'}</b><small>a pezzo · IVA esclusa</small></div>` : `
           <label class="pv-pf"><span>Prezzo d'acquisto €</span><input id="pv-acq" inputmode="decimal" value="${esc(fmtIn(base))}" placeholder="${acqSc != null ? esc(fmtIn(acqSc)) : 'da inserire'}">${acqSc != null && base === '' ? `<small class="pv-scn">${esc(pvScNote(pvSup))}</small>` : ''}</label>
-          <div class="pv-pf"><span>Prezzo al pubblico</span><b>${pub != null ? eur(pub) : '—'}</b><small>${cat.f === 'milwaukee' ? 'prezzo consigliato volantino' : ['ffg', 'benman', 'hugo', 'sola'].includes(cat.f) ? 'prezzo di listino ' + esc(cat.nome) : cat.f === 'maxilia' ? 'acquisto Maxilia × ricarico' : 'prezzo utilizzatore ' + esc(cat.nome)}${acq && pub ? ` · margine ${fmtNum((pub - acq) / pub * 100, 0)}%` : ''}</small></div>
-          ${lordo ? `<div class="pv-pf"><span>Listino lordo</span><b>${eur(lordo)}</b><small>${pub ? `sconto utilizzatore ${fmtNum((1 - pub / lordo) * 100, 0)}%` : 'prezzo di listino'}</small></div>` : ''}`}
+          <div class="pv-pf"><span>Prezzo al pubblico</span><b>${pub != null ? eur(pub) : '—'}</b><small>${cat.f === 'milwaukee' ? 'prezzo consigliato volantino' : ['ffg', 'benman', 'hugo', 'sola'].includes(cat.f) ? 'prezzo di listino ' + esc(cat.nome) : cat.f === 'maxilia' ? 'acquisto Maxilia × ricarico' : cat.f === 'usag' && it.c[0][5] != null && Math.abs(it.c[0][5] - it.c[0][2]) < .01 ? 'listino USAG 2026' : 'prezzo utilizzatore ' + esc(cat.nome)}${acq && pub ? ` · margine ${fmtNum((pub - acq) / pub * 100, 0)}%` : ''}</small></div>
+          ${lordo && !(pub != null && Math.abs(pub - lordo) < .01) ? `<div class="pv-pf"><span>Listino lordo</span><b>${eur(lordo)}</b><small>${pub ? `sconto utilizzatore ${fmtNum((1 - pub / lordo) * 100, 0)}%` : 'prezzo di listino'}</small></div>` : ''}`}
         </div>
       </div>
       <div class="card pv-mx">
