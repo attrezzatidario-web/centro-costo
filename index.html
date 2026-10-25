@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=85">
-  <link rel="stylesheet" href="cdc.css?v=85">
+  <link rel="stylesheet" href="style.css?v=86">
+  <link rel="stylesheet" href="cdc.css?v=86">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -264,12 +264,12 @@
       <!-- TORENTAL · LISTINO KIT -->
       <section id="v-torental" class="view" data-v="torental" hidden>
         <div class="gl-bar">
-          <div class="tr-title"><b>Listino kit adesivi</b><span>prezzi per mezzo e servizi</span></div>
+          <div class="tr-seg tr-tabs" role="tablist"><button type="button" data-trtab="list">Listino</button><button type="button" data-trtab="ord">Ordini</button><button type="button" data-trtab="cli">Clienti</button></div>
           <div class="gl-act">
-            <button class="btn sm" id="tr-imp"><span class="lb-d">Importa listino</span><span class="lb-m">Importa</span></button>
-            <button class="btn sm" id="tr-xls"><span class="lb-d">Esporta Excel</span><span class="lb-m">Esporta</span></button>
-            <button class="btn sm primary" id="tr-mod"><span class="lb-d">Modifica listino</span><span class="lb-m">Modifica</span></button>
-            <button class="btn sm tr-pdfbtn" id="tr-pdf" title="Scarica il listino in PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><span>PDF</span></button>
+            <button class="btn sm primary tr-ordbtn" id="tro-new"><span class="lb-d">+ Nuovo ordine</span><span class="lb-m">+ Ordine</span></button><button class="btn sm tr-lsb" id="tr-imp"><span class="lb-d">Importa listino</span><span class="lb-m">Importa</span></button>
+            <button class="btn sm tr-lsb" id="tr-xls"><span class="lb-d">Esporta Excel</span><span class="lb-m">Esporta</span></button>
+            <button class="btn sm tr-lsb" id="tr-mod"><span class="lb-d">Modifica listino</span><span class="lb-m">Modifica</span></button>
+            <button class="btn sm tr-pdfbtn tr-lsb" id="tr-pdf" title="Scarica il listino in PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><span>PDF</span></button>
           </div>
         </div>
         <div id="tr-body"></div>
@@ -420,6 +420,6 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="app.js?v=85"></script>
+  <script src="app.js?v=86"></script>
 </body>
 </html>

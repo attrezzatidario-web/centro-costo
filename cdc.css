@@ -2307,3 +2307,61 @@ body.pv-cli .pv-lacq { display: none; }
   #v-preventivi .pv-act .pv-eye { padding: 0 12px; min-width: 40px; justify-content: center; }
   #v-preventivi .pv-act { flex-wrap: nowrap; }
 }
+/* v86: Torental · ordini e clienti */
+#v-torental .tr-tabs { padding: 4px; }
+#v-torental .tr-tabs button { font-size: 13.5px; padding: 7px 16px; }
+#v-torental:not([data-tab="list"]) .tr-lsb { display: none; }
+#tr-body > * { margin: 0; }
+#tr-body { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+#v-torental:not([data-tab="list"]) #tr-body .card { margin: 0; }
+.tro-sb { margin: 0 0 12px; max-width: 520px; }
+.tro-add { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto auto; gap: 10px; align-items: end; padding: 14px; margin: 4px 0 14px; border-radius: 14px; background: var(--bg); }
+.tro-add .f { margin: 0; }
+.tro-add select, .tro-add input { height: 42px; }
+.tro-ab { height: 42px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.tro-ab svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.tro-tw { overflow-x: auto; }
+.tro-lt { width: 100%; }
+.tro-lt th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.tro-lt td { vertical-align: middle; padding-top: 10px; padding-bottom: 10px; }
+.tro-c-n { min-width: 260px; }
+.tro-ln { width: 100%; height: 38px; border: 1px solid transparent; border-radius: 8px; background: transparent; font: inherit; font-weight: 600; color: var(--ink); padding: 0 8px; margin-left: -8px; }
+.tro-ln:hover { border-color: var(--line); } .tro-ln:focus { outline: 0; border-color: var(--accent); background: var(--surface); }
+.tro-c-n small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.tro-lt .pv-li { width: 96px; }
+.tro-c-q .pv-li { width: 70px; }
+.tro-c-x { white-space: nowrap; text-align: right; width: 76px; }
+.tro-c-x .pv-lb:disabled { opacity: .3; cursor: default; }
+.tro-ehb { flex-wrap: wrap; }
+.trc-l { display: grid; gap: 8px; }
+.trc-r { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.trc-m { flex: 1; min-width: 0; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; padding: 0; }
+.trc-i { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; }
+.trc-t { min-width: 0; display: grid; gap: 2px; } .trc-t b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .trc-t small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trc-s { display: grid; text-align: right; gap: 2px; } .trc-s b { font-size: 13px; } .trc-s small { font-size: 12px; color: var(--muted); }
+.f-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; } .f-grid .f-w { grid-column: 1 / -1; } .f-grid .f { margin: 0; }
+@media (max-width: 899px) {
+  #v-torental .gl-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  #v-torental .tr-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: 44px; border-radius: 14px; }
+  #v-torental .tr-tabs button { padding: 0 4px; }
+  #v-torental .gl-act { justify-content: flex-start; flex-wrap: wrap; }
+  .tro-add { grid-template-columns: minmax(0, 1fr) 90px; }
+  .tro-add .tro-as { grid-column: 1 / -1; }
+  .tro-ab { justify-content: center; }
+  .trc-s { display: none; }
+}
+@media (max-width: 699px) {
+  .tro-tw { overflow: visible; }
+  .tro-lt, .tro-lt tbody { display: block; } .tro-lt thead { display: none; }
+  .tro-lt tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .tro-lt td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; min-width: 0 !important; }
+  .tro-lt td.tro-c-n { grid-column: 1 / 3; } .tro-lt td.tro-c-x { grid-column: 3; grid-row: 1; justify-self: end; width: auto; }
+  .tro-lt td[data-l]::before { content: attr(data-l); display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .tro-lt .pv-li { width: 100% !important; height: 42px; font-size: 16px; }
+  .tro-lt td.tro-c-t { display: flex; flex-direction: column; justify-content: flex-end; font-weight: 800; font-size: 15px; }
+  .f-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 899px) {
+  #tro-ed .pv-ef > label:nth-child(2), #tro-ed .pv-ef > label:nth-child(8) { grid-column: auto; }
+  #v-torental #tro-new2 { display: none; }
+}

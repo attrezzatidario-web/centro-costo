@@ -4698,6 +4698,14 @@
 
   /* ---------- pagina ---------- */
   function renderTor() {
+    const vt = $('#v-torental'); if (vt) vt.dataset.tab = trTab;
+    $$('[data-trtab]').forEach(b => b.classList.toggle('on', b.dataset.trtab === trTab));
+    if (trTab !== 'list') {
+      sub(trTab === 'ord' ? 'ordini dei kit e degli articoli del listino Torental' : 'clienti degli ordini Torental');
+      const body = $('#tr-body'), anim = trAnim && !reduced(); trAnim = false; body.classList.toggle('cc-anim', anim);
+      if (trTab === 'ord') trOrders(body); else trClients(body);
+      return;
+    }
     const D = trData(), K = D.kit.map((k, i) => ({ k, i, c: trCalc(k, D) }));
     sub(`${ivaLbl()} · listino kit adesivi e servizi per i mezzi Torental`);
     const anim = trAnim && !reduced(); trAnim = false;
@@ -4754,6 +4762,206 @@
     renderTrCalc();
   }
 
+  /* ---------- v86: ordini Torental e clienti (Config «tro:<id>» e «trClienti») ---------- */
+  let trTab = LS.get('cdc_trtab', 'list') || 'list', trEdit = '', trOQ = '', trCQ = '';
+  const TRO_ST = { bozza: ['Bozza', ''], confermato: ['Confermato', 'soon'], lavorazione: ['In lavorazione', 'soon'], completato: ['Completato', 'paid'], annullato: ['Annullato', 'late'] };
+  const troList = () => Object.keys(db.config || {}).filter(k => k.startsWith('tro:')).map(k => cfg(k)).filter(o => o && o.id).sort((a, b) => String(b.num).localeCompare(String(a.num)));
+  const troGet = id => { const o = cfg('tro:' + id); return o ? JSON.parse(JSON.stringify(o)) : null; };
+  const troNum = () => { const y = new Date().getFullYear(), n = troList().filter(o => String(o.num).startsWith(`T${y}-`)).map(o => Number(String(o.num).split('-')[1]) || 0); return `T${y}-${String((n.length ? Math.max(...n) : 0) + 1).padStart(3, '0')}`; };
+  const troNew = () => ({ id: uid(), num: troNum(), data: today(), stato: 'bozza', cliente: { nome: '', ref: '', tel: '', email: '', ind: '', piva: '' }, mezzi: '', consegna: '', righe: [], sconto: 0, note: '' });
+  const troTot = o => { const sub = r2((o.righe || []).reduce((s, l) => s + num(l.q) * num(l.p), 0)), sc = r2(sub * num(o.sconto) / 100), imp = r2(sub - sc), iva = r2(imp * .22); return { sub, sc, imp, iva, tot: r2(imp + iva), n: (o.righe || []).length }; };
+  const trCliList = () => { const c = cfg('trClienti'); return Array.isArray(c) ? c.map(x => ({ ...x })) : []; };
+  const trCliFind = (L, nome) => { const k = pvCliKey(nome); return k ? L.find(x => pvCliKey(x.nome) === k) : null; };
+  function trCliOps(o) {
+    const cl = o.cliente || {}, nome = String(cl.nome || '').trim(); if (!nome) return [];
+    const L = trCliList(), before = JSON.stringify(L); let c = trCliFind(L, nome);
+    if (!c) { c = { id: uid(), nome, ref: '', tel: '', email: '', ind: '', piva: '', note: '', dal: today() }; L.push(c); }
+    ['ref', 'tel', 'email', 'ind', 'piva'].forEach(k => { const v = String(cl[k] || '').trim(); if (v) c[k] = v; });
+    o.cliId = c.id; L.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+    return JSON.stringify(L) === before ? [] : [{ action: 'upsert', sheet: 'Config', row: { chiave: 'trClienti', valore: JSON.stringify(L) } }];
+  }
+  const troOps = o => { o.agg = new Date().toISOString(); return [...trCliOps(o), { action: 'upsert', sheet: 'Config', row: { chiave: 'tro:' + o.id, valore: JSON.stringify(o) } }]; };
+  const troSave = (o, msg) => { write(troOps(o)); if (msg) toast(msg); };
+  const troQuiet = o => { const ops = troOps(o); applyMany(ops); if (!isLocal()) queue.push(...ops); save(); flush(); };
+  const trSetTab = t => { trTab = t; LS.set('cdc_trtab', t); trAnim = true; renderTor(); };
+  function trCatalog() {
+    const D = trData(), L = [];
+    D.kit.forEach((k, i) => { const c = trCalc(k, D); L.push({ v: 'k' + i, t: `${trShort(k.n)} · kit`, cod: k.cod || '', p: c.fattura, g: 'Kit' }); if (c.app) L.push({ v: 'a' + i, t: `${trShort(k.n)} · applicazione`, cod: k.cod ? k.cod + '-APP' : '', p: c.app, g: 'Applicazione' }); if (c.rim) L.push({ v: 'r' + i, t: `${trShort(k.n)} · rimozione kit esistente`, cod: k.cod ? k.cod + '-RIM' : '', p: c.rim, g: 'Rimozione' }); });
+    D.sing.forEach((s, i) => L.push({ v: 's' + i, t: trNice(s.n), cod: s.cod || '', p: num(s.p), g: 'Articoli singoli' }));
+    L.push({ v: 'tr', t: 'Transferta (1 giorno, 100 km)', cod: 'TRASF', p: num(D.transferta), g: 'Servizi' });
+    return L;
+  }
+  function trOrders(body) {
+    if (trEdit) return trOrdEditor(body);
+    const L = troList(), q = amNorm(trOQ).split(/\s+/).filter(Boolean);
+    const F = L.filter(o => !q.length || q.every(w => amNorm(`${o.num} ${(o.cliente || {}).nome || ''} ${o.mezzi || ''} ${(o.righe || []).map(l => l.t).join(' ')}`).includes(w)));
+    const by = s => L.filter(o => !s || o.stato === s);
+    body.innerHTML = `${L.length ? `<div class="pv-kpis">${[['', 'Ordini'], ['bozza', 'Bozze'], ['confermato', 'Confermati'], ['completato', 'Completati']].map(([k, l]) => `<div class="card pv-k"><span>${l}</span><b>${by(k).length}</b><small>${eur0(by(k).reduce((s, o) => s + troTot(o).imp, 0))}</small></div>`).join('')}</div>` : ''}
+      <div class="card"><div class="card-h"><h3>Ordini Torental</h3><span class="muted small">kit, applicazioni e articoli del listino · IVA esclusa</span><button type="button" class="btn sm primary" id="tro-new2">+ Nuovo ordine</button></div>
+      ${L.length ? `<div class="pv-sb tro-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="tro-q" type="search" placeholder="Cerca per cliente, numero, targa o prodotto…" value="${esc(trOQ)}" autocomplete="off"></div>
+        <div class="pv-ql">${F.map(o => { const t = troTot(o), st = TRO_ST[o.stato] || TRO_ST.bozza; return `<button type="button" class="pv-qr" data-troopen="${esc(o.id)}"><span class="pv-qn"><b>${esc(o.num)}</b><small>${esc(shortDate(o.data))}</small></span><span class="pv-qc"><b>${esc((o.cliente && o.cliente.nome) || 'Cliente da indicare')}</b><small>${t.n} righe${o.mezzi ? ' · ' + esc(o.mezzi) : ''}${t.n ? ' · ' + esc([...new Set(o.righe.map(l => l.t))].slice(0, 2).join(', ')) : ''}</small></span><span class="chip ${st[1]}">${st[0]}</span><b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('') || '<div class="empty">Nessun ordine trovato</div>'}</div>`
+      : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun ordine</h3><p>Crea un ordine con i kit, le applicazioni e gli articoli del listino Torental. Il cliente si salva da solo nella sezione Clienti.</p><button type="button" class="btn primary" id="tro-new3">+ Nuovo ordine</button></div>`}</div>`;
+  }
+  function trOrdEditor(body) {
+    const o = troGet(trEdit); if (!o) { trEdit = ''; return trOrders(body); }
+    const st = TRO_ST[o.stato] || TRO_ST.bozza, cl = o.cliente || {}, CAT = trCatalog(), G = [...new Set(CAT.map(x => x.g))];
+    body.innerHTML = `
+      <div class="pv-back"><button type="button" class="btn sm" id="tro-back">‹ Ordini</button><span class="chip ${st[1]}">${st[0]}</span><span class="pv-sp"></span><button type="button" class="btn sm" id="tro-dup">Duplica</button><button type="button" class="btn sm st-btn-d" id="tro-del">Elimina</button></div>
+      <div class="pv-ed" id="tro-ed" data-id="${esc(o.id)}">
+        <div class="card pv-eh">
+          <div class="pv-eht"><div><span class="pv-code">Ordine Torental</span><h2>${esc(o.num)}</h2></div>
+            <div class="pv-ehb tro-ehb"><button type="button" class="btn sm" id="tro-copy">Copia</button><button type="button" class="btn sm tr-pdfbtn" id="tro-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><span>PDF</span></button><button type="button" class="btn sm primary" id="tro-save">Salva</button></div></div>
+          <div class="pv-ef">
+            <label class="f"><span>Cliente / ragione sociale</span><input data-tof="cliente.nome" list="tro-cli-dl" autocomplete="off" value="${esc(cl.nome || '')}" placeholder="Es. Torental S.p.A. – filiale di Roma"><datalist id="tro-cli-dl">${trCliList().map(c => `<option value="${esc(c.nome)}">`).join('')}</datalist></label>
+            <label class="f"><span>Referente</span><input data-tof="cliente.ref" value="${esc(cl.ref || '')}"></label>
+            <label class="f"><span>Telefono</span><input data-tof="cliente.tel" value="${esc(cl.tel || '')}"></label>
+            <label class="f"><span>Email</span><input data-tof="cliente.email" type="email" value="${esc(cl.email || '')}"></label>
+            <label class="f pv-w2"><span>Indirizzo / sede intervento</span><input data-tof="cliente.ind" value="${esc(cl.ind || '')}"></label>
+            <label class="f"><span>P. IVA / C.F.</span><input data-tof="cliente.piva" value="${esc(cl.piva || '')}"></label>
+            <label class="f"><span>Data ordine</span><input data-tof="data" type="date" value="${esc(o.data)}"></label>
+            <label class="f"><span>Data intervento</span><input data-tof="consegna" type="date" value="${esc(o.consegna || '')}"></label>
+            <label class="f"><span>Stato</span><select data-tof="stato">${Object.entries(TRO_ST).map(([k, v]) => `<option value="${k}"${k === o.stato ? ' selected' : ''}>${v[0]}</option>`).join('')}</select></label>
+            <label class="f pv-w2"><span>Mezzi / targhe</span><input data-tof="mezzi" value="${esc(o.mezzi || '')}" placeholder="Es. 3 furgoni frigo – AB123CD, EF456GH…"></label>
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><div><h3>Prodotti</h3><span class="muted small">${o.righe.length} righe · prezzi del listino Torental IVA esclusa · puoi cambiarli</span></div></div>
+          <div class="tro-add">
+            <label class="f tro-as"><span>Prodotto dal listino</span><select id="tro-pick">${G.map(g => `<optgroup label="${esc(g)}">${CAT.filter(x => x.g === g).map(x => `<option value="${x.v}">${esc(x.t)} — ${esc(eur(x.p))}</option>`).join('')}</optgroup>`).join('')}<optgroup label="Altro"><option value="free">Riga libera…</option></optgroup></select></label>
+            <label class="f tro-aq"><span>Quantità</span><input id="tro-pq" type="number" min="1" step="1" inputmode="numeric" value="1"></label>
+            <button type="button" class="btn primary tro-ab" id="tro-addl"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi</button>
+            <button type="button" class="btn tro-ab" id="tro-addkit" title="Aggiunge kit + applicazione dello stesso tipo">+ Kit con applicazione</button>
+          </div>
+          ${o.righe.length ? `<div class="tro-tw"><table class="tbl tro-lt"><thead><tr><th>Prodotto</th><th class="r">Quantità</th><th class="r">Prezzo cad. €</th><th class="r">Totale</th><th></th></tr></thead><tbody>
+            ${o.righe.map((l, i) => `<tr><td class="tro-c-n"><input class="tro-ln" data-trol="${i}:t" value="${esc(l.t)}"><small>${l.cod ? 'cod. ' + esc(l.cod) : 'riga libera'}</small></td><td class="num tro-c-q" data-l="Quantità"><input class="pv-li" data-trol="${i}:q" type="number" min="0" step="1" inputmode="numeric" value="${esc(String(num(l.q)))}"></td><td class="num tro-c-p" data-l="Prezzo cad. €"><input class="pv-li" data-trol="${i}:p" inputmode="decimal" value="${esc(fmtIn(r2(num(l.p))))}"></td><td class="num amt tro-c-t" data-l="Totale riga" data-trolt="${i}">${eur(num(l.q) * num(l.p))}</td><td class="tro-c-x"><button type="button" class="pv-lb" data-troup="${i}" title="Sposta su"${i ? '' : ' disabled'}><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" class="pv-lb d" data-trodel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
+          </tbody></table></div>` : '<div class="empty">Nessun prodotto: scegli dal listino e premi «Aggiungi».</div>'}
+        </div>
+        <div class="pv-foot">
+          <div class="card"><div class="card-h"><h3>Note</h3></div><textarea data-tof="note" rows="4" placeholder="Es. intervento presso la vostra sede · pagamento 30 gg d.f.">${esc(o.note || '')}</textarea></div>
+          <div class="card pv-tots" id="tro-tots"></div>
+        </div>
+      </div>`;
+    troTotUpd(o);
+  }
+  function troTotUpd(o) {
+    const el = $('#tro-tots'); if (!el) return; const t = troTot(o);
+    if (!el.firstChild) el.innerHTML = `<div class="pv-tr"><span>Totale prodotti</span><b id="tro-t-sub"></b></div>
+      <div class="pv-tr"><span>Sconto sul totale</span><span class="pv-gs"><input id="tro-gsc" data-tof="sconto" inputmode="decimal" value="${num(o.sconto) ? esc(fmtIn(o.sconto)) : ''}" placeholder="0"> %</span><b id="tro-t-sc"></b></div>
+      <div class="pv-tr"><span>Imponibile</span><b id="tro-t-imp"></b></div>
+      <div class="pv-tr"><span>IVA 22%</span><b id="tro-t-iva"></b></div>
+      <div class="pv-tr t"><span>Totale</span><b id="tro-t-tot"></b></div>`;
+    $('#tro-t-sub').textContent = eur(t.sub); $('#tro-t-sc').textContent = '− ' + eur(t.sc); $('#tro-t-imp').textContent = eur(t.imp); $('#tro-t-iva').textContent = eur(t.iva); $('#tro-t-tot').textContent = eur(t.tot);
+  }
+  function troFromForm() {
+    const ed = $('#tro-ed'); if (!ed) return null; const o = troGet(ed.dataset.id); if (!o) return null;
+    $$('[data-tof]', document).forEach(el => { if (!el.closest('#tro-ed')) return; const k = el.dataset.tof, v = el.value; if (k.startsWith('cliente.')) { o.cliente = o.cliente || {}; o.cliente[k.slice(8)] = v.trim(); } else if (k === 'sconto') o.sconto = Math.min(100, Math.max(0, num(v))); else o[k] = v; });
+    $$('[data-trol]', ed).forEach(el => { const [i, k] = el.dataset.trol.split(':'), l = o.righe[+i]; if (!l) return; l[k] = k === 't' ? el.value : num(el.value); });
+    return o;
+  }
+  function troLive(e) {
+    const t = e.target; if (!t.closest || !t.closest('#tro-ed') || !(t.dataset.tof || t.dataset.trol)) return;
+    const o = troFromForm(); if (!o) return;
+    if (t.dataset.trol) { const i = +t.dataset.trol.split(':')[0], l = o.righe[i], c = $(`[data-trolt="${i}"]`); if (c && l) c.textContent = eur(num(l.q) * num(l.p)); }
+    troTotUpd(o);
+    if (e.type === 'change') { troQuiet(o); if (t.dataset.tof === 'stato') { trAnim = false; renderTor(); } }
+  }
+  function troAdd(withApp) {
+    const o = troFromForm(); if (!o) return;
+    const v = $('#tro-pick').value, q = Math.max(1, Math.round(num($('#tro-pq').value) || 1)), CAT = trCatalog();
+    if (v === 'free') o.righe.push({ t: 'Descrizione', cod: '', q, p: 0 });
+    else { const x = CAT.find(c => c.v === v); if (!x) return; o.righe.push({ t: x.t, cod: x.cod, q, p: x.p }); if (withApp) { const i = v.slice(1), a = CAT.find(c => c.v === 'a' + i); if (v[0] === 'k' && a) o.righe.push({ t: a.t, cod: a.cod, q, p: a.p }); } }
+    troQuiet(o); renderTor();
+    if (v === 'free') setTimeout(() => { const els = $$('.tro-ln'); const el = els[els.length - 1]; if (el) { el.focus(); el.select(); } }, 30);
+  }
+  function troText(o) {
+    const t = troTot(o), cl = o.cliente || {};
+    return [`Ordine Torental ${o.num} del ${shortDate(o.data)}`, cl.nome ? `Cliente: ${cl.nome}` : '', o.mezzi ? `Mezzi: ${o.mezzi}` : '', o.consegna ? `Intervento: ${shortDate(o.consegna)}` : '', '',
+      ...o.righe.map(l => `- ${l.t}${num(l.q) !== 1 ? ' × ' + fmtNum(num(l.q), 0) : ''}: ${eur(num(l.q) * num(l.p))}`), '', t.sc ? `Sconto ${fmtNum(num(o.sconto), 1).replace(/,0$/, '')}%: – ${eur(t.sc)}` : '', `Imponibile: ${eur(t.imp)}`, `IVA 22%: ${eur(t.iva)}`, `Totale: ${eur(t.tot)}`, o.note ? '\n' + o.note : ''].filter((x, i, a) => x !== '' || (a[i - 1] !== '' && i)).join('\n').trim();
+  }
+  async function troCopy() { const o = troFromForm(); if (!o) return; const txt = troText(o); try { await navigator.clipboard.writeText(txt); toast('Ordine copiato: incollalo dove vuoi'); } catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Ordine copiato'); } catch { toast('Copia non riuscita'); } ta.remove(); } }
+  async function troPdf() {
+    const o = troFromForm(); if (!o) return; troQuiet(o);
+    try {
+      busy('Preparo il PDF…');
+      const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      let FF = 'helvetica';
+      if (fonts) { fonts.forEach(([w, data]) => { doc.addFileToVFS(`Inter-${w}.ttf`, data); doc.addFont(`Inter-${w}.ttf`, 'Inter', w === 'regular' ? 'normal' : w); }); FF = 'Inter'; }
+      const W = 210, H = 297, M = 16, C = { navy: [23, 54, 109], blue: [51, 98, 171], orange: [235, 104, 52], ink: [31, 36, 48], muted: [120, 128, 142], line: [227, 231, 238], soft: [245, 247, 251], white: [255, 255, 255] };
+      const font = (st, sz) => { doc.setFont(FF, FF === 'helvetica' && st === 'semibold' ? 'bold' : st); doc.setFontSize(sz); }, color = c => doc.setTextColor(...c), fill = c => doc.setFillColor(...c);
+      const t = troTot(o), cl = o.cliente || {}, st = (TRO_ST[o.stato] || TRO_ST.bozza)[0];
+      fill(C.navy); doc.rect(0, 0, W, 42, 'F'); fill(C.orange); doc.rect(0, 42, W, 1.6, 'F');
+      if (logo) { fill(C.white); doc.roundedRect(M, 10, 22, 22, 4, 4, 'F'); doc.addImage(logo, 'PNG', M + 2, 12, 18, 18); }
+      color(C.white); font('bold', 18); doc.text(`Ordine ${o.num}`, M + 28, 20); font('normal', 9.5); doc.text(`Kit adesivi Torental · ${shortDate(o.data)} · ${st}`, M + 28, 27);
+      font('normal', 8.5); doc.text('Soluzione Veicolare S.r.l.', W - M, 18, { align: 'right' }); doc.text('San Cesareo (RM)', W - M, 23, { align: 'right' });
+      let y = 54;
+      fill(C.soft); doc.roundedRect(M, y, W - 2 * M, 30, 3, 3, 'F');
+      color(C.muted); font('semibold', 7.5); doc.text('CLIENTE', M + 5, y + 7); doc.text('INTERVENTO', W / 2 + 4, y + 7);
+      color(C.ink); font('bold', 11); doc.text(doc.splitTextToSize(cl.nome || '—', W / 2 - M - 10)[0], M + 5, y + 14);
+      font('normal', 8.5); const cli = [cl.ref, cl.tel, cl.email, cl.ind, cl.piva ? 'P. IVA ' + cl.piva : ''].filter(Boolean); doc.text(doc.splitTextToSize(cli.join(' · '), W / 2 - M - 10).slice(0, 2), M + 5, y + 20);
+      font('normal', 9); doc.text(o.consegna ? `Data: ${shortDate(o.consegna)}` : 'Data da definire', W / 2 + 4, y + 14); if (o.mezzi) doc.text(doc.splitTextToSize('Mezzi: ' + o.mezzi, W / 2 - M - 8).slice(0, 2), W / 2 + 4, y + 20);
+      y += 38;
+      doc.autoTable({ startY: y, margin: { left: M, right: M }, head: [['Prodotto', 'Codice', 'Q.tà', 'Prezzo cad.', 'Totale']], body: o.righe.map(l => [l.t, l.cod || '—', fmtNum(num(l.q), 0), eur(num(l.p)), eur(num(l.q) * num(l.p))]),
+        styles: { font: FF, fontSize: 9, cellPadding: 2.6, textColor: C.ink, lineColor: C.line, lineWidth: .2 }, headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [250, 251, 253] },
+        columnStyles: { 1: { cellWidth: 26, textColor: C.muted }, 2: { halign: 'right', cellWidth: 16 }, 3: { halign: 'right', cellWidth: 28 }, 4: { halign: 'right', cellWidth: 28, fontStyle: 'bold' } } });
+      y = doc.lastAutoTable.finalY + 8; if (y > H - 70) { doc.addPage(); y = 24; }
+      const R = [['Totale prodotti', eur(t.sub)], ...(t.sc ? [[`Sconto ${fmtNum(num(o.sconto), 1).replace(/,0$/, '')}%`, '– ' + eur(t.sc)]] : []), ['Imponibile', eur(t.imp)], ['IVA 22%', eur(t.iva)]];
+      const x0 = W - M - 78; font('normal', 9.5); R.forEach(([a, b]) => { color(C.muted); doc.text(a, x0, y); color(C.ink); doc.text(b, W - M, y, { align: 'right' }); y += 6; });
+      fill(C.blue); doc.roundedRect(x0 - 4, y - 2, 82, 12, 2.5, 2.5, 'F'); color(C.white); font('bold', 11); doc.text('Totale', x0, y + 5.6); doc.text(eur(t.tot), W - M, y + 5.6, { align: 'right' }); y += 20;
+      const nota = [o.note, trData().nota].filter(Boolean).join('\n');
+      if (nota) { color(C.muted); font('semibold', 7.5); doc.text('NOTE', M, y); color(C.ink); font('normal', 9); doc.text(doc.splitTextToSize(nota, W - 2 * M), M, y + 6); }
+      const N = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= N; p++) { doc.setPage(p); color(C.muted); font('normal', 7.5); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 8); doc.text(`Ordine ${o.num} · Pagina ${p} di ${N}`, W - M, H - 8, { align: 'right' }); }
+      doc.setProperties({ title: `Ordine Torental ${o.num}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      const sl = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
+      doc.save(`Ordine_Torental_${o.num}${cl.nome ? '_' + sl(cl.nome) : ''}.pdf`);
+      busy(); toast('PDF scaricato');
+    } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
+  }
+  function trClients(body) {
+    const L = trCliList(), O = troList(), q = amNorm(trCQ).split(/\s+/).filter(Boolean);
+    const F = L.filter(c => !q.length || q.every(w => amNorm(`${c.nome} ${c.ref} ${c.tel} ${c.email} ${c.ind}`).includes(w)));
+    const ini = s => String(s || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    body.innerHTML = `<div class="card"><div class="card-h"><div><h3>Clienti Torental</h3><span class="muted small">${L.length} clienti · si salvano da soli quando scrivi il nome in un ordine</span></div><button type="button" class="btn sm primary" id="trc-add">+ Nuovo cliente</button></div>
+      ${L.length ? `<div class="pv-sb tro-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="trc-q" type="search" placeholder="Cerca un cliente…" value="${esc(trCQ)}" autocomplete="off"></div>` : ''}
+      <div class="trc-l">${F.map(c => { const mine = O.filter(o => o.cliId === c.id || pvCliKey((o.cliente || {}).nome) === pvCliKey(c.nome)), tot = mine.reduce((s, o) => s + troTot(o).imp, 0); return `<div class="trc-r"><button type="button" class="trc-m" data-trcedit="${esc(c.id)}"><span class="trc-i">${esc(ini(c.nome))}</span><span class="trc-t"><b>${esc(c.nome)}</b><small>${esc([c.ref, c.tel, c.email].filter(Boolean).join(' · ') || 'nessun contatto')}</small></span><span class="trc-s"><b>${mine.length} ${mine.length === 1 ? 'ordine' : 'ordini'}</b><small>${mine.length ? eur0(tot) : '—'}</small></span></button><button type="button" class="btn sm" data-trcnew="${esc(c.id)}">+ Ordine</button></div>`; }).join('') || `<div class="empty">${L.length ? 'Nessun cliente trovato' : 'Nessun cliente ancora: crea un ordine o premi «+ Nuovo cliente».'}</div>`}</div></div>`;
+  }
+  function trCliForm(id) {
+    const L = trCliList(), c = L.find(x => x.id === id) || { id: uid(), nome: '', ref: '', tel: '', email: '', ind: '', piva: '', note: '', dal: today() }, isNew = !L.some(x => x.id === id);
+    const F = [['nome', 'Ragione sociale / nome', ''], ['ref', 'Referente', ''], ['tel', 'Telefono', ''], ['email', 'Email', 'email'], ['ind', 'Indirizzo', ''], ['piva', 'P. IVA / C.F.', '']];
+    openSheet(isNew ? 'Nuovo cliente Torental' : 'Cliente Torental', `<div class="f-grid">${F.map(([k, l, ty]) => `<label class="f${k === 'ind' || k === 'nome' ? ' f-w' : ''}"><span>${l}</span><input name="${k}"${ty ? ` type="${ty}"` : ''} value="${esc(c[k] || '')}"${k === 'nome' ? ' data-focus required' : ''}></label>`).join('')}<label class="f f-w"><span>Note</span><textarea name="note" rows="3">${esc(c.note || '')}</textarea></label></div>`, fd => {
+      const nome = String(fd.get('nome') || '').trim(); if (!nome) { toast('Scrivi il nome del cliente'); return false; }
+      const dup = trCliFind(L.filter(x => x.id !== c.id), nome); if (dup) { toast('Esiste già un cliente con questo nome'); return false; }
+      F.forEach(([k]) => { c[k] = String(fd.get(k) || '').trim(); }); c.note = String(fd.get('note') || '').trim();
+      const M = L.filter(x => x.id !== c.id); M.push(c); M.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+      write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'trClienti', valore: JSON.stringify(M) } }]); toast(isNew ? 'Cliente salvato' : 'Cliente aggiornato'); return true;
+    }, isNew ? null : () => { if (!confirm(`Togliere ${c.nome} dai clienti? Gli ordini restano.`)) return false; write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'trClienti', valore: JSON.stringify(L.filter(x => x.id !== c.id)) } }]); toast('Cliente tolto'); return true; });
+  }
+  function troOpenNew(base) { const o = { ...troNew(), ...(base || {}) }; troSave(o); trTab = 'ord'; LS.set('cdc_trtab', 'ord'); trEdit = o.id; trAnim = true; renderTor(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function trOrdClick(t) {
+    const tb = t.closest('[data-trtab]'); if (tb) { trEdit = ''; trSetTab(tb.dataset.trtab); return true; }
+    if (t.closest('#tro-new, #tro-new2, #tro-new3')) { troOpenNew(); return true; }
+    if (t.closest('#tr-toord')) { const { L } = trQuote(); troOpenNew({ righe: L.map(x => ({ t: x.t, cod: '', q: x.q, p: x.p })) }); toast('Ordine creato dal preventivo rapido'); return true; }
+    const op = t.closest('[data-troopen]'); if (op) { trEdit = op.dataset.troopen; trAnim = true; renderTor(); window.scrollTo({ top: 0 }); return true; }
+    if (t.closest('#tro-back')) { const o = troFromForm(); if (o) troQuiet(o); trEdit = ''; trAnim = true; renderTor(); return true; }
+    if (t.closest('#tro-save')) { const o = troFromForm(); if (o) { troSave(o, 'Ordine salvato'); } return true; }
+    if (t.closest('#tro-copy')) { troCopy(); return true; }
+    if (t.closest('#tro-pdf')) { troPdf(); return true; }
+    if (t.closest('#tro-addl')) { troAdd(false); return true; }
+    if (t.closest('#tro-addkit')) { const v = $('#tro-pick').value; if (v[0] !== 'k') { toast('Scegli un kit dal menu'); return true; } troAdd(true); return true; }
+    const dl = t.closest('[data-trodel]'); if (dl) { const o = troFromForm(); if (o) { o.righe.splice(+dl.dataset.trodel, 1); troQuiet(o); renderTor(); } return true; }
+    const up = t.closest('[data-troup]'); if (up) { const o = troFromForm(), i = +up.dataset.troup; if (o && i > 0) { [o.righe[i - 1], o.righe[i]] = [o.righe[i], o.righe[i - 1]]; troQuiet(o); renderTor(); } return true; }
+    if (t.closest('#tro-dup')) { const o = troFromForm(); if (o) { troOpenNew({ cliente: { ...o.cliente }, mezzi: o.mezzi, righe: o.righe.map(l => ({ ...l })), sconto: o.sconto, note: o.note }); toast('Ordine duplicato'); } return true; }
+    if (t.closest('#tro-del')) { const o = troFromForm(); if (o && confirm(`Eliminare l'ordine ${o.num}?`)) { write([{ action: 'delete', sheet: 'Config', id: 'tro:' + o.id }]); trEdit = ''; toast('Ordine eliminato'); } return true; }
+    if (t.closest('#trc-add')) { trCliForm(''); return true; }
+    const ce = t.closest('[data-trcedit]'); if (ce) { trCliForm(ce.dataset.trcedit); return true; }
+    const cn = t.closest('[data-trcnew]'); if (cn) { const c = trCliList().find(x => x.id === cn.dataset.trcnew); if (c) troOpenNew({ cliente: { nome: c.nome, ref: c.ref || '', tel: c.tel || '', email: c.email || '', ind: c.ind || '', piva: c.piva || '' } }); return true; }
+    return false;
+  }
+  function trCliAutofill(el) {
+    if (!el || el.dataset.tof !== 'cliente.nome') return; const c = trCliFind(trCliList(), el.value); if (!c) return;
+    [['ref', 'ref'], ['tel', 'tel'], ['email', 'email'], ['ind', 'ind'], ['piva', 'piva']].forEach(([k, f]) => { const i = $(`#tro-ed [data-tof="cliente.${f}"]`); if (i && !i.value.trim() && c[k]) i.value = c[k]; });
+  }
+
   /* ---------- preventivo rapido ---------- */
   function trQState() {
     const D = trData();
@@ -4779,7 +4987,7 @@
       ${D.sing.length ? `<details class="tr-sd"${D.sing.some(s => num(Q.sing[s.cod || s.n])) ? ' open' : ''}><summary>Aggiungi articoli singoli</summary><div class="tr-sg">${D.sing.map(s => `<label><span>${esc(trNice(s.n))}<small>${esc(eur(s.p))} cad.</small></span><input data-trqs="${esc(s.cod || s.n)}" type="number" min="0" step="1" inputmode="numeric" value="${num(Q.sing[s.cod || s.n]) || ''}" placeholder="0"></label>`).join('')}</div></details>` : ''}
       <div class="tr-ql">${L.map(x => `<div><span>${esc(x.t)}${x.q !== 1 ? ` <em>× ${fmtNum(x.q, 0)}</em>` : ''}</span><b>${esc(eur(x.q * x.p))}</b></div>`).join('')}</div>
       <div class="iva-sum"><div><span>Imponibile</span><b>${esc(eur(imp))}</b></div><div><span>IVA 22%</span><b>${esc(eur(iva))}</b></div><div class="t"><span>Totale</span><b>${esc(eur(tot))}</b></div></div>
-      <div class="row-btns" style="margin-top:12px"><button type="button" class="btn sm" id="tr-copy">Copia il preventivo</button></div>`;
+      <div class="row-btns" style="margin-top:12px"><button type="button" class="btn sm" id="tr-copy">Copia il preventivo</button><button type="button" class="btn sm primary" id="tr-toord">Crea ordine con questi prodotti</button></div>`;
   }
   function trQSet(e) {
     const t = e.target, Q = trQState();
@@ -6730,6 +6938,7 @@
       const lydo = t.closest('[data-lydoc]'); if (lydo) { const id = lydo.dataset.lydoc; if (t.closest('#sheet')) { closeSheet(); setTimeout(() => lyDocDetail(id), 250); } else lyDocDetail(id); return; }
       const lyro = t.closest('[data-lyrow]'); if (lyro) { const r = lyRows().find(x => String(x.id) === lyro.dataset.lyrow); if (r) lyRowForm(r); return; }
       const lyar = t.closest('[data-lyart]'); if (lyar) { lyF.q = lyar.dataset.lyart; $('#ly-q').value = lyF.q; renderLyList(); lyTo('#ly-list'); return; }
+      if (view === 'torental' && trOrdClick(t)) return;
       if (t.closest('#tr-imp')) { importTor(); return; }
       if (t.closest('#tr-xls')) { exportTor(); return; }
       if (t.closest('#tr-mod')) { trForm(); return; }
@@ -6824,6 +7033,8 @@
     document.addEventListener('change', e => { if (e.target.id === 'am-fc') { amF.cdc = e.target.value; $$('#am-map .tr-pin, #am-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.amcdc === amF.cdc)); renderAmList(); } if (e.target.id === 'am-fk') { amF.cat = e.target.value; renderAmList(); } if (e.target.id === 'am-fv') { amF.vend = e.target.value; renderAmList(); } });
     document.addEventListener('input', e => { if (e.target.id === 'ly-q') { clearTimeout(qt); qt = setTimeout(() => { lyF.q = e.target.value; renderLyList(); }, 180); } if (e.target.id === 'ly-aq') { clearTimeout(qt); qt = setTimeout(() => { lyArtQ = e.target.value; renderLyArt(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'ly-fc') { lyF.cdc = e.target.value; $$('#ly-map .tr-pin, #ly-rank .cr-row').forEach(x => x.classList.toggle('on', x.dataset.lycdc === lyF.cdc)); renderLyList(); } if (e.target.id === 'ly-fk') { lyF.cat = e.target.value; renderLyList(); } if (e.target.id === 'ly-fd') { lyF.doc = e.target.value; renderLyList(); } });
+    ['input', 'change'].forEach(ev => document.addEventListener(ev, e => { troLive(e); if (ev === 'change') trCliAutofill(e.target); }));
+    document.addEventListener('input', e => { const t = e.target; if (t.id !== 'tro-q' && t.id !== 'trc-q') return; if (t.id === 'tro-q') trOQ = t.value; else trCQ = t.value; const pos = t.selectionStart; renderTor(); const n = $('#' + t.id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } });
     ['input', 'change'].forEach(ev => document.addEventListener(ev, e => { if (e.target.closest && e.target.closest('#tr-calc') && (e.target.dataset.trq || e.target.dataset.trqs) && (ev === 'change' || e.target.type === 'number')) trQSet(e); }));
     document.addEventListener('input', e => { if (e.target.id === 'fa-q') { clearTimeout(qt); qt = setTimeout(() => { faF.q = e.target.value; renderFatList(); }, 180); } });
     document.addEventListener('change', e => { if (e.target.id === 'fa-ff') { faF.forn = e.target.value; renderFatList(); } if (e.target.id === 'fa-fs') { faF.stato = e.target.value; renderFatList(); } });
