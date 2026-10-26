@@ -1,7 +1,7 @@
 {
-  "name": "Centro di Costo — Soluzione Veicolare",
+  "name": "Centro di Costo — Gestionale aziendale",
   "short_name": "Centro Costo",
-  "description": "Controllo dei centri di costo di Soluzione Veicolare e Attrezzati",
+  "description": "Gestionale aziendale: costi, acquisti, fatture e preventivi",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

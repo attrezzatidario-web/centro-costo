@@ -7817,16 +7817,16 @@
   start();
   intro();
 
-  /* ================= Splash: S.V.CAR → logo ================= */
+  /* ================= Splash: il grafico che diventa il logo dell'app ================= */
   function intro() {
     const sp = $('#splash'); if (!sp) return;
     const q = id => document.getElementById('spx-' + id);
     const E = {
       out3: t => 1 - Math.pow(1 - t, 3), out5: t => 1 - Math.pow(1 - t, 5), in3: t => t * t * t,
       io: t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
-      back: t => { const c = 1.55; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+      back: t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
     };
-    let skip = false, t0 = performance.now();
+    let skip = false; const t0 = performance.now();
     const tw = (delay, dur, ease, fn) => new Promise(res => {
       const step = now => {
         if (skip) { fn(1); return res(); }
@@ -7837,65 +7837,70 @@
       requestAnimationFrame(step);
     });
     const lerp = (a, b, k) => a + (b - a) * k;
-    const letters = ['S', 'C', 'A', 'R'].map(q), V = q('V'), Ln = q('L'), dots = [q('D1'), q('D2')];
-    const ic = q('ic'), sq = q('sq'), ring = q('ring'), hand = q('hand'), slice = q('slice');
-    const title = $('.spx-t', sp), stage = $('.spx-stage', sp), bg = $('.spx-bg', sp);
-
-    // campiona una forma in N punti nel sistema dell'SVG
-    const N = 140;
-    const sample = (el, sx, sy, tx, ty) => { const L = el.getTotalLength(), pts = []; for (let i = 0; i < N; i++) { const p = el.getPointAtLength(L * i / N); pts.push([p.x * sx + tx, p.y * sy + ty]); } return pts; };
-    const area = P => P.reduce((a, p, i) => { const n = P[(i + 1) % P.length]; return a + p[0] * n[1] - n[0] * p[1]; }, 0);
-    const align = (A, B) => { if (Math.sign(area(A)) !== Math.sign(area(B))) B = B.slice().reverse(); let best = 0, bd = Infinity; for (let o = 0; o < N; o += 2) { let d = 0; for (let i = 0; i < N; i += 4) { const b = B[(i + o) % N]; d += (A[i][0] - b[0]) ** 2 + (A[i][1] - b[1]) ** 2; } if (d < bd) { bd = d; best = o; } } return B.map((_, i) => B[(i + best) % N]); };
-    const poly = (A, B, k) => 'M' + A.map((a, i) => `${lerp(a[0], B[i][0], k).toFixed(2)} ${lerp(a[1], B[i][1], k).toFixed(2)}`).join('L') + 'Z';
     const set = (el, o) => Object.entries(o).forEach(([k, v]) => (el.style[k] = v));
+    const ic = q('ic'), sq = q('sq'), ring = q('ring'), hand = q('hand'), slice = q('slice'), shine = q('shine');
+    const bars = [...q('bars').children], axis = q('axis').firstElementChild, rips = [...q('rip').children], dotsG = q('dots');
+    const title = $('.spx-t', sp), stage = $('.spx-stage', sp), bg = $('.spx-bg', sp), grid = $('.spx-grid', sp), glow = $('.spx-glow', sp);
+    const word = $('b', title), tag = $(':scope > span', title), prog = $('.spx-prog', title), progU = $('u', prog);
+    word.innerHTML = [...word.textContent].map(ch => `<span>${ch === ' ' ? '&nbsp;' : esc(ch)}</span>`).join('');
+    const letters = [...word.children];
 
     const finish = () => {
       if (finish.done) return; finish.done = true;
-      const target = [...$$('.nav .brand img, .top-logo')].find(e => e.offsetParent && e.getBoundingClientRect().width > 0);
-      const a = ic.getBoundingClientRect(), dur = reduced() ? 1 : 620;
-      title.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(6px)' }], { duration: dur * .45, fill: 'forwards' });
-      bg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur, delay: dur * .25, easing: 'ease', fill: 'forwards' });
+      const target = [...$$('.nav .brand img, .top-logo, .auth-top img')].find(e => e.offsetParent && e.getBoundingClientRect().width > 0);
+      const a = sq.getBoundingClientRect(), dur = reduced() ? 1 : 680;
+      title.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(8px)' }], { duration: dur * .4, fill: 'forwards' });
+      bg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur * .9, delay: dur * .3, easing: 'ease', fill: 'forwards' });
       if (target && a.width) {
         const b = target.getBoundingClientRect(), w = stage.getBoundingClientRect(), s = b.width / a.width;
+        target.style.visibility = 'hidden'; setTimeout(() => { target.style.visibility = ''; }, dur);
         const tx = b.left - w.left - (a.left - w.left) * s, ty = b.top - w.top - (a.top - w.top) * s;
-        stage.animate([{ transform: 'none' }, { transform: `translate(${tx}px,${ty}px) scale(${s})` }], { duration: dur, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'forwards' });
-      } else stage.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(1.04)' }], { duration: dur, fill: 'forwards' });
-      setTimeout(() => sp.remove(), dur + 80);
+        stage.animate([{ transform: 'none' }, { transform: `translate(${tx}px,${ty}px) scale(${s})` }], { duration: dur, easing: 'cubic-bezier(.7,0,.2,1)', fill: 'forwards' });
+      } else stage.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(1.05)' }], { duration: dur, fill: 'forwards' });
+      setTimeout(() => sp.remove(), dur + 90);
     };
     sp.addEventListener('click', () => { skip = true; });
 
-    if (reduced()) { ['wm'].forEach(id => (q(id).style.opacity = 0)); set(ic, { opacity: 1 }); [sq, ring, hand, slice].forEach(e => set(e, { opacity: 1, strokeDashoffset: 0, transform: 'none' })); sq.setAttribute('rx', 116); set(title, { opacity: 1 }); return setTimeout(finish, 500); }
+    if (reduced()) {
+      bars.forEach(b => set(b, { opacity: 0 })); set(ic, { opacity: 1 }); [sq, ring, hand, slice].forEach(e => set(e, { opacity: 1, strokeDashoffset: 0, transform: 'none' })); sq.setAttribute('rx', 116);
+      letters.forEach(l => set(l, { opacity: 1 })); set(tag, { opacity: 1, letterSpacing: '.24em' }); return setTimeout(finish, 600);
+    }
 
-    // 1 · comparsa del marchio
-    letters.forEach((el, i) => { set(el, { opacity: 0 }); tw(80 + i * 75, 650, E.out5, k => set(el, { opacity: k, transform: `translateY(${(1 - k) * 9}px)` })); });
-    set(V, { opacity: 0 }); tw(260, 520, E.out3, k => set(V, { opacity: k, transform: `translateY(${(1 - k) * -10}px) scale(${.8 + .2 * k})` }));
-    const sw = q('sweep-r'); tw(420, 620, E.io, k => sw.setAttribute('width', 130 * k));
-    dots.forEach((d, i) => { set(d, { opacity: 0 }); tw(820 + i * 90, 420, E.back, k => set(d, { opacity: Math.min(1, k * 2), transform: `scale(${k})` })); });
-    const sh = q('shine'); tw(1050, 650, E.io, k => { sh.setAttribute('opacity', .9); sh.setAttribute('x', lerp(-160, 620, k)); });
-
-    // 2 · il marchio si raccoglie nel logo
-    const wm = q('wm'), cx = (300 + 61.5) / 3, cy = (150 + 83.6) / 3;
-    const T2 = 1850;
-    letters.concat(dots).forEach((el, i) => {
-      const b = el.getBBox(), dx = cx - (b.x + b.width / 2), dy = cy - (b.y + b.height / 2);
-      tw(T2 + i * 25, 520, E.in3, k => set(el, { transform: `translate(${dx * k}px,${dy * k}px) scale(${1 - .85 * k})`, opacity: 1 - k }));
+    // 1 · sfondo: puntinato e alone
+    tw(0, 900, E.out3, k => { set(grid, { opacity: k * .9, transform: `scale(${1.08 - .08 * k})` }); set(glow, { opacity: k }); });
+    // 2 · un piccolo grafico a barre cresce dal suo asse
+    tw(80, 520, E.io, k => set(axis, { strokeDashoffset: 1 - k }));
+    bars.forEach((b, i) => tw(180 + i * 85, 640, E.back, k => set(b, { transform: `scaleY(${k})` })));
+    // 3 · le barre si raccolgono al centro diventando punti in orbita
+    const T = 1180, C = [200, 200];
+    const dots = bars.map((b, i) => { const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('r', 0); if (b.classList.contains('r')) c.style.fill = '#e22726'; dotsG.appendChild(c); return c; });
+    bars.forEach((b, i) => {
+      const bb = b.getBBox(), bx = bb.x + bb.width / 2, by = bb.y + bb.height;
+      tw(T + i * 40, 380, E.in3, k => set(b, { transform: `translate(${(C[0] - bx) * k * .35}px,${(C[1] - by) * k * .35}px) scaleY(${1 - k}) scaleX(${1 - .4 * k})`, opacity: 1 - k * .3 }));
+      const a0 = Math.atan2(by - 6 - C[1], bx - C[0]);
+      tw(T + 260 + i * 40, 760, E.io, k => {
+        const ang = a0 - k * Math.PI * 1.8, r0 = Math.hypot(bx - C[0], by - 6 - C[1]), r = k < .45 ? lerp(r0, 112, E.out3(k / .45)) : lerp(112, 0, E.in3((k - .45) / .55));
+        dots[i].setAttribute('cx', C[0] + Math.cos(ang) * r); dots[i].setAttribute('cy', C[1] + Math.sin(ang) * r);
+        dots[i].setAttribute('r', k < .12 ? k / .12 * 8 : 8 * (1 - E.in3((k - .12) / .88)) + 1.5);
+        dots[i].style.opacity = k > .92 ? (1 - k) / .08 : 1;
+      });
     });
-    const tgt = sample(slice, .3125, .3125, 220, 70);
-    const s1 = sample(Ln, 3, 3, -61.5, -83.6), s2 = sample(V, 3, 3, -61.5, -83.6);
-    const t1 = align(s1, tgt), t2 = align(s2, tgt);
-    const m1 = q('m1'), m2 = q('m2');
-    tw(T2 + 60, 760, E.io, k => {
-      if (k > 0) { Ln.style.opacity = 0; V.style.opacity = 0; m1.style.opacity = 1; m2.style.opacity = 1 - k * .9; }
-      m1.setAttribute('d', poly(s1, t1, k)); m2.setAttribute('d', poly(s2, t2, k)); m1.style.strokeWidth = m2.style.strokeWidth = (8.1 * k).toFixed(2);
-    });
+    tw(T + 200, 300, E.out3, k => set(axis, { opacity: 1 - k }));
+    // 4 · nasce il logo: quadrato, anello, lancetta e fetta rossa
+    const T2 = T + 760;
     set(ic, { opacity: 1 });
-    tw(T2 + 220, 700, E.back, k => { set(sq, { opacity: Math.min(1, k * 3), transform: `scale(${Math.max(0, k)})` }); sq.setAttribute('rx', lerp(256, 116, Math.min(1, Math.max(0, k)))); });
-    tw(T2 + 820, 10, E.out3, () => { set(slice, { opacity: 1 }); m1.style.opacity = 0; m2.style.opacity = 0; });
-    tw(T2 + 640, 620, E.io, k => set(ring, { opacity: 1, strokeDashoffset: 1 - k }));
-    tw(T2 + 860, 420, E.out3, k => set(hand, { opacity: 1, strokeDashoffset: 1 - k }));
-    tw(T2 + 1000, 600, E.out5, k => set(title, { opacity: k, transform: `translateY(${(1 - k) * 12}px)` }))
-      .then(() => setTimeout(finish, skip ? 0 : 650));
-    void wm;
+    tw(T2, 720, E.back, k => { set(sq, { opacity: Math.min(1, k * 3), transform: `scale(${Math.max(0, k)})` }); sq.setAttribute('rx', lerp(256, 116, Math.min(1, Math.max(0, k)))); });
+    rips.forEach((r, i) => tw(T2 + 80 + i * 160, 1100, E.out3, k => set(r, { opacity: (1 - k) * .45, transform: `scale(${1 + k * 1.4})` })));
+    tw(T2 + 260, 620, E.io, k => set(ring, { opacity: 1, strokeDashoffset: 1 - k }));
+    tw(T2 + 520, 420, E.out3, k => set(hand, { opacity: 1, strokeDashoffset: 1 - k }));
+    tw(T2 + 700, 560, E.back, k => set(slice, { opacity: Math.min(1, k * 4), transform: `translate(${(1 - k) * 40}px,${(1 - k) * -40}px) scale(${Math.max(0, k)})` }));
+    tw(T2 + 1150, 700, E.io, k => { set(shine, { opacity: k < 1 ? 1 : 0 }); shine.setAttribute('x', lerp(-120, 420, k)); });
+    // 5 · nome dell'app lettera per lettera, sottotitolo che si stringe, barra di caricamento
+    letters.forEach((l, i) => tw(T2 + 420 + i * 28, 560, E.out5, k => set(l, { opacity: k, transform: `translateY(${(1 - k) * 16}px) rotate(${(1 - k) * 6}deg)`, filter: `blur(${(1 - k) * 4}px)` })));
+    tw(T2 + 760, 900, E.out5, k => set(tag, { opacity: k, letterSpacing: `${lerp(.5, .24, k)}em` }));
+    tw(T2 + 800, 300, E.out3, k => set(prog, { opacity: k }));
+    tw(T2 + 820, 820, E.io, k => set(progU, { transform: `scaleX(${k})` }))
+      .then(() => setTimeout(finish, skip ? 0 : 250));
   }
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

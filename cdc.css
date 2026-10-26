@@ -132,27 +132,31 @@
 select.cell-in { text-align: left; min-width: 150px; padding-right: 28px; }
 
 /* =========================================================
-   SPLASH — S.V.CAR che diventa il logo
+   SPLASH — il grafico che diventa il logo dell'app
    ========================================================= */
-.spx { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer; --wm: #3362ab; }
-.spx-bg { position: absolute; inset: 0; background: radial-gradient(120% 80% at 50% 42%, var(--surface) 0%, var(--bg) 70%); }
-.spx-stage { position: relative; display: grid; justify-items: center; width: min(560px, 90vw); transform-origin: 0 0; will-change: transform; }
+.spx { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer; overflow: hidden; color: var(--line); }
+.spx-bg { position: absolute; inset: 0; background: radial-gradient(120% 85% at 50% 40%, var(--surface) 0%, var(--bg) 72%); }
+.spx-grid { position: absolute; inset: -10%; opacity: 0; background-image: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent) 1.1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(closest-side at 50% 45%, #000 0%, transparent 85%); mask-image: radial-gradient(closest-side at 50% 45%, #000 0%, transparent 85%); }
+.spx-glow { position: absolute; left: 50%; top: 42%; width: 70vmin; height: 70vmin; margin: -35vmin 0 0 -35vmin; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 65%); opacity: 0; }
+.spx-stage { position: relative; display: grid; justify-items: center; width: min(400px, 82vw); transform-origin: 0 0; will-change: transform; }
 .spx-svg { width: 100%; height: auto; display: block; overflow: visible; }
-.spx-l.b { fill: var(--wm); }
-.spx-l.r, .spx-m { fill: #e22726; }
-.spx-m { stroke: #e22726; stroke-linejoin: round; stroke-width: 0; }
-.spx-l { transform-box: fill-box; transform-origin: 50% 50%; }
-#spx-ic, #spx-sq, #spx-ring, #spx-hand, #spx-slice, .spx-m { opacity: 0; }
-#spx-sq { transform-box: fill-box; transform-origin: 50% 50%; }
+#spx-bars rect { fill: url(#spx-bar); transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(0); }
+#spx-bars rect.r { fill: #e22726; }
+#spx-axis path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+#spx-dots circle { fill: var(--accent); }
+#spx-rip circle { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; stroke-width: 1.5; }
+#spx-ic, #spx-sq, #spx-ring, #spx-hand, #spx-slice { opacity: 0; }
+#spx-sq, #spx-slice { transform-box: fill-box; transform-origin: 50% 50%; }
+#spx-slice { transform-origin: 0% 100%; }
 #spx-ring, #spx-hand { stroke-dasharray: 1; stroke-dashoffset: 1; }
-.spx-t { display: grid; justify-items: center; gap: 4px; margin-top: -18px; opacity: 0; }
-.spx-t b { font-size: clamp(20px, 5.4vw, 26px); font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
-.spx-t span { font-size: 11.5px; font-weight: 600; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .spx { --wm: #6d93db; }
-}
-:root[data-theme="dark"] .spx { --wm: #6d93db; }
-
+.spx-t { display: grid; justify-items: center; gap: 6px; margin-top: -34px; }
+.spx-t b { display: flex; font-size: clamp(22px, 6vw, 30px); font-weight: 700; letter-spacing: -.025em; color: var(--ink); white-space: pre; }
+.spx-t b span { display: inline-block; opacity: 0; }
+.spx-t > span { font-size: 11.5px; font-weight: 600; letter-spacing: .5em; text-transform: uppercase; color: var(--muted); opacity: 0; }
+.spx-prog { display: block; width: 120px; height: 3px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 14%, transparent); overflow: hidden; margin-top: 12px; opacity: 0; }
+.spx-prog u { display: block; height: 100%; width: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), #e22726); transform: scaleX(0); transform-origin: 0 50%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .spx { color: #3a3f4b; } }
+:root[data-theme="dark"] .spx { color: #3a3f4b; }
 
 /* =========================================================
    CENTRI — dashboard
