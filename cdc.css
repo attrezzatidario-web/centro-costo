@@ -2653,3 +2653,55 @@ body.is-demo #sync, body.is-demo #sync-side { color: #a16207; }
 body[data-view="utenti"] .iva-tg { visibility: hidden; }
 @media (max-width: 1099px) { .ad-u { grid-template-columns: 42px minmax(0, 1fr); } }
 @media (min-width: 900px) { #app main > .demo-bar { margin: 0 0 16px; } }
+
+/* ================= v95: settori di attività ================= */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.set-c { display: flex; align-items: flex-start; gap: 11px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.set-c:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.set-c.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.set-ct { display: grid; gap: 2px; min-width: 0; }
+.set-ct b { font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.set-ct small { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.set-ci { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--bg); color: var(--accent); }
+.set-c.on .set-ci { background: var(--surface); }
+.set-ci svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.set-ci.lg { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); }
+.set-ci.lg svg { width: 23px; height: 23px; }
+.set-grid.sm { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 236px; overflow: auto; padding: 2px; margin: 2px -2px 0; }
+.set-grid.sm .set-c { align-items: center; padding: 8px 10px; gap: 9px; border-radius: 10px; }
+.set-grid.sm .set-ci { width: 28px; height: 28px; border-radius: 8px; }
+.set-grid.sm .set-ci svg { width: 16px; height: 16px; }
+.set-grid.sm .set-ct b { font-size: 12.5px; }
+@media (max-width: 380px) { .set-grid.sm { grid-template-columns: 1fr; } }
+
+/* impostazioni › attività e sezioni */
+.st-set { display: flex; align-items: center; gap: 14px; padding: 4px 0 14px; border-bottom: 1px solid var(--line); }
+.st-set .st-l b { font-size: 15.5px; }
+#s-mod .st-row:last-child, #s-set .st-row:last-child { border-bottom: 0; }
+#s-mod .tg:disabled { opacity: .5; cursor: default; }
+
+/* registrazione: codice o nuova azienda */
+.reg-mode { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; gap: 3px; border-radius: 11px; background: var(--bg); border: 1px solid var(--line); isolation: isolate; }
+.reg-mode button { position: relative; z-index: 1; height: 32px; border: 0; background: none; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; transition: color .2s; }
+.reg-mode button.on { color: var(--ink); }
+.reg-mode i { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 4.5px); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.08); transform: translateX(calc(var(--i, 0) * (100% + 3px))); transition: transform .3s var(--out, ease); }
+#reg-form [data-regnew] { display: grid; gap: 12px; }
+#reg-form [data-regnew][hidden] { display: none; }
+#reg-form [data-regcode] { display: grid; gap: 12px; }
+#reg-form [data-regcode][hidden] { display: none; }
+
+/* barra demo: attività scelta */
+.demo-set { display: inline-flex; align-items: center; gap: 6px; margin: 0 2px; padding: 2px 8px 2px 6px; border: 0; border-radius: 999px; background: rgba(255,255,255,.55); color: inherit; font: inherit; font-weight: 600; cursor: pointer; vertical-align: middle; }
+.demo-set svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.demo-set em { font-style: normal; font-weight: 500; opacity: .7; text-decoration: underline; text-underline-offset: 2px; }
+
+/* amministrazione: richieste di nuove aziende, settore e piano dei gestionali */
+.ad-req { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; width: fit-content; }
+.ad-req svg, .ad-sp svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ad-wset { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 10px; }
+.ad-sp { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.ad-pill.p-prova { background: var(--warn-soft); color: var(--warn); } .ad-pill.p-base { background: var(--accent-soft); color: var(--accent); } .ad-pill.p-pro { background: #e7f6ec; color: #166534; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ad-pill.p-pro { background: #163323; color: #6fd39a; } :root:not([data-theme="light"]) .demo-set { background: rgba(255,255,255,.12); } }
+:root[data-theme="dark"] .ad-pill.p-pro { background: #163323; color: #6fd39a; } :root[data-theme="dark"] .demo-set { background: rgba(255,255,255,.12); }
+.db-areas[hidden] { display: none; }
+@media (min-width: 1180px) { .db-tops.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }

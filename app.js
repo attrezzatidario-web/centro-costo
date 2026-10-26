@@ -13,7 +13,7 @@
   const UM = ['PZ', 'CONF', 'PA', 'KG', 'LT', 'ML', 'MT', 'BL', 'SCA', 'H'];
 
   // categorie automatiche: la prima regola che trova una parola vince
-  const RULES = [
+  const RULES_VEI = [
     ['Trasporti e servizi', ['SPESE DI TRASPORTO', 'TRASPORTO', 'SPEDIZIONE', 'MANODOPERA', 'SERVIZIO']],
     ['Abbigliamento da lavoro', ['PAYPER', 'FELPA', 'T-SHIRT', 'TSHIRT', 'PANTALON', 'GIUBB', 'GILET', 'CAMICIA', 'BERMUDA', 'CAPPELLIN', 'SOFT SHELL', 'SOFT-SHELL', ' PILE', 'TRANSFER DTF', 'DAVENPORT', 'POLO ', 'GIACCA', 'TUTA ', 'PORTWEST', 'HEAVY MAN', 'GABARDINE', 'K-WAY', 'SALOPETTE']],
     ['DPI e sicurezza', ['SCARPE', 'SCARPA', 'GUANT', 'OCCHIAL', 'ELMETT', 'VISIERA', 'MASCHER', 'FILTRO BLS', 'BLS ', 'CUFFI', 'ALTA VISIBILIT', 'PRONTO SOCCORSO', 'EV-0', 'EV-1', 'TAPPI AURIC', 'U-POWER', 'COFRA', 'IMBRACATURA', 'ESTINTORE', 'CARTELLO']],
@@ -27,7 +27,9 @@
     ['Elettrico e illuminazione', ['CAVO', 'NASTRO ISOLANTE', 'NASTRO TELATO', 'LAMPION', 'FARO', 'PRESA', 'SPINA', 'PROLUNGA', 'AVVOLGICAVO', 'LED', 'INTERRUTTORE', 'MULTIPRESA', 'CAPICORDA']],
     ['Utensili e attrezzature', ['CHIAVE', 'CHIAVI', 'PINZA', 'CACCIAVITE', 'MARTELLO', 'MAZZETTA', 'CRICCHETTO', 'SET ', 'CASSETTA', 'VALIGETTA', 'CARRELLO', 'CAVALLETTO', 'MARTINETTO', 'SOLLEVATORE', 'TRANSPALLET', 'AVVOLGITUBO', 'TUBO', 'PISTOLA', 'TAGLIERINA', 'TAGLIERNI', 'CUTTER', 'FLESSOMETRO', 'METRO', 'LUCCHETTO', 'INGRASSATORE', 'ARRETRATORE', 'ESTRATTORE', 'TAGLIATUBI', 'COLTELLO', 'USAG', 'BGS', 'KOKEN', 'BENMAN', 'FF GROUP', 'LAMPADA', 'SCALA', 'VASCA', 'TANICA', 'TRAPPOLA', 'SGABELLO', 'BANCO', 'MORSA', 'LIVELLA', 'SPELAFILI', 'ASSORTIMENTO', 'DINAMOMETRICA']]
   ];
-  const CAT_DEF = [...RULES.map(r => r[0]), 'Altro'];
+  // v95: le regole cambiano con il settore dell'azienda (settori.js); queste sono quelle di Soluzione Veicolare
+  let RULES = RULES_VEI;
+  let CAT_DEF = [...RULES.map(r => r[0]), 'Altro'];
   function autoCat(desc) {
     const d = ' ' + String(desc || '').toUpperCase().replace(/\s+/g, ' ') + ' ';
     for (const [c, keys] of RULES) if (keys.some(k => d.includes(k))) return c;
@@ -213,6 +215,90 @@
     get sede() { const a = (db.config || {}).azienda; return (a && a.citta) || (me && me.wsCitta) || 'San Cesareo (RM)'; },
     get N() { return this.n.toUpperCase(); }
   };
+  /* ================= v95: settore di attività, moduli e nomi ================= */
+  const SET = window.CDC_SETTORI || { list: [], moduli: [], sempre: [], piani: {}, get: () => null };
+  const SET_DEF = { id: 'veicoli', n: 'Allestimento veicoli e attrezzature', sede: ['Piazzale', 'Piazzali'], acq: 'Attrezzatura', mod: {}, cat: null };
+  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental'];
+  const AREA_MOD = { gls: 'gls', gas: 'gasolio', ly: 'lyreco', am: 'amazon' };
+  // la demo ricorda sul dispositivo il settore scelto; gli altri gestionali lo prendono dal registro «Gestionali»
+  const settoreId = () => DEMO ? (LS.get('cdc_demo_set', '') || 'veicoli') : ((me && me.wsSettore) || (isMain() ? 'veicoli' : 'altro'));
+  const settore = () => SET.get(settoreId()) || SET_DEF;
+  const modAvail = k => { const m = SET.moduli.find(x => x.k === k); return !(m && m.only) || (settoreId() === m.only && (isMain() || DEMO)); };
+  function modOn(k) {
+    if (!MOD_K.includes(k)) return true;
+    if (!modAvail(k)) return false;
+    const c = cfg('moduli');
+    if (c && typeof c === 'object' && k in c) return !!c[k];
+    const d = settore().mod || {};
+    return k in d ? !!d[k] : true;
+  }
+  const areaOn = k => !AREA_MOD[k] || modOn(AREA_MOD[k]);
+  let setKey = '';
+  function applySettore(force) {
+    const s = settore(), key = [s.id, JSON.stringify(cfg('moduli') || null), DEMO, isMain()].join('|');
+    if (!force && key === setKey) return false;
+    setKey = key;
+    RULES = s.cat || RULES_VEI;
+    CAT_DEF = [...new Set(RULES.map(r => r[0])), 'Altro'];
+    AREAS = AREAS_ALL.filter(a => areaOn(a.k));
+    PZ_AREAS = PZ_AREAS_ALL.filter(a => areaOn(a.k));
+    $$('.nav a[data-view]').forEach(a => { if (MOD_K.includes(a.dataset.view)) a.hidden = !modOn(a.dataset.view); });
+    document.body.dataset.settore = s.id;
+    lexSet(s);
+    dockApply();
+    return true;
+  }
+  /* nomi del settore: «piazzale» diventa locale, cantiere, deposito…; «attrezzatura» diventa acquisti.
+     Un osservatore cambia le parole in tutta l'app (e nei PDF) senza toccare il codice di ogni sezione. */
+  let LEX = null, LEX_T = null;
+  const LEX_O = new WeakMap(), LEX_A = new WeakMap(); // testo e attributi originali, per tornare indietro quando cambia il settore
+  function lexRestore() {
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let t;
+    while ((t = w.nextNode())) if (LEX_O.has(t)) { t.nodeValue = LEX_O.get(t); LEX_O.delete(t); }
+    document.querySelectorAll('[placeholder],[title],[aria-label]').forEach(el => { const o = LEX_A.get(el); if (o) { Object.entries(o).forEach(([k, v]) => el.setAttribute(k, v)); LEX_A.delete(el); } });
+  }
+  const FEM_S = { il: 'la', del: 'della', al: 'alla', nel: 'nella', dal: 'dalla', sul: 'sulla', un: 'una', questo: 'questa', quel: 'quella', nessun: 'nessuna', singolo: 'singola' };
+  const FEM_P = { i: 'le', gli: 'le', dei: 'delle', ai: 'alle', nei: 'nelle', dai: 'dalle', sui: 'sulle', questi: 'queste', quei: 'quelle' };
+  const likeCase = (w, like) => like.length > 1 && like === like.toUpperCase() ? w.toUpperCase() : /^\p{Lu}/u.test(like) ? w[0].toUpperCase() + w.slice(1) : w[0].toLowerCase() + w.slice(1);
+  function lexSet(s) {
+    if (LEX) { LEX = null; lexRestore(); }
+    const R = [], [S1, P1, fem] = s.sede || SET_DEF.sede;
+    if (S1 !== 'Piazzale') R.push([/\b((?:il|del|al|nel|dal|sul|un|questo|quel|nessun|singolo|i|gli|dei|ai|nei|dai|sui|questi|quei)\s+)?(piazzal)([ei])\b/gi, (m, art, st, end) => {
+      const word = st + end, pl = /i/i.test(end), n = likeCase(pl ? P1 : S1, word);
+      if (!art) return n;
+      const a = art.trim(), low = a.toLowerCase(), f = fem ? (pl ? FEM_P : FEM_S)[low] : null;
+      return (f ? likeCase(f, a) : a) + art.slice(a.length) + n;
+    }]);
+    if (s.acq && s.acq !== 'Attrezzatura') R.push(
+      [/([Aa])cquisti (?:di )?attrezzatura/g, '$1cquisti'], [/([Dd])ell'attrezzatura/g, (m, d) => (d === 'D' ? 'D' : 'd') + 'egli acquisti'],
+      [/\bad Attrezzatura\b/g, 'agli Acquisti'], [/\bin Attrezzatura\b/g, 'negli Acquisti'], [/\bdi attrezzatura\b/g, 'di acquisti'],
+      [/\bAttrezzatura\b/g, 'Acquisti'], [/\battrezzatura\b/g, 'acquisti'], [/(?<!E )\bATTREZZATURA\b/g, 'ACQUISTI'], [/\bAttrezz\./g, 'Acquisti']);
+    if (s.id !== 'veicoli') R.push([/GLS Attrezzati/g, 'Spedizioni GLS'], [/\bGasolio\b/g, 'Carburante'], [/\bgasolio\b/g, 'carburante'], [/\bGASOLIO\b/g, 'CARBURANTE']);
+    LEX = R.length ? R : null;
+    LEX_T = LEX ? /piazzal|attrezz|gasolio|GLS Attrezzati/i : null;
+    if (LEX) lexNode(document.body);
+  }
+  const lex = str => { if (!LEX || typeof str !== 'string' || !LEX_T.test(str)) return str; let o = str; LEX.forEach(([re, to]) => { o = o.replace(re, to); }); return o; };
+  const lexDeep = v => typeof v === 'string' ? lex(v) : Array.isArray(v) ? v.map(lexDeep) : v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, lexDeep(x)])) : v;
+  const LEX_SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|CODE)$/;
+  function lexNode(root) {
+    if (!LEX || !root) return;
+    if (root.nodeType === 3) { const p = root.parentNode; if (p && LEX_SKIP.test(p.nodeName)) return; lexText(root); return; }
+    if (root.nodeType !== 1 || LEX_SKIP.test(root.nodeName) || root.id === 'splash') return;
+    const at = el => ['placeholder', 'title', 'aria-label'].forEach(k => { const v = el.getAttribute(k); if (v) { const n = lex(v); if (n !== v) { const o = LEX_A.get(el) || {}; if (!(k in o)) o[k] = v; LEX_A.set(el, o); el.setAttribute(k, n); } } });
+    at(root); root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(at);
+    if (!LEX_T.test(root.textContent)) return;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let t;
+    while ((t = w.nextNode())) { const p = t.parentNode; if (p && (LEX_SKIP.test(p.nodeName) || p.isContentEditable)) continue; lexText(t); }
+  }
+  function lexText(t) {
+    const v = t.nodeValue, n = lex(v);
+    if (n !== v) { LEX_O.set(t, v); t.nodeValue = n; }
+    else if (LEX_O.has(t) && lex(LEX_O.get(t)) !== v) LEX_O.delete(t); // il codice ha scritto un testo nuovo senza parole da cambiare
+  }
+  new MutationObserver(ms => { if (!LEX) return; ms.forEach(m => { if (m.type === 'characterData') lexNode(m.target); else m.addedNodes.forEach(lexNode); }); })
+    .observe(document.body, { childList: true, subtree: true, characterData: true });
+
   function applyMe(u) {
     me = { ...(me || {}), ...u }; LS.set('cdc_me', me);
     const b = $('#brand-ws'); if (b) b.textContent = DEMO ? 'Versione demo' : (me.wsNome || '').replace(/\s+S\.?r\.?l\.?$|\s+S\.?p\.?A\.?$/i, '') || 'Gestionale';
@@ -220,12 +306,18 @@
     document.body.classList.toggle('is-demo', DEMO);
     document.body.classList.toggle('is-ro', me.ruolo === 'lettura');
     $$('.nv-admin').forEach(a => { a.hidden = !me.admin; });
+    applySettore();
+    renderDemoBar();
+  }
+  function renderDemoBar() {
     let bar = $('#demo-bar');
-    if (DEMO || me.ruolo === 'lettura') {
+    if (me && (DEMO || me.ruolo === 'lettura')) {
       if (!bar) { bar = document.createElement('div'); bar.id = 'demo-bar'; bar.className = 'demo-bar'; $('#app main .top').after(bar); }
-      bar.innerHTML = DEMO ? `<span><b>Versione demo</b> · dati di prova: puoi provare tutto, ma le modifiche non vengono salvate e si azzerano quando ricarichi la pagina.</span><button type="button" class="btn sm" id="demo-out">Esci dalla demo</button>`
+      const s = settore();
+      bar.innerHTML = DEMO ? `<span><b>Versione demo</b> · <button type="button" class="demo-set" id="demo-set" title="Cambia attività"><svg viewBox="0 0 24 24">${s.ic || ''}</svg>${esc(s.s || s.n)}<em>Cambia</em></button> · dati di prova: le modifiche non vengono salvate.</span><button type="button" class="btn sm" id="demo-out">Esci dalla demo</button>`
         : `<span><b>Sola lettura</b> · puoi consultare i dati ma non modificarli. Per i permessi chiedi all'amministratore.</span>`;
       const o = $('#demo-out'); if (o) o.onclick = () => logout(true);
+      const c = $('#demo-set'); if (c) c.onclick = () => setForm(true);
     } else if (bar) bar.remove();
   }
   function setSession(u, t) {
@@ -246,6 +338,7 @@
     if (!demoOut && !confirm('Uscire da questo dispositivo? Per entrare di nuovo serviranno email e password.')) return;
     if (!DEMO && queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate: uscendo andranno perse. Continuare?`)) return;
     const wasDemo = DEMO; DEMO = false;
+    if (wasDemo) try { localStorage.removeItem('cdc_demo_set'); } catch {}
     try { await api('logout'); } catch {}
     queue = []; LS.set('cdc_queue', []); lockApp(); authPane(wasDemo ? 'reg' : 'login'); toast(wasDemo ? 'Sei uscito dalla demo' : 'Uscito');
   }
@@ -294,13 +387,33 @@
     if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v('email'))) return authMsg('Email non valida');
     if (f.elements.password.value.length < 8) return authMsg('La password deve avere almeno 8 caratteri');
     if (f.elements.password.value !== f.elements.password2.value) return authMsg('Le due password non coincidono');
-    if (!v('codice')) return authMsg('Scrivi il codice del gestionale');
+    const nuova = f.dataset.mode === 'new';
+    if (nuova) {
+      if (v('azienda').length < 2) return authMsg('Scrivi il nome della tua azienda');
+      if (!v('settore')) return authMsg('Scegli il tipo di attività');
+    } else if (!v('codice')) return authMsg('Scrivi il codice del gestionale');
     try {
-      const r = await busyBtn($('#reg-go'), 'Creo l\'account…', () => authCall('register', { nome: v('nome'), azienda: v('azienda'), email: v('email'), password: f.elements.password.value, codice: v('codice').toUpperCase(), device: device() }));
+      const body = { nome: v('nome'), azienda: v('azienda'), email: v('email'), password: f.elements.password.value, device: device() };
+      Object.assign(body, nuova ? { nuova: true, settore: v('settore'), citta: v('citta') } : { codice: v('codice').toUpperCase() });
+      const r = await busyBtn($('#reg-go'), nuova ? 'Invio la richiesta…' : 'Creo l\'account…', () => authCall('register', body));
       if (r.attivo && r.token) { f.reset(); setSession(r.user, r.token); start(); toast(r.user.demo ? 'Benvenuto nella demo' : 'Account creato'); return; }
-      $('#login-email').value = v('email'); f.reset(); authPane('login');
-      authMsg('', 'Richiesta inviata. L\'amministratore deve approvare il tuo account: riceverai una email appena sarà attivo.');
-    } catch (e) { authMsg(netErr(e)); }
+      $('#login-email').value = v('email'); f.reset(); regMode('code'); authPane('login');
+      authMsg('', nuova ? 'Richiesta inviata. Prepariamo il gestionale della tua azienda: riceverai una email appena è pronto.' : 'Richiesta inviata. L\'amministratore deve approvare il tuo account: riceverai una email appena sarà attivo.');
+    } catch (e) { authMsg(/Codice gestionale non valido/.test(e.message) && nuova ? 'Per registrare una nuova azienda aggiorna lo script Google alla versione cdc-4.1' : netErr(e)); }
+  }
+  // v95: registrazione con il codice di un gestionale esistente oppure richiesta di un gestionale nuovo per la propria attività
+  function regMode(m) {
+    const f = $('#reg-form'); if (!f) return;
+    f.dataset.mode = m;
+    $$('[data-regm]', f).forEach(b => { const on = b.dataset.regm === m; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    $('.reg-mode', f).style.setProperty('--i', m === 'new' ? 1 : 0);
+    $('[data-regcode]', f).hidden = m === 'new'; $('[data-regnew]', f).hidden = m !== 'new';
+    f.elements.codice.required = m !== 'new';
+    const az = f.elements.azienda; az.placeholder = m === 'new' ? 'nome della tua azienda' : 'facoltativo'; az.required = m === 'new';
+    const box = $('#reg-set');
+    if (m === 'new' && box) { box.innerHTML = setGrid(f.elements.settore.value, true); if (!box._b) { box._b = 1; setPickBind(box, id => { f.elements.settore.value = id; }); } }
+    $('#reg-go').textContent = m === 'new' ? 'Richiedi il gestionale' : 'Crea account';
+    if (!$('#reg-form').hidden) $('#auth-sub').textContent = m === 'new' ? 'Chiedi un gestionale su misura per la tua attività.' : AUTH_TXT.reg[1];
   }
   async function doForgot(ev) {
     ev.preventDefault(); authMsg();
@@ -325,6 +438,7 @@
       const t = e.target.closest('[data-auth]'); if (t) { authPane(t.dataset.auth); return; }
       const ey = e.target.closest('[data-pweye]'); if (ey) { const i = ey.parentElement.querySelector('input'); const sh = i.type === 'password'; i.type = sh ? 'text' : 'password'; ey.classList.toggle('on', sh); ey.setAttribute('aria-label', sh ? 'Nascondi password' : 'Mostra password'); return; }
       if (e.target.closest('[data-democode]')) { const c = $('#reg-form').elements.codice; c.value = 'DEMO2026'; c.focus(); }
+      const rm = e.target.closest('[data-regm]'); if (rm) { regMode(rm.dataset.regm); return; }
     });
     $('#reg-form').elements.codice.addEventListener('input', e => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase().replace(/\s+/g, ''); try { e.target.setSelectionRange(p, p); } catch {} });
   }
@@ -429,6 +543,8 @@
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
     if (view === 'utenti' && !(me && me.admin)) view = 'home';
+    applySettore();
+    if (MOD_K.includes(view) && !modOn(view)) { view = 'home'; if (location.hash && location.hash !== '#home') history.replaceState(null, '', '#home'); }
     if (view === 'attrezzatura') ccAnim = true;
     if (view === 'home') ovAnim = true;
     if (view === 'gls') { glsAnim = true; if (prevView !== 'gls' && !gKeep) gMonth = ALLM; gKeep = false; }
@@ -474,6 +590,7 @@
     document.body.classList.toggle('iva-on', ivaOn);
   }
   function render() {
+    applySettore();
     ivaUI();
     const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin }[view];
     fn && fn();
@@ -1010,16 +1127,60 @@
       busy(); toast(kind === 'now' ? 'Backup fatto' : bkInfo.auto ? 'Backup automatico attivato' : 'Backup automatico disattivato'); renderBackup();
     } catch (e) { busy(); if (!(e instanceof AuthError)) { toast('Non riuscito: ' + e.message); $('#s-bk').insertAdjacentHTML('beforeend', `<div class="fa-chk ko" style="margin-top:10px"><b>Serve un'autorizzazione</b><span>Apri Apps Script, scegli la funzione «attivaBackup» e premi Esegui: Google chiede il permesso una volta sola.</span></div>`); } }
   }
+  /* ---------- v95: attività (settore) e sezioni accese ---------- */
+  const setGrid = (sel, compact) => `<div class="set-grid${compact ? ' sm' : ''}" role="radiogroup" aria-label="Tipo di attività">${SET.list.map(x => `<button type="button" class="set-c${x.id === sel ? ' on' : ''}" data-setpick="${x.id}" role="radio" aria-checked="${x.id === sel}"><span class="set-ci"><svg viewBox="0 0 24 24">${x.ic}</svg></span><span class="set-ct"><b>${esc(x.s || x.n)}</b>${compact ? '' : `<small>${esc(x.d)}</small>`}</span></button>`).join('')}</div>`;
+  function setPickBind(box, onPick) {
+    box.addEventListener('click', e => { const b = e.target.closest('[data-setpick]'); if (!b || !box.contains(b)) return; $$('[data-setpick]', box).forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); }); onPick(b.dataset.setpick); });
+  }
+  function setForm(demoPick) {
+    let sel = settoreId();
+    if (me && me.ruolo === 'lettura') return toast('Il tuo account è in sola lettura');
+    openSheet(demoPick ? 'Che attività vuoi provare?' : 'Tipo di attività', `<p class="pvx-intro">${demoPick ? 'La demo si adatta all\'attività che scegli: nomi delle sedi, sezioni, categorie di spesa e dati di prova. Puoi cambiarla quando vuoi dalla barra in alto.' : 'Cambiando attività cambiano i nomi delle sedi, le categorie di spesa proposte e le sezioni accese di partenza. I dati già inseriti restano tutti.'}</p>${setGrid(sel)}`, async () => {
+      if (DEMO) {
+        LS.set('cdc_demo_set', sel);
+        try { await loadLib('demo.js'); db = window.CDC_DEMO(sel); } catch {}
+        applySettore(true); prodIdx = null; ovAnim = true; render(); renderDemoBar(); toast(`Demo · ${settore().s || settore().n}`); return true;
+      }
+      if (sel === settoreId()) return true;
+      try {
+        busy('Aggiorno l\'attività…');
+        const u = await api('setSettore', { settore: sel }); busy();
+        applyMe(u);
+        if (cfg('moduli')) write([{ action: 'delete', sheet: 'Config', id: 'moduli' }]);
+        applySettore(true); render(); toast(`Attività: ${settore().n}`); return true;
+      } catch (e) { busy(); if (!(e instanceof AuthError)) toast(/sconosciuta/i.test(e.message) ? 'Aggiorna lo script Google alla versione cdc-4.1 per cambiare attività' : e.message); }
+    }, null, demoPick ? 'Apri la demo' : 'Salva');
+    $('#sheet-form').classList.add('wide');
+    setPickBind($('#sheet-body'), id => { sel = id; });
+  }
+  function renderSetMod() {
+    const el = $('#s-set'); if (!el) return;
+    const s = settore(), ro = me && me.ruolo === 'lettura', P = SET.piani || {};
+    el.innerHTML = `<div class="st-set"><span class="set-ci lg"><svg viewBox="0 0 24 24">${s.ic || ''}</svg></span><div class="st-l"><b>${esc(s.n)}</b><small>${esc(s.d || '')}</small></div>${ro ? '' : '<button type="button" class="btn sm" id="s-set-ch">Cambia</button>'}</div>
+      <div class="st-row"><div class="st-l"><b>Come si adatta il gestionale</b><small>Sedi chiamate «${esc(s.sede[1])}» · sezione «${esc(s.acq)}» · ${CAT_DEF.length - 1} categorie di spesa con riconoscimento automatico delle voci</small></div></div>
+      ${!DEMO && me && me.wsPiano ? `<div class="st-row"><div class="st-l"><b>Piano</b><small>Il piano del tuo gestionale. Per cambiarlo contatta l'amministratore.</small></div><span class="st-pill on">${esc(P[me.wsPiano] || me.wsPiano)}</span></div>` : ''}`;
+    const M = SET.moduli.filter(m => modAvail(m.k)), on = M.filter(m => modOn(m.k)).length;
+    $('#s-mod-n').textContent = `${on} di ${M.length} accese`;
+    $('#s-mod').innerHTML = `<div class="st-row"><div class="st-l"><b>Sempre attive</b><small>${['Dashboard', s.acq, 'Fatture fornitori', 'Preventivi e catalogo di tutti i fornitori'].map(esc).join(' · ')}</small></div><span class="st-pill on">Incluse</span></div>`
+      + M.map(m => { const o = modOn(m.k); return `<div class="st-row"><div class="st-l"><b>${esc(m.t(s))}</b><small>${esc(m.d(s))}</small></div><button type="button" class="tg${o ? ' on' : ''}" data-mod="${m.k}" role="switch" aria-checked="${o}" aria-label="${esc(m.t(s))}"${ro ? ' disabled' : ''}><i></i></button></div>`; }).join('');
+  }
+  function modToggle(k) {
+    if (me && me.ruolo === 'lettura') return toast('Il tuo account è in sola lettura');
+    const c = { ...(cfg('moduli') || {}) }; c[k] = !modOn(k);
+    setConfig('moduli', c);
+    const m = SET.moduli.find(x => x.k === k); toast(`${m ? m.t(settore()) : k} ${c[k] ? 'accesa' : 'spenta'}`);
+  }
   function renderSettings() {
     themeUI();
     sub('');
     renderMe();
+    renderSetMod();
     renderBackup();
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
     const stat = (l, v, s2) => `<div class="st-stat"><span>${l}</span><b>${v}</b>${s2 ? `<small>${s2}</small>` : ''}</div>`;
     $('#s-conn').innerHTML = stat('Dati salvati in', DEMO ? 'Nessuno (demo)' : isLocal() ? 'Questo dispositivo' : 'Foglio Google') + (!isLocal() ? stat('Versione script', esc(db.v || '—')) : '')
       + stat('Acquisti attrezzatura', fmtNum(db.movimenti.length, 0), nd ? `${fmtNum(nd, 0)} senza data` : 'tutti con data')
-      + stat('Ordini e fatture', fmtNum(amOrd().length + new Set(lyRows().map(r => r.fattura)).size + faRows().length, 0), 'Amazon, Lyreco, fornitori');
+      + stat('Ordini e fatture', fmtNum(amOrd().length + new Set(lyRows().map(r => r.fattura)).size + faRows().length, 0), [areaOn('am') && 'Amazon', areaOn('ly') && 'Lyreco', 'fornitori'].filter(Boolean).join(', '));
     $('#s-pull').closest('.st-row').hidden = isLocal();
     { const K = db.aik || { gemini: !!db.ai }, on = [K.gemini && 'Gemini', K.openai && 'ChatGPT'].filter(Boolean);
       $('#s-ai-st').textContent = isLocal() ? 'Disponibile solo con il Foglio Google collegato.' : on.length ? `Chiavi attive: ${on.join(' e ')}${on.length > 1 ? ` · si usa prima ${db.aiFirst === 'openai' ? 'ChatGPT' : 'Gemini'}, l'altra se dà errore` : ''}.` : 'Nessuna chiave: le funzioni IA sono spente.';
@@ -2544,17 +2705,30 @@
      DASHBOARD GENERALE — tutte le aree di spesa
      ========================================================= */
   let ovP = '', ovAnim = true;
-  const AREAS = [
+  const AREAS_ALL = [
     { k: 'att', t: 'Attrezzatura', go: 'attrezzatura', ic: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>' },
     { k: 'gls', t: 'Spedizioni GLS', go: 'gls', ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' },
     { k: 'gas', t: 'Gasolio e noleggi', go: 'gasolio', ic: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/>' },
     { k: 'ly', t: 'Lyreco', go: 'lyreco', ic: '<path d="M9 4h6v3H9z"/><path d="M15 5h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3M9 12h6M9 16h4"/>' },
     { k: 'am', t: 'Amazon', go: 'amazon', ic: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10M7.5 5l9 4"/>' }
   ];
+  let AREAS = AREAS_ALL; // v95: solo le aree dei moduli accesi
   const ovMonthOf = { att: r => validD(r.data) ? String(r.data).slice(0, 7) : '', gls: r => r.mese || '', gas: r => String(r.data || '').slice(0, 7), ly: r => String(r.data || '').slice(0, 7), am: o => String(o.data || '').slice(0, 7) };
   const ovRows = () => ({ att: db.movimenti || [], gls: glsRows(), gas: gasRows(), ly: lyRows(), am: amOrd() });
   const ovVal = { att: arr => sumT(arr), gls: arr => gTot(arr) * gMul(), gas: (arr, m) => (gCost(arr) + gasRentTot() * rentMonths(m).length) * gMul(), ly: arr => lySum(arr), am: arr => amSum(arr) };
   const ovShort = { att: 'Attrezzatura', gls: 'GLS', gas: 'Gasolio', ly: 'Lyreco', am: 'Amazon', fat: 'Fatture' };
+  // v95: nei settori senza Torental la scheda accanto alle fatture riassume i preventivi
+  function ovPvMini() {
+    let L = []; try { L = pvList(); } catch {}
+    const tot = p => { try { return pvTotals(p).imp; } catch { return 0; } };
+    const open = L.filter(p => p.stato === 'bozza' || p.stato === 'inviato' || !p.stato), ok = L.filter(p => p.stato === 'accettato');
+    return `<a class="card db-mini a-tr" href="#preventivi">
+            <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24"><path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span class="db-at">Preventivi</span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+            ${L.length ? `<div class="db-mv"><b>${open.length} aperti</b><span>${eur0(open.reduce((s, p) => s + tot(p), 0))} in attesa · ${ok.length} accettati</span></div>
+            <div class="db-ml">${L.slice(0, 3).map(p => `<div class="db-mli"><span><b>${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${esc(p.num || '')} · ${esc((PV_ST[p.stato] || PV_ST.bozza)[0])}</small></span><strong>${eur(tot(p))}</strong></div>`).join('')}</div>
+            <div class="db-an">preventivi ai clienti con i cataloghi dei fornitori · non sono spese</div>` : '<div class="db-an">Crea il primo preventivo con i cataloghi di tutti i fornitori</div>'}
+          </a>`;
+  }
   function renderOverview() {
     const D = ovRows();
     const months = [...new Set(AREAS.flatMap(a => D[a.k].map(ovMonthOf[a.k])).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
@@ -2565,7 +2739,7 @@
     sub(`${ivaLbl()} · tutte le aree di spesa`);
     const pick = (k, m) => m ? D[k].filter(r => ovMonthOf[k](r) === m) : D[k];
     const P = {}, V = {};
-    AREAS.forEach(a => { P[a.k] = pick(a.k, ovP); V[a.k] = ovVal[a.k](P[a.k], ovP); });
+    AREAS_ALL.forEach(a => { const on = areaOn(a.k); P[a.k] = on ? pick(a.k, ovP) : []; V[a.k] = on ? ovVal[a.k](P[a.k], ovP) : 0; });
     const T = AREAS.reduce((s, a) => s + V[a.k], 0);
     const prevK = ovP ? months[months.indexOf(ovP) - 1] : null;
     const PV = prevK ? AREAS.reduce((o, a) => (o[a.k] = ovVal[a.k](pick(a.k, prevK), prevK), o), {}) : null;
@@ -2583,9 +2757,9 @@
     const dChip = (a, b) => { const p = dPct(a, b); if (p == null || !isFinite(p)) return ''; return `<span class="ov-d ${p > 0 ? 'up' : 'down'}">${p > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}%</span>`; };
     const mName = k => MESI[Number(k.slice(5)) - 1].replace(/^./, c => c.toUpperCase());
     P.fat = ovP ? faRows().filter(r => String(r.data).slice(0, 7) === ovP) : faRows();
-    const CK = allChecks(P, ovP), ckW = CK.filter(x => x.t === 'warn').length;
+    const CK = allChecks(P, ovP).filter(x => areaOn(x.a)), ckW = CK.filter(x => x.t === 'warn').length;
     const lyDocsN = new Set(P.ly.map(r => r.fattura)).size, amA = amArts(P.am);
-    const nDocs = P.att.length + P.gls.length + P.gas.length + lyDocsN + P.am.length;
+    const nDocs = P.att.length + (areaOn('gls') ? P.gls.length : 0) + (areaOn('gas') ? P.gas.length : 0) + (areaOn('ly') ? lyDocsN : 0) + (areaOn('am') ? P.am.length : 0);
     const active = AREAS.filter(a => V[a.k] > 0 || P[a.k].length);
     // sparkline
     const spark = (k, i) => {
@@ -2611,7 +2785,9 @@
       gls: () => ''
     };
     // forniture per piazzale (Lyreco + Amazon)
-    const pz = lyCdcList().map(c => ({ c, ly: lySum(P.ly.filter(r => (r.cdc || LY_NONE) === c.cod)), am: amSum(P.am.filter(o => (o.cdc || LY_NONE) === c.cod)) })).map(x => ({ ...x, t: x.ly + x.am })).filter(x => x.t > 0).sort((a, b) => (a.c.cod === LY_NONE) - (b.c.cod === LY_NONE) || b.t - a.t);
+    const pzGen = !areaOn('ly') && !areaOn('am'); // v95: senza Lyreco e Amazon la scheda mostra gli acquisti per centro
+    const pz = pzGen ? [...groupBy(P.att, r => String(r.centro || '').trim() || '—')].map(([k, v]) => ({ c: { cod: k === '—' ? LY_NONE : k, n: k === '—' ? 'Senza centro' : k, citta: '' }, ly: 0, am: 0, at: sumT(v), n: v.length })).map(x => ({ ...x, t: x.at })).filter(x => x.t > 0).sort((a, b) => (a.c.cod === LY_NONE) - (b.c.cod === LY_NONE) || b.t - a.t)
+      : lyCdcList().map(c => ({ c, ly: areaOn('ly') ? lySum(P.ly.filter(r => (r.cdc || LY_NONE) === c.cod)) : 0, am: areaOn('am') ? amSum(P.am.filter(o => (o.cdc || LY_NONE) === c.cod)) : 0 })).map(x => ({ ...x, t: x.ly + x.am })).filter(x => x.t > 0).sort((a, b) => (a.c.cod === LY_NONE) - (b.c.cod === LY_NONE) || b.t - a.t);
     const pzT = pz.reduce((s, x) => s + x.t, 0), pzM = Math.max(1, ...pz.map(x => x.t));
     // fatture e Torental
     const F = P.fat, open = F.filter(r => !faPaid(r)), late = F.filter(faLate);
@@ -2633,12 +2809,12 @@
         <div class="gh-kpis db-kpis">
           <div class="gh-k"><span>Media mensile</span><b data-ovk="0">0 €</b><small>${byM.length} ${byM.length === 1 ? 'mese' : 'mesi'} con dati</small></div>
           <div class="gh-k"><span>Mese più alto</span><b>${top ? esc(mName(top.m)) : '—'}</b><small>${top ? esc(eur0(top.t)) : ''}</small></div>
-          <div class="gh-k"><span>Documenti registrati</span><b data-ovk="1">0</b><small>acquisti, spedizioni, pieni, fatture e ordini</small></div>
+          <div class="gh-k"><span>Documenti registrati</span><b data-ovk="1">0</b><small>${['acquisti', areaOn('gls') && 'spedizioni', areaOn('gas') && 'pieni', (areaOn('ly') || areaOn('am')) && 'fatture e ordini'].filter(Boolean).join(', ')}</small></div>
           <div class="gh-k"><span>Da controllare</span><b data-ovk="2">0</b><small>${CK.length ? `${ckW} importanti` : 'tutto in ordine'}</small></div>
         </div>
       </div>
 
-      <div class="db-areas">${AREAS.map((a, i) => { const st = stats[a.k](), nt = note[a.k]();
+      <div class="db-areas"${AREAS.length < 2 ? ' hidden' : ''}>${AREAS.map((a, i) => { const st = stats[a.k](), nt = note[a.k]();
         return `<a class="card db-area a-${a.k}" href="#${a.go}" style="--d:${120 + i * 70}ms">
           <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24">${a.ic}</svg></span><span class="db-at"><span class="lb-d">${a.t}</span><span class="lb-m">${ovShort[a.k]}</span></span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
           <div class="db-av"><b data-ova="${i}">0 €</b></div>
@@ -2663,14 +2839,14 @@
       </div>
 
       <div class="db-row">
-        <div class="card db-pz"><div class="card-h"><h3>Forniture per piazzale</h3><span class="muted small">Lyreco + Amazon · ${ivaLbl()}</span></div>
+        <div class="card db-pz"><div class="card-h"><h3>${pzGen ? 'Acquisti per centro' : 'Forniture per piazzale'}</h3><span class="muted small">${pzGen ? 'Attrezzatura' : [areaOn('ly') && 'Lyreco', areaOn('am') && 'Amazon'].filter(Boolean).join(' + ')} · ${ivaLbl()}</span></div>
           ${pz.length ? `<div class="db-pzl">${pz.map((x, i) => `<div class="db-pr${x.c.cod === LY_NONE ? ' na' : ''}" style="--d:${200 + i * 45}ms">
               <span class="db-pn">${x.c.cod === LY_NONE ? '?' : i + 1}</span>
               <span class="db-pm"><span class="db-pt"><b>${esc(x.c.n)}</b><strong>${eur0(x.t)}</strong></span>
-                <span class="db-pb" style="width:${(x.t / pzM * 100).toFixed(1)}%">${x.ly > 0 ? `<i class="a-ly" style="flex:${x.ly}" title="Lyreco ${esc(eur(x.ly))}"></i>` : ''}${x.am > 0 ? `<i class="a-am" style="flex:${x.am}" title="Amazon ${esc(eur(x.am))}"></i>` : ''}</span>
-                <small>${esc(x.c.cod)}${x.c.citta ? ' · ' + esc(x.c.citta) : ''} · ${fmtNum(pct(x.t, pzT), 1)}%${x.ly > 0 ? ` · Lyreco ${eur0(x.ly)}` : ''}${x.am > 0 ? ` · Amazon ${eur0(x.am)}` : ''}</small></span>
+                <span class="db-pb" style="width:${(x.t / pzM * 100).toFixed(1)}%">${x.ly > 0 ? `<i class="a-ly" style="flex:${x.ly}" title="Lyreco ${esc(eur(x.ly))}"></i>` : ''}${x.am > 0 ? `<i class="a-am" style="flex:${x.am}" title="Amazon ${esc(eur(x.am))}"></i>` : ''}${x.at > 0 ? `<i class="a-att" style="flex:${x.at}"></i>` : ''}</span>
+                <small>${pzGen ? `${x.n} righe` : esc(x.c.cod)}${x.c.citta ? ' · ' + esc(x.c.citta) : ''} · ${fmtNum(pct(x.t, pzT), 1)}%${x.ly > 0 ? ` · Lyreco ${eur0(x.ly)}` : ''}${x.am > 0 ? ` · Amazon ${eur0(x.am)}` : ''}</small></span>
             </div>`).join('')}</div>
-            <div class="ov-leg db-leg"><span class="a-ly"><i></i>Lyreco</span><span class="a-am"><i></i>Amazon</span><span class="muted">${pz.filter(x => x.c.cod !== LY_NONE).length} piazzali · ${eur0(pzT)}</span></div>` : '<div class="empty">Nessuna fornitura Lyreco o Amazon nel periodo</div>'}
+            <div class="ov-leg db-leg">${pzGen ? '<span class="a-att"><i></i>Attrezzatura</span>' : (areaOn('ly') ? '<span class="a-ly"><i></i>Lyreco</span>' : '') + (areaOn('am') ? '<span class="a-am"><i></i>Amazon</span>' : '')}<span class="muted">${pz.filter(x => x.c.cod !== LY_NONE).length} ${pzGen ? 'centri' : 'piazzali'} · ${eur0(pzT)}</span></div>` : `<div class="empty">${pzGen ? 'Nessun acquisto nel periodo' : 'Nessuna fornitura nel periodo'}</div>`}
         </div>
         <div class="db-side">
           <a class="card db-mini a-fat" href="#fatture">
@@ -2680,18 +2856,18 @@
             ${open.length ? `<div class="db-ml">${open.slice().sort((a, b) => String(a.scadenza || '9').localeCompare(String(b.scadenza || '9'))).slice(0, 3).map(r => `<div class="db-mli${faLate(r) ? ' late' : ''}"><span><b>${esc(String(r.fornitore || '—').split(/\s+/).slice(0, 2).join(' '))}</b><small>n. ${esc(r.numero || '—')}${validD(r.scadenza) ? ` · ${faLate(r) ? 'scaduta il' : 'scade il'} ${esc(shortDate(r.scadenza))}` : ''}</small></span><strong>${eur(num(r.totale))}</strong></div>`).join('')}</div>` : ''}
             <div class="db-an">non sommate alla spesa: sono già negli acquisti</div>
           </a>
-          <a class="card db-mini a-tr" href="#torental">
+          ${modOn('torental') ? `<a class="card db-mini a-tr" href="#torental">
             <div class="db-ah"><span class="ov-ic"><svg viewBox="0 0 24 24"><path d="M3 7h12v9H3zM15 10h3.5L21 13v3h-6"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17.5" cy="17.5" r="1.7"/><path d="M6 10.5h6"/></svg></span><span class="db-at">Listino Torental</span><svg class="db-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
             ${TK ? `<div class="db-mv"><b>${TK.n} kit</b><span>da ${eur0(TK.min)} a ${eur0(TK.max)}</span></div>
             <div class="db-ml">${TK.kits.slice(0, 3).map(k => `<div class="db-mli"><span><b>${esc(k.n)}</b><small>${k.cod ? 'cod. ' + esc(k.cod) : 'senza codice'}</small></span><strong>${eur(k.p)}</strong></div>`).join('')}</div>
             <div class="db-an">listino di vendita, non è una spesa · ${TK.s} articoli singoli · transferta ${eur0(TK.tr)}/giorno</div>` : '<div class="db-an">Importa il listino dalla sezione Torental</div>'}
-          </a>
+          </a>` : ovPvMini()}
         </div>
       </div>
 
       <div class="db-row db-row2">
         <div class="card ov-ck" id="ov-ck"><div class="card-h"><h3>Cose da verificare</h3><span class="muted small">${CK.length ? `${CK.length} punti · ${ckW} importanti` : 'tutto coincide'}</span></div>
-        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'ly', 'am', 'fat'].map(k => [k, ovShort[k], CK.filter(x => x.a === k).length])].filter(([k, , n]) => !k || n).map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}">${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
+        <div class="ov-ckf">${[['', 'Tutte', CK.length], ...['att', 'gls', 'gas', 'ly', 'am', 'fat'].filter(areaOn).map(k => [k, ovShort[k], CK.filter(x => x.a === k).length])].filter(([k, , n]) => !k || n).map(([k, l, n]) => `<button type="button" class="ov-cf${k === '' ? ' on' : ''}" data-ckf="${k}">${k ? `<i class="a-${k}"></i>` : ''}${l}<b>${n}</b></button>`).join('')}</div>
         ${CK.length ? `<div class="ov-cl">${CK.map((x, i) => `<button type="button" class="ov-ci ${x.t}" data-ovgo="${x.go}" data-cka="${x.a}" style="--d:${150 + Math.min(i, 12) * 45}ms"${i >= 4 ? ' data-more="1"' : ''}><span class="ov-cl-l"></span><span class="ov-cm"><span class="ov-ct"><em class="ov-tag t-${x.a}">${ovShort[x.a]}</em><b>${x.h}</b></span><small>${x.d}</small></span><b class="ov-cv">${x.v}</b><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>${CK.length > 4 ? `<button type="button" class="db-more" id="ov-ckmore">Mostra tutti i ${CK.length} punti</button>` : ''}` : '<div class="empty">Tutto coincide: nessuna anomalia trovata</div>'}</div>
         <div class="card db-feed"><div class="card-h"><h3>Ultimi movimenti</h3><span class="muted small">tutte le aree</span></div><div class="ov-feed" id="ov-feed"></div></div>
       </div>
@@ -2715,7 +2891,7 @@
       ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' })),
       ...lyFeed,
       ...P.am.map(o => ({ a: 'am', d: o.data, t: String(o.articoli || 'Ordine Amazon').split(/\s*\|\s*/)[0], s: lyName(o.cdc || LY_NONE), v: amV(o), go: 'amazon' }))
-    ].sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
+    ].filter(x => areaOn(x.a)).sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
     $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr a-${x.a}" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
 
     renderOvAI(() => ovSummary(P, V, byM, CK));
@@ -2726,7 +2902,12 @@
     [...groupBy(P.ly, r => r.categoria || 'Altro')].forEach(([k, v]) => T4.push({ k, v: lySum(v), n: v.length, l: 'Lyreco' }));
     const T4s = T4.sort((a, b) => b.v - a.v).slice(0, 5);
     const box = (title, link, list, fmt, unit, nm, cls) => { const m = Math.max(...list.map(x => x.v), 1); return `<div class="card ${cls || ''}"><div class="card-h"><h3>${title}</h3><a class="link" href="#${link}">Apri</a></div>${list.length ? `<div class="ov-top">${list.map((x, i) => `<div class="ov-tr" style="--d:${200 + i * 60}ms"><span class="ov-tn">${i + 1}</span><span class="ov-tm"><b>${esc(nm ? nm(x.k) : x.k)}</b><small>${x.l ? esc(x.l) + ' · ' : ''}${x.n} ${unit}</small><span class="gd-b"><i style="width:${(x.v / m * 100).toFixed(1)}%"></i></span></span><b>${fmt(x.v)}</b></div>`).join('')}</div>` : '<div class="empty">Nessun dato</div>'}</div>`; };
-    $('#ov-tops').innerHTML = box('Centri · attrezzatura', 'attrezzatura', T1, eur0, 'righe', null, 'a-att') + box('Destinazioni GLS', 'gls', T2, eur0, 'sped.', null, 'a-gls') + box(noPrice ? 'Mezzi · litri' : 'Mezzi · gasolio', 'gasolio', T3, noPrice ? v => fmtNum(v, 0) + ' L' : eur0, 'pieni', plateFmt, 'a-gas') + box('Categorie · forniture', T4s[0] && T4s[0].l === 'Lyreco' ? 'lyreco' : 'amazon', T4s, eur0, 'righe', null, 'a-am');
+    // v95: le classifiche seguono i moduli accesi; senza GLS/gasolio/forniture compaiono categorie e fornitori degli acquisti
+    const bGls = areaOn('gls') && box('Destinazioni GLS', 'gls', T2, eur0, 'sped.', null, 'a-gls'), bGas = areaOn('gas') && box(noPrice ? 'Mezzi · litri' : 'Mezzi · gasolio', 'gasolio', T3, noPrice ? v => fmtNum(v, 0) + ' L' : eur0, 'pieni', plateFmt, 'a-gas');
+    const bFor = (areaOn('ly') || areaOn('am')) && box('Categorie · forniture', T4s[0] && T4s[0].l === 'Lyreco' ? 'lyreco' : 'amazon', T4s, eur0, 'righe', null, 'a-am');
+    const bCat = box('Categorie di spesa', 'articoli', top5(P.att, r => r.categoria || 'Altro', sumT), eur0, 'righe', null, 'a-att'), bFr = box('Fornitori principali', 'movimenti', top5(P.att, r => String(r.fornitore || '').trim() || '—', sumT), eur0, 'righe', null, 'a-att');
+    const TB = [box('Centri · attrezzatura', 'attrezzatura', T1, eur0, 'righe', null, 'a-att'), bGls, bGas, bFor, bCat, bFr].filter(Boolean).slice(0, 4);
+    $('#ov-tops').classList.toggle('n3', TB.length === 3); $('#ov-tops').innerHTML = TB.join('');
   }
 
   /* =========================================================
@@ -2734,10 +2915,11 @@
      ========================================================= */
   let pzP = '', pzSel = '', pzAnim = true;
   const PZ_NC = 'NC';
-  const PZ_AREAS = [
+  const PZ_AREAS_ALL = [
     { k: 'att', t: 'Attrezzatura', go: 'attrezzatura' }, { k: 'gls', t: 'Spedizioni GLS', go: 'gls' }, { k: 'gas', t: 'Gasolio e noleggi', go: 'gasolio' },
     { k: 'ly', t: 'Lyreco', go: 'lyreco' }, { k: 'am', t: 'Amazon', go: 'amazon' }
   ];
+  let PZ_AREAS = PZ_AREAS_ALL;
   const PZ_LINKED = { att: 'Attrezzatura', gls: 'Spedizioni GLS', gas: 'Gasolio' };
   const pzLinks = () => { const c = cfg('cdcLink'); return c && typeof c === 'object' ? c : {}; };
   // propone il centro di costo per un nome usato in attrezzatura, GLS o gasolio
@@ -2769,7 +2951,7 @@
     const amA = amArts(amOrd()), byO = groupBy(amA, a => String(a.ordine));
     amOrd().forEach(o => out.push({ a: 'am', cod: o.cdc || LY_NONE, name: o.cdc || LY_NONE, m: String(o.data || '').slice(0, 7), d: o.data, v: amV(o), t: String(o.articoli || '').split(/\s*\|\s*/)[0], s: `Ordine ${o.id}`, doc: o.id, cats: (byO.get(String(o.id)) || []).map(a => [a.cat, a.val]) }));
     out.forEach(x => { if (x.cod === LY_NONE) x.cod = PZ_NC; });
-    return out;
+    return out.filter(x => areaOn(x.a));
   }
   // nomi usati nelle sezioni senza codice (attrezzatura, GLS, gasolio) con il collegamento attuale
   function pzNames() {
@@ -2778,7 +2960,7 @@
     (db.movimenti || []).forEach(r => { const nm = String(r.centro || '—').trim() || '—'; add('att', nm, nm, tot(r)); });
     glsRows().forEach(r => { const nm = `${glsKey(r)}${r.cdcNome ? ' ' + r.cdcNome : ''}`.trim(); add('gls', nm, glsLbl(r), num(r.totale) * gMul()); });
     gasRows().forEach(r => { const nm = String(r.centro || '—').trim() || '—'; add('gas', nm, nm, num(r.litri) * gPrezzo(r) * gMul()); });
-    return out.sort((a, b) => a.a.localeCompare(b.a) || b.v - a.v);
+    return out.filter(x => areaOn(x.a)).sort((a, b) => a.a.localeCompare(b.a) || b.v - a.v);
   }
   function pzLinkForm() {
     const X = pzNames(), C = lyCdcList().filter(c => c.cod !== LY_NONE);
@@ -5684,7 +5866,12 @@
   const b64 = buf => { const u8 = new Uint8Array(buf); let s = ''; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
   let pdfFonts = null;
   const loadFonts = () => pdfFonts || (pdfFonts = Promise.all(['regular', 'semibold', 'bold'].map(w => fetch(`font-inter-${w}.ttf`).then(r => { if (!r.ok) throw new Error('font'); return r.arrayBuffer(); }).then(b => [w, b64(b)]))).catch(() => { pdfFonts = null; return null; }));
-  async function loadPdf() { if (!(window.jspdf && window.jspdf.jsPDF)) await loadLib('lib-jspdf.min.js'); if (!window.jspdf.jsPDF.API.autoTable) await loadLib('lib-jspdf-autotable.min.js'); return window.jspdf.jsPDF; }
+  async function loadPdf() { if (!(window.jspdf && window.jspdf.jsPDF)) await loadLib('lib-jspdf.min.js'); if (!window.jspdf.jsPDF.API.autoTable) await loadLib('lib-jspdf-autotable.min.js');
+    // v95: nei PDF le parole del settore (piazzale → locale, attrezzatura → acquisti…) cambiano come nell'app
+    const J = window.jspdf.jsPDF;
+    if (!LEX) return J;
+    if (!loadPdf.LJ) loadPdf.LJ = class extends J { constructor(...a) { super(...a); ['text', 'getTextWidth', 'splitTextToSize', 'autoTable'].forEach(fn => { const o = this[fn]; if (typeof o === 'function') this[fn] = function (t, ...r) { return o.call(this, LEX ? lexDeep(t) : t, ...r); }; }); } };
+    return loadPdf.LJ; }
   const logoPng = () => new Promise(res => { const img = new Image(); img.onload = () => { try { const c = document.createElement('canvas'); c.width = c.height = 256; c.getContext('2d').drawImage(img, 0, 0, 256, 256); res(c.toDataURL('image/png')); } catch { res(null); } }; img.onerror = () => res(null); img.src = 'logo.svg'; });
   function trPdfAsk() {
     openSheet('Esporta il listino in PDF', `<p class="muted small" style="margin:0 0 14px">Scegli che versione ti serve. Tutti i prezzi sono IVA esclusa.</p>
@@ -6296,7 +6483,7 @@
   const lyDocs = () => db.lyfatture || [];
   const lyOk = () => isLocal() || !db.v || db.v >= 'cdc-1.6';
   let lyCdcSrc, lyCdcC = null;
-  const lyCdcList = () => { const c = cfg('lyCdc'); if (c !== lyCdcSrc || !lyCdcC) { lyCdcSrc = c; lyCdcC = lyCdcMerge(Array.isArray(c) && c.length ? c : []); } return lyCdcC; };
+  const lyCdcList = () => { const c = cfg('lyCdc'), mk = isMain(); if (c !== lyCdcSrc || !lyCdcC || mk !== lyCdcList.m) { lyCdcSrc = c; lyCdcList.m = mk; lyCdcC = lyCdcMerge(Array.isArray(c) && c.length ? c : []); } return lyCdcC; };
   const lyCdc = cod => lyCdcList().find(x => x.cod === cod) || { cod, n: cod || '—', tipo: '' };
   const lyName = cod => lyCdc(cod || LY_NONE).n;
   const lyMulR = r => ivaOn ? 1 + num(r.iva) : 1;
@@ -7395,14 +7582,14 @@
       const q = nh(adQ), L = U.filter(u => (adF === 'tutti' || u.stato === adF) && (!q || nh([u.nome, u.email, u.azienda, u.ws, wsName(u.ws)].join(' ')).includes(q)))
         .sort((a, b) => (a.stato === 'attesa' ? 0 : 1) - (b.stato === 'attesa' ? 0 : 1) || (a.ruolo === 'admin' ? -1 : b.ruolo === 'admin' ? 1 : 0) || String(b.creato).localeCompare(String(a.creato)));
       h += L.length ? `<div class="ad-list">${L.map(u => {
-        const adm = u.ruolo === 'admin', E = esc(u.email);
+        const adm = u.ruolo === 'admin', E = esc(u.email), rq = adReq(u);
         return `<article class="ad-u st-${esc(u.stato)}" data-email="${E}">
           <span class="st-av">${esc(adIni(u))}</span>
-          <div class="ad-who"><b>${esc(u.nome || '—')}${u.email === me.email ? ' <em>(tu)</em>' : ''}</b><span>${E}</span><small>${esc(u.azienda || '')}${u.telefono ? ` · ${esc(u.telefono)}` : ''}</small></div>
-          <div class="ad-meta"><span class="ad-pill s-${esc(u.stato)}">${AD_S[u.stato] || esc(u.stato)}</span><span class="ad-pill r-${esc(u.ruolo)}">${AD_R[u.ruolo] || esc(u.ruolo)}</span><span class="ad-ws" title="Gestionale">${esc(wsName(u.ws))} <code>${esc(u.ws)}</code></span></div>
+          <div class="ad-who"><b>${esc(u.nome || '—')}${u.email === me.email ? ' <em>(tu)</em>' : ''}</b><span>${E}</span><small>${esc(u.azienda || '')}${u.telefono ? ` · ${esc(u.telefono)}` : ''}</small>${rq ? `<span class="ad-req"><svg viewBox="0 0 24 24">${SET.get(rq.settore).ic}</svg>Nuova azienda · ${esc(SET.get(rq.settore).s || SET.get(rq.settore).n)}${rq.citta ? ` · ${esc(rq.citta)}` : ''}</span>` : ''}</div>
+          <div class="ad-meta"><span class="ad-pill s-${esc(u.stato)}">${AD_S[u.stato] || esc(u.stato)}</span><span class="ad-pill r-${esc(u.ruolo)}">${AD_R[u.ruolo] || esc(u.ruolo)}</span>${u.ws ? `<span class="ad-ws" title="Gestionale">${esc(wsName(u.ws))} <code>${esc(u.ws)}</code></span>` : `<span class="ad-ws">${rq ? 'Gestionale da creare' : 'Nessun gestionale'}</span>`}</div>
           <div class="ad-when"><span>Registrato ${adDate(u.creato)}</span><span>Ultimo accesso ${adAgo(u.ultimo)}${u.accessi ? ` · ${u.accessi} accessi` : ''}</span>${u.sessioni ? `<span class="ad-live">● ${u.sessioni} ${u.sessioni > 1 ? 'dispositivi collegati' : 'dispositivo collegato'}</span>` : ''}</div>
           <div class="ad-act">${adm ? '<span class="ad-note">Amministratore principale</span>' : `
-            ${u.stato === 'attesa' ? `<button type="button" class="btn primary sm" data-ad="ok">Approva</button><button type="button" class="btn sm danger" data-ad="no">Rifiuta</button>` : u.stato === 'bloccato' ? `<button type="button" class="btn sm" data-ad="ok">Sblocca</button>` : `<button type="button" class="btn sm" data-ad="block">Blocca</button>`}
+            ${u.stato === 'attesa' ? `<button type="button" class="btn primary sm" data-ad="ok">${rq && !u.ws ? 'Approva e crea il gestionale' : 'Approva'}</button><button type="button" class="btn sm danger" data-ad="no">Rifiuta</button>` : u.stato === 'bloccato' ? `<button type="button" class="btn sm" data-ad="ok">Sblocca</button>` : `<button type="button" class="btn sm" data-ad="block">Blocca</button>`}
             <button type="button" class="btn sm ghost" data-ad="edit">Modifica</button>
             <button type="button" class="btn sm ghost" data-ad="more" aria-label="Altre azioni">⋯</button>`}</div>
         </article>`; }).join('')}</div>` : `<div class="empty"><b>Nessun utente</b><span>${adQ || adF !== 'tutti' ? 'Nessun risultato con questi filtri.' : 'Quando qualcuno si registra con un codice lo trovi qui.'}</span></div>`;
@@ -7412,6 +7599,7 @@
         return `<article class="ad-w t-${esc(w.tipo)} ${w.stato !== 'attivo' ? 'off' : ''}" data-ws="${C}">
           <header><span class="ad-pill t-${esc(w.tipo)}">${T}</span>${w.stato !== 'attivo' ? '<span class="ad-pill s-bloccato">Sospeso</span>' : ''}${me.ws === w.codice ? '<span class="ad-pill s-attivo">Sei qui</span>' : ''}</header>
           <h3>${esc(w.nome)}</h3><p>${esc(w.citta || '')}${w.note ? ` · ${esc(w.note)}` : ''}</p>
+          <div class="ad-wset"><span class="ad-sp"><svg viewBox="0 0 24 24">${SET.get(adWsSet(w)).ic}</svg>${esc(SET.get(adWsSet(w)).s || SET.get(adWsSet(w)).n)}</span>${w.tipo === 'cliente' ? `<span class="ad-pill p-${esc(w.piano || 'prova')}">${esc(SET.piani[w.piano || 'prova'] || w.piano)}</span>` : ''}</div>
           <div class="ad-code"><span>Codice di registrazione</span><code>${C}</code><button type="button" class="btn sm ghost" data-ad="copy">Copia</button></div>
           <div class="ad-wn"><span><b>${w.utenti}</b> ${w.utenti === 1 ? 'utente' : 'utenti'}</span><span>creato ${adDate(w.creato)}</span><span>${w.tipo === 'demo' ? 'dati di prova, nulla viene salvato' : w.url ? 'Foglio Google proprio' : ''}</span></div>
           <footer>${w.tipo !== 'demo' && me.ws !== w.codice ? `<button type="button" class="btn primary sm" data-ad="enter">Entra</button>` : ''}${w.url ? `<a class="btn sm ghost" href="${esc(w.url)}" target="_blank" rel="noopener">Apri il Foglio</a>` : ''}<button type="button" class="btn sm ghost" data-ad="wsedit">Modifica</button>${w.tipo !== 'principale' ? `<button type="button" class="btn sm ghost" data-ad="wsstato">${w.stato === 'attivo' ? 'Sospendi' : 'Riattiva'}</button>` : ''}</footer>
@@ -7421,12 +7609,14 @@
     el.innerHTML = h;
     const qi = $('#ad-q'); if (qi) qi.oninput = () => { adQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderAdmin().then(() => { const x = $('#ad-q'); if (x) { x.focus(); try { x.setSelectionRange(p, p); } catch {} } }); }, 180); };
   }
+  const adReq = u => { if (!u || !u.richiesta) return null; try { const r = typeof u.richiesta === 'string' ? JSON.parse(u.richiesta) : u.richiesta; return r && r.settore ? r : null; } catch { return null; } };
+  const adWsSet = w => w.settore || (w.tipo === 'principale' ? 'veicoli' : w.tipo === 'demo' ? 'veicoli' : 'altro');
   function adUserForm(u) {
     const W = AD.ws || [];
     openSheet(`Modifica ${u.nome || u.email}`, `<p class="pvx-intro">${esc(u.email)}</p>
       <div class="f-row"><label class="f"><span>Nome e cognome</span><input name="nome" value="${esc(u.nome || '')}" data-focus></label><label class="f"><span>Telefono</span><input name="telefono" value="${esc(u.telefono || '')}"></label></div>
       <label class="f"><span>Azienda</span><input name="azienda" value="${esc(u.azienda || '')}"></label>
-      <div class="f-row"><label class="f"><span>Gestionale</span><select name="ws">${W.map(w => `<option value="${esc(w.codice)}" ${w.codice === u.ws ? 'selected' : ''}>${esc(w.nome)} (${esc(w.codice)})</option>`).join('')}</select></label>
+      <div class="f-row"><label class="f"><span>Gestionale</span><select name="ws">${u.ws ? '' : `<option value="" selected>${adReq(u) ? 'Da creare all\'approvazione' : '— Nessuno'}</option>`}${W.map(w => `<option value="${esc(w.codice)}" ${w.codice === u.ws ? 'selected' : ''}>${esc(w.nome)} (${esc(w.codice)})</option>`).join('')}</select></label>
       <label class="f"><span>Permessi</span><select name="ruolo">${['utente', 'lettura', 'demo'].map(r => `<option value="${r}" ${r === u.ruolo ? 'selected' : ''}>${AD_R[r]}</option>`).join('')}</select></label></div>
       <label class="f"><span>Stato</span><select name="stato">${['attivo', 'attesa', 'bloccato'].map(r => `<option value="${r}" ${r === u.stato ? 'selected' : ''}>${AD_S[r]}</option>`).join('')}</select></label>
       <label class="f"><span>Note (le vedi solo tu)</span><textarea name="note" rows="2">${esc(u.note || '')}</textarea></label>
@@ -7460,12 +7650,15 @@
     const sugg = () => 'AZ' + Math.random().toString(36).slice(2, 6).toUpperCase() + new Date().getFullYear().toString().slice(2);
     openSheet(isNew ? 'Nuovo gestionale' : `Modifica ${w.nome}`, `${isNew ? '<p class="pvx-intro">Crea un gestionale separato per un\'altra azienda: avrà il suo Foglio Google, vuoto, e le sue cartelle su Drive.</p>' : ''}
       <label class="f"><span>Nome azienda</span><input name="nome" value="${esc(w.nome)}" data-focus required placeholder="Es. Rossi Trasporti S.r.l."></label>
+      <div class="f-row"><label class="f"><span>Tipo di attività</span><select name="settore">${SET.list.map(x => `<option value="${x.id}"${x.id === adWsSet(w) ? ' selected' : ''}>${esc(x.n)}</option>`).join('')}</select></label>
+      ${w.tipo === 'cliente' || isNew ? `<label class="f"><span>Piano</span><select name="piano">${Object.entries(SET.piani).map(([k, v]) => `<option value="${k}"${k === (w.piano || 'prova') ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label>` : ''}</div>
       <div class="f-row"><label class="f"><span>Codice di registrazione</span><input name="codice" value="${esc(w.codice || (isNew ? sugg() : ''))}" required pattern="[A-Za-z0-9_\\-]{4,20}" style="text-transform:uppercase;font-family:var(--mono,monospace)"></label>
       <label class="f"><span>Città</span><input name="citta" value="${esc(w.citta || '')}" placeholder="per i PDF"></label></div>
       ${isNew ? `<label class="f"><span>Tipo</span><select name="tipo"><option value="cliente">Cliente · dati veri in un Foglio nuovo</option><option value="demo">Demo · dati di prova, nulla viene salvato</option></select></label>` : ''}
       <label class="f"><span>Note</span><input name="note" value="${esc(w.note || '')}"></label>
       <p class="ad-help">Il codice va da 4 a 20 lettere o numeri. ${isNew ? '' : 'Se lo cambi, il vecchio non funzionerà più per le nuove registrazioni (gli utenti già iscritti restano collegati).'}</p>`, fd => {
-      const o = { nome: String(fd.get('nome') || '').trim(), codice: String(fd.get('codice') || '').trim().toUpperCase(), citta: String(fd.get('citta') || '').trim(), note: String(fd.get('note') || '').trim() };
+      const o = { nome: String(fd.get('nome') || '').trim(), codice: String(fd.get('codice') || '').trim().toUpperCase(), citta: String(fd.get('citta') || '').trim(), note: String(fd.get('note') || '').trim(), settore: String(fd.get('settore') || '') };
+      if (fd.has('piano')) o.piano = String(fd.get('piano'));
       if (isNew) { o.tipo = fd.get('tipo'); toast('Creo il gestionale e il suo Foglio Google…'); adDo('adminWsAdd', o, 'Gestionale creato'); }
       else adDo('adminWsSet', { codice: w.codice, set: o }, 'Gestionale aggiornato');
       return true;
@@ -7488,7 +7681,7 @@
     const k = b.dataset.ad, card = b.closest('[data-email]'), wc = b.closest('[data-ws]');
     const u = card && (AD.users || []).find(x => x.email === card.dataset.email), w = wc && (AD.ws || []).find(x => x.codice === wc.dataset.ws);
     if (k === 'reload') { AD = null; renderAdmin(); return; }
-    if (k === 'ok' && u) { adDo('adminUser', { email: u.email, set: { stato: 'attivo' } }, u.stato === 'attesa' ? `${u.nome || u.email} approvato · gli arriva una email` : 'Utente sbloccato'); return; }
+    if (k === 'ok' && u) { const nw = adReq(u) && !u.ws; if (nw) toast('Creo il gestionale e il suo Foglio Google…'); adDo('adminUser', { email: u.email, set: { stato: 'attivo' } }, u.stato === 'attesa' ? (nw ? `Gestionale di ${adReq(u).azienda || u.azienda || u.nome} creato · ${u.nome || u.email} approvato` : `${u.nome || u.email} approvato · gli arriva una email`) : 'Utente sbloccato'); return; }
     if (k === 'block' && u) { if (confirm(`Bloccare ${u.nome || u.email}? Verrà disconnesso subito.`)) adDo('adminUser', { email: u.email, set: { stato: 'bloccato' } }, 'Utente bloccato'); return; }
     if (k === 'no' && u) { if (confirm(`Rifiutare la richiesta di ${u.nome || u.email}? L'account viene eliminato.`)) adDo('adminDelUser', { email: u.email }, 'Richiesta rifiutata'); return; }
     if (k === 'edit' && u) return adUserForm(u);
@@ -7791,6 +7984,7 @@
 
     document.addEventListener('submit', e => { if (e.target.id === 'ov-ask') { e.preventDefault(); const q = $('#ov-q').value; $('#ov-q').value = ''; ovAsk(q); } });
     $('#s-logout').onclick = () => logout();
+    document.addEventListener('click', e => { const t = e.target.closest('[data-mod]'); if (t && !t.disabled) { modToggle(t.dataset.mod); return; } if (e.target.closest('#s-set-ch')) setForm(DEMO); });
     $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere il tuo account da tutti i dispositivi (anche questo)? Serviranno di nuovo email e password.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Disconnesso da tutti i dispositivi'); };
     $('#s-pw').onclick = () => pwForm();
     $('#s-me-edit').onclick = () => meForm();
@@ -7804,11 +7998,12 @@
   async function start() {
     if (top !== self) { try { top.location = self.location; } catch { document.body.innerHTML = ''; } return; }
     if (url !== 'local' && (!tok || !me)) { showLogin(); return; }
-    if (DEMO) { try { await loadLib('demo.js'); db = window.CDC_DEMO(); } catch { db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [], pdf: [] }; } }
+    if (DEMO) { try { await loadLib('demo.js'); db = window.CDC_DEMO(settoreId()); } catch { db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [], pdf: [] }; } }
     if (me) applyMe(me);
     $('#setup').hidden = true; $('#app').hidden = false;
     setSync(); go();
     if (!isLocal()) pull();
+    if (DEMO && !LS.get('cdc_demo_set', '')) setTimeout(() => setForm(true), 400); // v95: la demo chiede quale attività provare
   }
 
   bind();

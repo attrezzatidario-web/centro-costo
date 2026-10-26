@@ -1,5 +1,6 @@
 /* Centro di Costo — dati dimostrativi per la versione DEMO (codice DEMO2026).
-   Tutto è inventato e generato nel browser: niente viene letto o salvato sul Foglio Google. */
+   Tutto è inventato e generato nel browser: niente viene letto o salvato sul Foglio Google.
+   v95: un set di dati per ogni settore di attività (settori.js); «veicoli» è la demo storica. */
 (() => {
   'use strict';
   let seed = 20260426;
@@ -13,7 +14,7 @@
   const daysAgo = n => { const d = new Date(now); d.setDate(d.getDate() - n); return d; };
   const uid = () => Math.floor(rnd() * 1e12).toString(36) + Math.floor(rnd() * 1e6).toString(36);
 
-  window.CDC_DEMO = function () {
+  const vei = function () {
     seed = 20260426;
     const CENTRI = ['MILANO', 'TORINO', 'BOLOGNA', 'ROMA', 'NAPOLI'];
     const SEDI = [
@@ -116,4 +117,163 @@
     config['tro:o1'] = { id: 'o1', num: `T${y}-001`, data: ds(daysAgo(6)), consegna: ds(daysAgo(-8)), stato: 'confermato', cliente: { nome: 'Noleggi Express S.r.l.', ref: 'Anna Conti', tel: '06 998877', email: 'anna@noleggiexpress.example', ind: 'Roma', piva: '' }, cliId: 't1', mezzi: '4 furgoni', righe: [{ t: 'Applicazione kit adesivi furgone', cod: 'DEMO-APP', q: 4, p: 85 }, { t: 'Transferta (1 giorno, 100 km)', cod: 'TRASF', q: 1, p: 120 }], sconto: 0, note: '' };
     return { movimenti, gls, gasolio, fatture, lyreco, lyfatture, amazon, amazonart, pdf: [], config, ai: false, aik: { gemini: false }, aiFirst: 'gemini', v: 'demo' };
   };
+
+  /* ================= v95: demo per settore ================= */
+  // [nome sede, città, provincia, [lon, lat]] · articoli [descrizione, um, prezzo, fornitore, peso] · fissi [descrizione, fornitore, € al mese]
+  const PROF = {
+    bar: { az: 'Bar Centrale Demo S.r.l.', citta: 'Roma (RM)',
+      sedi: [['Bar Centrale', 'Roma', 'RM', [12.496, 41.902]], ['Caffè Stazione', 'Roma', 'RM', [12.502, 41.901]], ['Chiosco al Parco', 'Ostia', 'RM', [12.29, 41.733]]],
+      art: [['Caffè in grani miscela bar 1 kg', 'KG', 18.5, 'Torrefazione Romana', 5], ['Latte fresco intero 1 L', 'LT', 1.15, 'Centrale del Latte', 8], ['Cornetti surgelati vuoti (conf. 60)', 'CONF', 23.9, 'Dolciaria Laziale', 5],
+        ['Cornetti alla crema (conf. 50)', 'CONF', 26.5, 'Dolciaria Laziale', 3], ['Tramezzini assortiti (vassoio 20)', 'CONF', 19, 'Gastronomia Fresca', 3], ['Acqua minerale naturale 50 cl (24)', 'CONF', 5.6, 'Bevande Italia', 4],
+        ['Coca-Cola lattina 33 cl (24)', 'CONF', 15.9, 'Bevande Italia', 3], ['Succo di frutta 125 ml (24)', 'CONF', 11.4, 'Bevande Italia', 2], ['Birra bottiglia 33 cl (24)', 'CONF', 19.8, 'Bevande Italia', 2],
+        ['Aperol 1 L', 'PZ', 13.9, 'Distribuzione Alcolici', 2], ['Prosecco DOC (6 bottiglie)', 'CONF', 33, 'Distribuzione Alcolici', 1], ['Zucchero in bustine (conf. 1000)', 'CONF', 14.5, 'Cash & Carry Roma', 2],
+        ['Bicchieri carta 8 oz asporto (conf. 1000)', 'CONF', 39, 'Monouso Pro', 1], ['Tovaglioli bar (conf. 2000)', 'CONF', 16.9, 'Monouso Pro', 2], ['Detergente lavabicchieri 5 kg', 'PZ', 14.5, 'Igiene Professionale', 1],
+        ['Sanificante superfici 750 ml (6)', 'CONF', 18, 'Igiene Professionale', 1], ['Intervento tecnico e decalcificazione', 'PZ', 95, 'Assistenza Macchine Bar', .3]],
+      fissi: [['Bolletta energia elettrica', 'Energia Più S.p.A.', 420], ['Canone di locazione locale', 'Immobiliare Capitolina', 2100], ['Elaborazione paghe e consulenza', 'Studio Paghe Rossi', 260]],
+      forn: ['Torrefazione Romana', 'Bevande Italia', 'Dolciaria Laziale', 'Cash & Carry Roma', 'Distribuzione Alcolici', 'Energia Più S.p.A.'] },
+    pizzeria: { az: 'Pizzeria Demo S.r.l.', citta: 'Napoli (NA)',
+      sedi: [['Pizzeria Centro', 'Napoli', 'NA', [14.252, 40.845]], ['Pizzeria Vomero', 'Napoli', 'NA', [14.232, 40.846]], ['Asporto Pozzuoli', 'Pozzuoli', 'NA', [14.12, 40.823]]],
+      art: [['Farina tipo 00 per pizza sacco 25 kg', 'SCA', 22.5, 'Molino del Sud', 6], ['Lievito di birra fresco 500 g', 'PZ', 2.1, 'Molino del Sud', 2], ['Fior di latte per pizza', 'KG', 7.8, 'Caseificio Campano', 7],
+        ['Mozzarella di bufala campana DOP', 'KG', 12.9, 'Caseificio Campano', 3], ['Pomodoro pelato 2,5 kg', 'PZ', 3.4, 'Conserve del Vesuvio', 5], ['Passata di pomodoro 700 g (12)', 'CONF', 11.2, 'Conserve del Vesuvio', 2],
+        ['Olio extravergine di oliva 5 L', 'PZ', 39.5, 'Oleificio Irpino', 2], ['Prosciutto cotto alta qualità', 'KG', 11.5, 'Salumificio Partenope', 2], ['Salame piccante a fette', 'KG', 14.2, 'Salumificio Partenope', 2],
+        ['Rucola fresca', 'KG', 6.2, 'Ortofrutta Flegrea', 2], ['Basilico fresco (mazzi)', 'PZ', .9, 'Ortofrutta Flegrea', 2], ['Cartoni pizza 33x33 (conf. 100)', 'CONF', 21.5, 'Imballaggi Pizza', 3],
+        ['Birra bottiglia 33 cl (24)', 'CONF', 19.8, 'Bevande Campania', 2], ['Acqua minerale 50 cl (24)', 'CONF', 5.4, 'Bevande Campania', 2], ['Coca-Cola lattina 33 cl (24)', 'CONF', 15.9, 'Bevande Campania', 2],
+        ['Legna di faggio per forno (quintale)', 'PZ', 16.5, 'Legnami Irpini', 3], ['Sgrassatore professionale 5 L', 'PZ', 12.8, 'Igiene Professionale', 1], ['Tovaglioli carta (conf. 1000)', 'CONF', 9.5, 'Imballaggi Pizza', 1]],
+      fissi: [['Bolletta energia elettrica', 'Energia Più S.p.A.', 560], ['Canone di locazione locale', 'Immobiliare Partenope', 1900], ['Commissioni Just Eat', 'Just Eat Italy', 640], ['Elaborazione paghe e consulenza', 'Studio Paghe Esposito', 310]],
+      forn: ['Molino del Sud', 'Caseificio Campano', 'Conserve del Vesuvio', 'Salumificio Partenope', 'Bevande Campania', 'Legnami Irpini'] },
+    ristorante: { az: 'Trattoria Demo S.r.l.', citta: 'Firenze (FI)',
+      sedi: [['Trattoria in Centro', 'Firenze', 'FI', [11.256, 43.773]], ['Osteria sul Fiume', 'Firenze', 'FI', [11.245, 43.766]], ['Bistrot Fiesole', 'Fiesole', 'FI', [11.293, 43.806]]],
+      art: [['Filetto di manzo', 'KG', 38, 'Macelleria Toscana', 3], ['Bistecca alla fiorentina', 'KG', 29, 'Macelleria Toscana', 4], ['Pollo ruspante intero', 'KG', 7.2, 'Macelleria Toscana', 2],
+        ['Salmone fresco filetto', 'KG', 19.5, 'Pescheria del Porto', 2], ['Gamberi rossi', 'KG', 42, 'Pescheria del Porto', 1], ['Vongole veraci', 'KG', 12.5, 'Pescheria del Porto', 2],
+        ['Pasta spaghetti trafilata al bronzo 5 kg', 'PZ', 9.8, 'Grossista Alimentare', 2], ['Riso carnaroli 5 kg', 'PZ', 15.5, 'Grossista Alimentare', 1], ['Olio extravergine di oliva 5 L', 'PZ', 41, 'Frantoio del Chianti', 2],
+        ['Parmigiano reggiano 24 mesi', 'KG', 19.8, 'Caseificio Emiliano', 2], ['Uova fresche (30)', 'CONF', 6.6, 'Fattoria Mugello', 3], ['Pomodori cuore di bue', 'KG', 2.9, 'Ortofrutta Toscana', 4],
+        ['Insalata mista', 'KG', 4.1, 'Ortofrutta Toscana', 3], ['Vino Chianti Classico (6 bottiglie)', 'CONF', 54, 'Cantina del Chianti', 3], ['Prosecco DOC (6 bottiglie)', 'CONF', 36, 'Cantina del Chianti', 1],
+        ['Acqua minerale 75 cl (12)', 'CONF', 7.2, 'Bevande Toscana', 3], ['Noleggio tovagliato settimanale', 'PZ', 68, 'Lavanderia Industriale Arno', 2], ['Detergente lavastoviglie 10 kg', 'PZ', 29, 'Igiene Professionale', 1]],
+      fissi: [['Bolletta energia elettrica', 'Energia Più S.p.A.', 780], ['Fornitura gas metano cucina', 'Gas Toscana S.p.A.', 340], ['Canone di locazione locale', 'Immobiliare Medicea', 2600], ['Elaborazione paghe e consulenza', 'Studio Paghe Bianchi', 420]],
+      forn: ['Macelleria Toscana', 'Pescheria del Porto', 'Grossista Alimentare', 'Cantina del Chianti', 'Ortofrutta Toscana', 'Lavanderia Industriale Arno'] },
+    lavanderia: { az: 'Lavanderia Demo S.r.l.', citta: 'Bologna (BO)', mezzi: [['FX201LV', 'Fiat Doblò ritiro e consegna', 'Marco Neri'], ['GA332LV', 'Renault Kangoo', 'Sara Greco']],
+      sedi: [['Lavanderia Centro', 'Bologna', 'BO', [11.342, 44.494]], ['Lavasecco Murri', 'Bologna', 'BO', [11.36, 44.48]], ['Self-service Casalecchio', 'Casalecchio di Reno', 'BO', [11.276, 44.477]]],
+      art: [['Detersivo liquido professionale 20 kg', 'PZ', 58, 'Chimica Lavanderia', 5], ['Ammorbidente concentrato 20 kg', 'PZ', 39, 'Chimica Lavanderia', 3], ['Smacchiatore pre-trattante 5 L', 'PZ', 24, 'Chimica Lavanderia', 2],
+        ['Solvente per lavasecco 30 L', 'PZ', 145, 'Chimica Lavanderia', 1], ['Igienizzante tessuti 10 L', 'PZ', 32, 'Chimica Lavanderia', 2], ['Grucce in metallo (conf. 500)', 'CONF', 48, 'Forniture Tintorie', 3],
+        ['Buste copriabiti in rotolo', 'PZ', 39, 'Forniture Tintorie', 3], ['Cartellini numerati (conf. 1000)', 'CONF', 14, 'Forniture Tintorie', 1], ['Guarnizione oblò lavatrice', 'PZ', 35, 'Ricambi Macchine Lavaggio', 1],
+        ['Cinghia essiccatoio', 'PZ', 28, 'Ricambi Macchine Lavaggio', 1], ['Manutenzione caldaia vapore', 'PZ', 180, 'Assistenza Tecnica Emilia', .5], ['Rotoli cassa termici (conf. 10)', 'CONF', 9, 'Ufficio Facile', 1]],
+      fissi: [['Bolletta energia elettrica', 'Energia Più S.p.A.', 690], ['Fornitura gas metano', 'Gas Emilia S.p.A.', 330], ['Servizio idrico', 'Acque Bolognesi', 140], ['Canone di locazione locale', 'Immobiliare Felsinea', 1450]],
+      forn: ['Chimica Lavanderia', 'Forniture Tintorie', 'Ricambi Macchine Lavaggio', 'Assistenza Tecnica Emilia', 'Energia Più S.p.A.'] },
+    edile: { az: 'Edil Deposito Demo S.r.l.', citta: 'Tivoli (RM)', mezzi: [['FT510ED', 'Camion con gru Iveco', 'Paolo Riva'], ['GB118ED', 'Furgone Ducato cassonato', 'Luca Gallo'], ['FV774ED', 'Muletto diesel', 'Andrea Fontana']],
+      sedi: [['Deposito Tivoli', 'Tivoli', 'RM', [12.8, 41.96]], ['Deposito Guidonia', 'Guidonia Montecelio', 'RM', [12.72, 41.998]], ['Punto vendita Colleferro', 'Colleferro', 'RM', [13.005, 41.728]]],
+      art: [['Cemento 32,5 R sacco 25 kg', 'SCA', 6.2, 'Cementeria Laziale', 7], ['Malta bastarda sacco 25 kg', 'SCA', 3.9, 'Cementeria Laziale', 4], ['Bancale forati 8x25x25 (200 pz)', 'PZ', 128, 'Laterizi Centro Italia', 3],
+        ['Tondino ferro B450C 12 mm (barra 12 m)', 'PZ', 11, 'Ferro Sud Acciai', 4], ['Rete elettrosaldata 2x3 m', 'PZ', 18, 'Ferro Sud Acciai', 3], ['Sabbia lavata big bag 1 m³', 'PZ', 55, 'Cave Tiburtine', 3],
+        ['Lastra cartongesso 120x200', 'PZ', 7.4, 'Isolanti & Cartongesso', 4], ['Pannello EPS 3 cm', 'PZ', 4.2, 'Isolanti & Cartongesso', 2], ['Guaina bituminosa rotolo 10 m', 'PZ', 38, 'Isolanti & Cartongesso', 2],
+        ['Piastrelle gres porcellanato 60x60', 'MT', 14, 'Ceramiche Sassuolo', 3], ['Tubo PVC 110 mm 3 m', 'PZ', 9.5, 'Idrotermica Roma', 2], ['Pittura lavabile 14 L', 'PZ', 42, 'Colorificio Laziale', 2],
+        ['Viti per cartongesso (conf. 1000)', 'CONF', 9, 'Ferramenta Industriale', 2], ['Pallet EPAL', 'PZ', 9, 'Pallet Service', 2], ['Trasporto con autogru', 'PZ', 120, 'Trasporti Edili Roma', 1]],
+      fissi: [['Bolletta energia elettrica', 'Energia Più S.p.A.', 520], ['Canone di locazione piazzale', 'Immobiliare Tiburtina', 2400], ['Assicurazione mezzi e merci', 'Assicurazioni Generali Demo', 380]],
+      forn: ['Cementeria Laziale', 'Laterizi Centro Italia', 'Ferro Sud Acciai', 'Isolanti & Cartongesso', 'Ceramiche Sassuolo', 'Trasporti Edili Roma'] },
+    impresa: { az: 'Costruzioni Demo S.r.l.', citta: 'Roma (RM)', mezzi: [['FS903IM', 'Furgone Ducato cantiere', 'Marco Neri'], ['GC217IM', 'Pick-up Hilux', 'Andrea Fontana']],
+      sedi: [['Cantiere via Appia', 'Roma', 'RM', [12.53, 41.86]], ['Villa Parioli', 'Roma', 'RM', [12.49, 41.925]], ['Condominio Frascati', 'Frascati', 'RM', [12.68, 41.81]]],
+      art: [['Cemento 32,5 R sacco 25 kg', 'SCA', 6.4, 'Edil Deposito Tivoli', 5], ['Forati 8x25x25', 'PZ', .65, 'Edil Deposito Tivoli', 4], ['Tondino ferro 12 mm (barra 12 m)', 'PZ', 11.4, 'Edil Deposito Tivoli', 3],
+        ['Noleggio miniescavatore (giorno)', 'PZ', 180, 'Noleggi Macchine Roma', 3], ['Noleggio ponteggio (mese)', 'PZ', 650, 'Ponteggi Lazio', 2], ['Subappalto impianto elettrico · SAL', 'PZ', 2400, 'Elettro Impianti Demo', 1],
+        ['Smaltimento macerie cassone 6 m³', 'PZ', 290, 'Ecologia Romana', 2], ['Scarpe antinfortunistiche S3', 'PA', 64, 'Sicurezza Lavoro', 1], ['Guanti da lavoro (conf. 12)', 'CONF', 18, 'Sicurezza Lavoro', 1],
+        ['Pratica CILA e direzione lavori', 'PZ', 600, 'Studio Tecnico Demo', .4], ['Lastra cartongesso 120x200', 'PZ', 7.6, 'Edil Deposito Tivoli', 3], ['Pittura lavabile 14 L', 'PZ', 44, 'Colorificio Laziale', 2],
+        ['Tubo multistrato 26 mm (50 m)', 'PZ', 95, 'Idrotermica Roma', 2], ['Gasolio per gruppo elettrogeno', 'LT', 1.72, 'Carburanti Roma', 2]],
+      fissi: [['Canone di locazione ufficio', 'Immobiliare Capitolina', 900], ['Assicurazione RC impresa', 'Assicurazioni Generali Demo', 410], ['Consulenza sicurezza RSPP', 'Studio Sicurezza Demo', 180]],
+      forn: ['Edil Deposito Tivoli', 'Noleggi Macchine Roma', 'Elettro Impianti Demo', 'Ecologia Romana', 'Ponteggi Lazio', 'Studio Tecnico Demo'] },
+    negozio: { az: 'Boutique Demo S.r.l.', citta: 'Torino (TO)',
+      sedi: [['Negozio Via Roma', 'Torino', 'TO', [7.683, 45.068]], ['Outlet Moncalieri', 'Moncalieri', 'TO', [7.68, 45.0]], ['Negozio Online', 'Torino', 'TO', null]],
+      art: [['Riassortimento merce collezione autunno', 'PZ', 1250, 'Moda Ingrosso Milano', 2], ['Riassortimento accessori e pelletteria', 'PZ', 680, 'Pelletterie Toscane', 1], ['Shopper carta personalizzate (conf. 250)', 'CONF', 85, 'Packaging Torino', 2],
+        ['Etichette prezzo in rotolo', 'PZ', 6, 'Ufficio Facile', 2], ['Scaffale espositore a muro', 'PZ', 240, 'Arredo Negozi', .5], ['Faretto LED a binario', 'PZ', 39, 'Illuminazione Pro', 1],
+        ['Rotoli cassa termici (conf. 10)', 'CONF', 9, 'Ufficio Facile', 1], ['Volantini promozionali (1000 pz)', 'PZ', 49, 'Tipografia Rapida', 1], ['Spese di trasporto corriere', 'PZ', 9.9, 'Corriere Espresso', 3]],
+      fissi: [['Canone di locazione negozio', 'Immobiliare Sabauda', 2300], ['Bolletta energia elettrica', 'Energia Più S.p.A.', 310], ['Canone software di cassa', 'Cassa Facile S.r.l.', 39]],
+      forn: ['Moda Ingrosso Milano', 'Pelletterie Toscane', 'Packaging Torino', 'Arredo Negozi', 'Tipografia Rapida'],
+      amz: [['Gruccia in velluto (50 pezzi)', 'Arredo negozio', 24.9], ['Lettore codici a barre USB', 'Informatica', 39.9], ['Carta da pacchi kraft', 'Imballaggio', 14.5], ['Specchio da camerino', 'Arredo negozio', 79]], gls: true },
+    estetica: { az: 'Salone Demo S.r.l.', citta: 'Milano (MI)',
+      sedi: [['Salone Centro', 'Milano', 'MI', [9.19, 45.464]], ['Beauty Lab Navigli', 'Milano', 'MI', [9.172, 45.451]], ['Barber Shop Isola', 'Milano', 'MI', [9.19, 45.488]]],
+      art: [['Tinta in crema professionale 100 ml', 'PZ', 6.5, 'Cosmetica Professionale', 6], ['Ossigeno 20 volumi 1 L', 'PZ', 4.2, 'Cosmetica Professionale', 3], ['Shampoo professionale 1 L', 'PZ', 14, 'Cosmetica Professionale', 3],
+        ['Maschera ristrutturante 500 ml', 'PZ', 18, 'Cosmetica Professionale', 2], ['Cera depilatoria liposolubile 800 ml', 'PZ', 9, 'Estetica Forniture', 2], ['Smalto semipermanente', 'PZ', 6.5, 'Nail Supply', 3],
+        ['Asciugamani monouso (conf. 100)', 'CONF', 12, 'Estetica Forniture', 3], ['Carta per lettino in rotolo', 'PZ', 6, 'Estetica Forniture', 2], ['Guanti in nitrile (conf. 100)', 'CONF', 8.9, 'Estetica Forniture', 2],
+        ['Phon professionale 2000 W', 'PZ', 129, 'Attrezzature Saloni', .4], ['Forbici da taglio 6"', 'PZ', 89, 'Attrezzature Saloni', .4], ['Prodotti per la rivendita (kit)', 'PZ', 140, 'Cosmetica Professionale', 1],
+        ['Lavanderia asciugamani e kimono', 'PZ', 45, 'Lavanderia Milano', 2]],
+      fissi: [['Canone di locazione salone', 'Immobiliare Meneghina', 1900], ['Bolletta energia elettrica', 'Energia Più S.p.A.', 290], ['Abbonamento app prenotazioni', 'Treatwell', 79]],
+      forn: ['Cosmetica Professionale', 'Estetica Forniture', 'Nail Supply', 'Attrezzature Saloni', 'Lavanderia Milano'],
+      amz: [['Organizer per spazzole', 'Arredo salone', 19.9], ['Lampada LED per unghie', 'Attrezzature', 49.9], ['Diffusore di essenze', 'Accoglienza', 29.9], ['Cuffie usa e getta (100)', 'Monouso', 9.9]] },
+    hotel: { az: 'Hotel Demo S.r.l.', citta: 'Venezia (VE)',
+      sedi: [['Hotel in Centro', 'Venezia', 'VE', [12.336, 45.438]], ['B&B Laguna', 'Venezia', 'VE', [12.325, 45.43]], ['Casa vacanze Lido', 'Venezia Lido', 'VE', [12.365, 45.41]]],
+      art: [['Cornetti surgelati (conf. 60)', 'CONF', 24, 'Forniture Alberghiere Veneto', 4], ['Caffè in grani 1 kg', 'KG', 21, 'Torrefazione Veneziana', 3], ['Latte UHT (cartone 12)', 'CONF', 12, 'Forniture Alberghiere Veneto', 3],
+        ['Marmellata monoporzione (conf. 100)', 'CONF', 18, 'Forniture Alberghiere Veneto', 2], ['Yogurt monoporzione (24)', 'CONF', 11, 'Forniture Alberghiere Veneto', 2], ['Kit cortesia (100 pezzi)', 'CONF', 45, 'Amenities Italia', 3],
+        ['Lenzuola matrimoniali', 'PZ', 18, 'Tessile Alberghiero', 1], ['Set asciugamani', 'PZ', 12, 'Tessile Alberghiero', 1], ['Noleggio biancheria (mese)', 'PZ', 380, 'Lavanderia Industriale Veneta', 2],
+        ['Detergente bagno 5 L', 'PZ', 11, 'Igiene Professionale', 2], ['Materasso matrimoniale', 'PZ', 320, 'Arredi Hotel', .3], ['Manutenzione climatizzatori', 'PZ', 160, 'Clima Service', .5]],
+      fissi: [['Commissioni Booking.com', 'Booking.com', 1150], ['Bolletta energia elettrica', 'Energia Più S.p.A.', 870], ['Canone di locazione immobile', 'Immobiliare Serenissima', 3200]],
+      forn: ['Forniture Alberghiere Veneto', 'Amenities Italia', 'Tessile Alberghiero', 'Lavanderia Industriale Veneta', 'Booking.com'],
+      amz: [['Asciugacapelli da parete', 'Arredo camere', 34.9], ['Bollitore elettrico', 'Arredo camere', 22.9], ['Ciabatte monouso (50)', 'Cortesia', 19.9], ['Cassaforte da camera', 'Arredo camere', 69]] },
+    altro: { az: 'Azienda Demo S.r.l.', citta: 'Milano (MI)',
+      sedi: [['Sede di Milano', 'Milano', 'MI', [9.19, 45.464]], ['Ufficio di Roma', 'Roma', 'RM', [12.496, 41.902]], ['Ufficio di Bologna', 'Bologna', 'BO', [11.342, 44.494]]],
+      art: [['Risma carta A4 80 g', 'PZ', 4.2, 'Ufficio Facile', 5], ['Toner stampante nero', 'PZ', 69, 'Ufficio Facile', 2], ['Notebook 15" per ufficio', 'PZ', 690, 'Informatica Pro', .3],
+        ['Sedia ergonomica da ufficio', 'PZ', 149, 'Arredo Ufficio', .4], ['Servizio pulizie mensile', 'PZ', 380, 'Pulizie Professionali', 2], ['Canone software gestionale', 'PZ', 49, 'Software House Demo', 2],
+        ['Consulenza commercialista', 'PZ', 450, 'Studio Commerciale Demo', 1], ['Spese di trasporto corriere', 'PZ', 12, 'Corriere Espresso', 2], ['Materiale di consumo vario', 'PZ', 35, 'Cash & Carry', 2]],
+      fissi: [['Canone di locazione ufficio', 'Immobiliare Demo', 1600], ['Bolletta energia elettrica', 'Energia Più S.p.A.', 240], ['Telefonia e internet', 'Telefonia Business', 89]],
+      forn: ['Ufficio Facile', 'Informatica Pro', 'Pulizie Professionali', 'Studio Commerciale Demo', 'Energia Più S.p.A.'],
+      amz: [['Mouse wireless', 'Informatica', 14.9], ['Cavo USB-C 2 m', 'Informatica', 11.9], ['Lampada da scrivania LED', 'Ufficio', 29.9], ['Kit pronto soccorso', 'Sicurezza', 26.5]] }
+  };
+  function sector(id) {
+    seed = 20260426 + id.length * 7919;
+    const P = PROF[id], S = window.CDC_SETTORI && window.CDC_SETTORI.get(id), RU = (S && S.cat) || [];
+    const cat = d => { const D = ' ' + String(d).toUpperCase() + ' '; for (const [c, k] of RU) if (k.some(x => D.includes(x))) return c; return 'Altro'; };
+    const pre = id.slice(0, 2).toUpperCase();
+    const SEDI = P.sedi.map(([n, citta, prov, geo], i) => ({ cod: `${pre}0${i + 1}`, n, tipo: S ? S.sede[0] : 'Sede', ind: `${citta} (${prov})`, key: n.toUpperCase(), loc: `${citta.toUpperCase()}|`, citta, prov, geo }))
+      .concat([{ cod: 'CDC99', n: 'Da attribuire', tipo: 'Sospeso', ind: 'Sede non indicata', key: '', loc: '', citta: '', prov: '', geo: null }]);
+    const REAL = SEDI.slice(0, -1), CENTRI = REAL.map(s => s.n.toUpperCase()), W = [5, 3, 2].slice(0, REAL.length);
+    const wPick = (arr, w) => { const t = w.reduce((a, b) => a + b, 0); let r = rnd() * t; for (let i = 0; i < arr.length; i++) { r -= w[i]; if (r <= 0) return arr[i]; } return arr[arr.length - 1]; };
+    const movimenti = [], tW = P.art.reduce((s, a) => s + (a[4] || 1), 0);
+    for (let i = 0; i < 340; i++) {
+      let r = rnd() * tW, a = P.art[0]; for (const x of P.art) { r -= x[4] || 1; if (r <= 0) { a = x; break; } }
+      const d = daysAgo(int(0, 330)), big = a[2] > 100, q = big ? 1 : a[1] === 'KG' ? int(2, 25) : int(1, 12);
+      movimenti.push({ id: 'dm' + uid(), data: ds(d), ndoc: 'DDT ' + int(1000, 9999), codice: 'ART' + int(10000, 99999), descrizione: a[0].toUpperCase(), um: a[1], quantita: q, prezzo: r2(a[2] * (0.92 + rnd() * 0.16)), iva: 0.22,
+        centro: wPick(CENTRI, W), societa: '', categoria: cat(a[0]), fornitore: a[3], note: '', creato: ds(d) });
+    }
+    // spese fisse mese per mese (affitto, bollette, consulenze) su ogni sede
+    for (let m = 10; m >= 0; m--) {
+      const base = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      P.fissi.forEach(([t, f, v], k) => REAL.forEach((s, j) => { if (j > 0 && k > 1 && rnd() < .4) return; const d = new Date(base); d.setDate(int(2, 26)); if (d > now) return;
+        const val = r2(v * (j ? .6 : 1) * (0.9 + rnd() * 0.2));
+        movimenti.push({ id: 'dm' + uid(), data: ds(d), ndoc: 'FT ' + int(100, 999), codice: '', descrizione: t.toUpperCase(), um: 'PZ', quantita: 1, prezzo: val, iva: 0.22, centro: CENTRI[j], societa: '', categoria: cat(t), fornitore: f, note: '', creato: ds(d) }); }));
+    }
+    // fatture dei fornitori principali
+    const fatture = [], CATS = [...new Set(movimenti.map(r => r.categoria))];
+    for (let i = 0; i < 40; i++) {
+      const d = daysAgo(int(5, 300)), imp = r2(120 + rnd() * 2600), sc = new Date(d); sc.setDate(sc.getDate() + pick([30, 60, 90]));
+      const paid = ds(sc) < ds(now) ? rnd() < 0.85 : rnd() < 0.2;
+      fatture.push({ id: 'df' + uid(), fornitore: pick(P.forn), numero: `${int(1, 999)}/${d.getFullYear()}`, data: ds(d), scadenza: ds(sc), imponibile: imp, imposta: r2(imp * 0.22), totale: r2(imp * 1.22), centro: wPick(CENTRI, W),
+        categoria: pick(CATS), stato: paid ? 'pagata' : 'da pagare', pagata: paid ? ds(sc) : '', ddt: '', righe: '', pdf: '', note: '', creato: ds(d) });
+    }
+    // carburante dei mezzi (lavanderia, edilizia)
+    const gasolio = [];
+    (P.mezzi || []).forEach(([targa, mezzo, op], k) => { let km = 30000 + k * 21000;
+      for (let d = 180; d > 0; d -= int(6, 11)) { const lt = r2(35 + rnd() * 35); km += Math.round(lt * (9 + rnd() * 4));
+        gasolio.push({ id: 'dq' + uid(), data: ds(daysAgo(d)), targa, km, litri: lt, prezzo: r2(1.68 + rnd() * 0.14), proprietario: 'Aziendale', operatore: op, centro: CENTRI[k % CENTRI.length], uso: mezzo, note: '' }); } });
+    // ordini Amazon (negozio, estetica, hotel, ufficio)
+    const amazon = [], amazonart = [];
+    if (P.amz) for (let i = 0; i < 26; i++) {
+      const d = daysAgo(int(2, 320)), oid = `40${int(1, 9)}-${int(1000000, 9999999)}-${int(1000000, 9999999)}`, s = wPick(REAL, W); let sub = 0, pz = 0; const n = int(1, 3);
+      for (let k = 0; k < n; k++) { const a = pick(P.amz), q = int(1, 3); sub += a[2] * q; pz += q;
+        amazonart.push({ id: oid + '-' + k, ordine: oid, data: ds(d), quantita: q, descrizione: a[0], prezzo: a[2], importo: r2(a[2] * q), venditore: 'Amazon', condizione: 'Nuovo', spedito: ds(d), localita: s.citta.toUpperCase(), categoria: a[1] }); }
+      const totale = r2(sub), imp = r2(totale / 1.22);
+      amazon.push({ id: oid, data: ds(d), articoli: n, pezzi: pz, venditore: 'Amazon', destinatario: P.az, localita: s.citta.toUpperCase(), pagamento: 'Carta aziendale', subtotale: totale, spedizione: 0, sconti: 0, imponibile: imp, iva: r2(totale - imp), totale, ivaTipo: 'fattura', cdc: s.cod, note: '', pdf: '' });
+    }
+    // spedizioni ai clienti del negozio online
+    const gls = [];
+    if (P.gls) { const DEST = [['Cliente Rossi', 'Milano', 'MI', 'Lombardia'], ['Cliente Bianchi', 'Roma', 'RM', 'Lazio'], ['Cliente Verdi', 'Napoli', 'NA', 'Campania'], ['Cliente Neri', 'Firenze', 'FI', 'Toscana'], ['Cliente Gallo', 'Bari', 'BA', 'Puglia'], ['Cliente Riva', 'Verona', 'VR', 'Veneto']];
+      for (let m = 5; m >= 0; m--) { const base = new Date(now.getFullYear(), now.getMonth() - m, 1), mese = `${base.getFullYear()}-${pad(base.getMonth() + 1)}`;
+        for (let i = 0, n = int(25, 45); i < n; i++) { const dd = pick(DEST), colli = 1, kg = r2(.5 + rnd() * 3), nolo = r2(5.9 + kg * .4), fuel = r2(nolo * .12), day = new Date(base); day.setDate(int(1, 27)); if (day > now) continue;
+          gls.push({ id: 'dg' + uid(), mese, data: ds(day), contratto: '1234', nsped: String(int(600000000, 699999999)), rif: 'WEB' + int(1000, 9999), destinatario: dd[0], citta: dd[1], prov: dd[2], regione: dd[3], cdc: REAL[REAL.length - 1].cod, cdcNome: CENTRI[CENTRI.length - 1], tipologia: 'Nazionale', colli, kgReali: kg, kgTass: Math.ceil(kg), nolo, fuel, suppl: 0, totale: r2(nolo + fuel), gg: int(1, 3), riaddebito: rnd() < .5 ? 'Cliente' : '', note: '' }); } } }
+    const cdcLink = {}; REAL.forEach((s, i) => { cdcLink['att|' + CENTRI[i]] = s.cod; cdcLink['gas|' + CENTRI[i]] = s.cod; });
+    const budget = {}; CENTRI.forEach((c, i) => { const v = movimenti.filter(r => r.centro === c).reduce((t, r) => t + r.quantita * r.prezzo, 0); budget[c] = Math.round(v * (i % 2 ? 1.15 : 0.95) / 500) * 500; });
+    const config = { azienda: { nome: P.az, citta: P.citta }, centri: CENTRI, lyCdc: SEDI, ppRic: 2, budget, cdcLink,
+      pvClienti: [{ id: 'c1', nome: 'Cliente Rossi S.r.l.', ref: 'Mario Rossi', email: 'info@rossi.example', tel: '02 1234567', ind: 'Via Milano 1, Milano', ric: '' },
+        { id: 'c2', nome: 'Studio Bianchi', ref: 'Giulia Bianchi', email: 'giulia@bianchi.example', tel: '011 7654321', ind: 'Corso Torino 5, Torino', ric: 60 }] };
+    const y = now.getFullYear();
+    const pv = (pid, num, cli, stato, giorni, righe) => { config['pv:' + pid] = { id: pid, num, data: ds(daysAgo(giorni)), valid: 30, stato, cliente: { nome: cli.nome, ref: cli.ref, email: cli.email, tel: cli.tel, ind: cli.ind }, righe, sconto: 0, note: 'Consegna in 10 giorni lavorativi.', iva: 22, agg: daysAgo(giorni).toISOString() }; };
+    pv('d1', `P${y}-002`, config.pvClienti[0], 'inviato', 4, [{ sup: 'payper', it: '000001', n: 'MIAMI+', cl: 'T-SHIRT', c: '00000', cn: 'BIANCO', sz: ['S', 'M', 'L'], q: { S: 4, M: 8, L: 6 }, p: 6.9, man: true, sc: 0 }]);
+    pv('d2', `P${y}-001`, config.pvClienti[1], 'accettato', 15, [{ sup: 'payper', it: '000001', n: 'MIAMI+', cl: 'T-SHIRT', c: '01000', cn: 'GIALLO', sz: ['M', 'L'], q: { M: 10, L: 10 }, p: 6.9, man: true, sc: 5 }]);
+    return { movimenti, gls, gasolio, fatture, lyreco: [], lyfatture: [], amazon, amazonart, pdf: [], config, ai: false, aik: { gemini: false }, aiFirst: 'gemini', v: 'demo' };
+  }
+  window.CDC_DEMO = id => PROF[id] ? sector(id) : vei();
 })();
