@@ -319,7 +319,10 @@
       days.forEach(([g, wd]) => CEN.forEach((c, j) => { const v = r2(target * wd * WS[j] / wT * (.8 + rnd() * .4)); if (v < 1) return; const pos = r2(v * (.55 + rnd() * .25)), dd = ds(new Date(yy, mm - 1, g));
         incassi.push({ id: 'di' + uid(), data: dd, sede: c, importo: v, contanti: r2(v - pos), pos, altro: 0, iva: ivaI, tipo: 'corrispettivi', note: '', creato: dd }); }));
     });
-    return Object.assign(D, { clienti, articoli, magmov, ddt, vendite, incassi });
+    // v101: anagrafica fornitori dai nomi usati negli acquisti
+    const FN = [...new Set([...D.movimenti.map(r => r.fornitore), ...D.fatture.map(f => f.fornitore)].filter(Boolean))].slice(0, 10);
+    const fornitori = FN.map((nome, i) => ({ id: 'dfo' + (i + 1), nome, piva: String(10000000000 + int(1, 89999999999)).slice(0, 11), cf: '', indirizzo: `Via ${pick(['Roma', 'Garibaldi', 'Mazzini', 'dell\'Industria', 'Tiburtina'])} ${int(1, 200)}`, cap: String(int(10, 98)) + '100', citta: pick(['Roma', 'Milano', 'Napoli', 'Bologna', 'Torino', 'Firenze']), prov: '', email: `ordini@${nome.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')}.example`, pec: '', tel: '0' + int(2, 9) + ' ' + int(1000000, 9999999), referente: pick(['Marco', 'Giulia', 'Paolo', 'Sara', 'Luca']) + ' ' + pick(['Rossi', 'Bianchi', 'Verdi', 'Neri']), categoria: (D.movimenti.find(r => r.fornitore === nome) || {}).categoria || '', pagamento: pick(['Bonifico 30 gg d.f.f.m.', 'Ri.Ba. 60 gg d.f.f.m.', 'Bonifico vista fattura']), iban: '', note: '', creato: ds(daysAgo(300)) }));
+    return Object.assign(D, { clienti, articoli, magmov, ddt, vendite, incassi, fornitori });
   }
   window.CDC_DEMO = id => addSales(PROF[id] ? sector(id) : vei(), PROF[id] ? id : 'veicoli');
 })();

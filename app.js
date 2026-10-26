@@ -153,7 +153,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi', Fornitori: 'fornitori' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -218,7 +218,7 @@
   /* ================= v95: settore di attività, moduli e nomi ================= */
   const SET = window.CDC_SETTORI || { list: [], moduli: [], sempre: [], piani: {}, get: () => null };
   const SET_DEF = { id: 'veicoli', n: 'Allestimento veicoli e attrezzature', sede: ['Piazzale', 'Piazzali'], acq: 'Attrezzatura', mod: {}, cat: null };
-  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'incassi', 'clienti', 'magazzino', 'vendite'];
+  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'incassi', 'clienti', 'fornitori', 'magazzino', 'vendite'];
   const AREA_MOD = { gls: 'gls', gas: 'gasolio', ly: 'lyreco', am: 'amazon' };
   // la demo ricorda sul dispositivo il settore scelto; gli altri gestionali lo prendono dal registro «Gestionali»
   const settoreId = () => DEMO ? (LS.get('cdc_demo_set', '') || 'veicoli') : ((me && me.wsSettore) || (isMain() ? 'veicoli' : 'altro'));
@@ -536,7 +536,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [], incassi: j.data.incassi || [] };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [], incassi: j.data.incassi || [], fornitori: j.data.fornitori || [] };
       if (j.data.user) applyMe(j.data.user);
       applyMany(queue);
       online = true; save(); render();
@@ -573,7 +573,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi', fornitori: 'Fornitori' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -598,8 +598,8 @@
     document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = ['clienti', 'magazzino', 'vendite', 'incassi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite', 'incassi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -629,7 +629,7 @@
   function render() {
     applySettore();
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -8327,6 +8327,8 @@
       e.preventDefault();
       if (k === 'az') return azForm(() => { render(); });
       if (k === 'inc-new') return incForm();
+      if (k === 'forn-new') return fornForm();
+      if (k === 'forn-imp') return fornImport();
       if (k === 'inc-imp') return incImport();
       if (k === 'inc-xls') return incExport();
       if (k === 'cli-new') return cliForm();
@@ -8364,6 +8366,8 @@
     const rc = t.closest('[data-cli]'); if (rc) { const c = cliOf(rc.dataset.cli); if (c) cliForm(c); return; }
     const ra = t.closest('[data-art]'); if (ra) { const a = artOf(ra.dataset.art); if (a) artForm(a); return; }
     const rd = t.closest('[data-ddt]'); if (rd) { const d = GX.ddt().find(x => x.id === rd.dataset.ddt); if (d) docForm('ddt', d); return; }
+    const fc = t.closest('[data-focat]'); if (fc) { e.preventDefault(); const key = fc.dataset.focat; closeSheet(); location.hash = '#preventivi'; setTimeout(() => { pvSup = key; pvAll = false; pvItem = ''; render(); }, 80); return; }
+    const rfo = t.closest('[data-forn]'); if (rfo) { const f = FOR().find(x => x.id === rfo.dataset.forn); if (f) fornForm(f); return; }
     const ri = t.closest('[data-inc]'); if (ri) { const r = INC().find(x => x.id === ri.dataset.inc); if (r) incForm(r); return; }
     const rf = t.closest('[data-fv]'); if (rf) { const f = GX.fv().find(x => x.id === rf.dataset.fv); if (f) docForm('fv', f); }
   }
@@ -8509,6 +8513,77 @@
       ws['!cols'] = [12, 20, 12, 12, 10, 12, 7, 12, 18, 30].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, 'Incassi');
       XLSX.writeFile(wb, `incassi-${today()}.xlsx`); toast('Excel scaricato');
     } catch (e) { toast(e.message); }
+  }
+
+  /* =========================================================
+     v101 · FORNITORI (anagrafica, spesa, fatture da pagare, cataloghi)
+     ========================================================= */
+  const FOR = () => db.fornitori || (db.fornitori = []);
+  let foQ = '';
+  const fKey = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?R\.?L\.?S?|S\.?P\.?A\.?|S\.?N\.?C\.?|S\.?A\.?S\.?|SRL|SPA|SNC|SAS|ITALIA)\b/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim();
+  const fMatch = (f, name) => { const a = fKey(f.nome), b = fKey(name); return !!a && !!b && (a === b || a.split(' ')[0] === b.split(' ')[0] && a.split(' ')[0].length >= 4); };
+  const fCat = f => Object.entries(PV_SUP).find(([, v]) => fMatch({ nome: v.n }, f.nome));
+  function fornStats() {
+    const y = String(new Date().getFullYear()), L = FOR(), S = new Map(L.map(f => [f.id, { spesa: 0, righe: 0, ultimo: '', open: 0, late: 0, nf: 0 }]));
+    const find = name => { if (!name) return null; return L.find(f => fMatch(f, name)) || null; };
+    const keep = ivaOn; ivaOn = false;
+    try { (db.movimenti || []).forEach(r => { const f = find(r.fornitore); if (!f) return; const x = S.get(f.id); if (String(r.data).slice(0, 4) === y) x.spesa += tot(r); x.righe++; if (String(r.data) > x.ultimo) x.ultimo = String(r.data); }); } finally { ivaOn = keep; }
+    faRows().forEach(r => { const f = find(r.fornitore); if (!f) return; const x = S.get(f.id); x.nf++; if (!faPaid(r)) x.open += num(r.totale); if (faLate(r)) x.late += num(r.totale); if (String(r.data) > x.ultimo) x.ultimo = String(r.data); });
+    return S;
+  }
+  // nomi di fornitori già usati negli acquisti e nelle fatture ma non ancora in anagrafica
+  function fornNuovi() {
+    const L = FOR(), M = new Map();
+    [...(db.movimenti || []).map(r => r.fornitore), ...faRows().map(r => r.fornitore)].forEach(n => { n = String(n || '').trim(); if (!n || L.some(f => fMatch(f, n))) return; const k = fKey(n); if (k && !M.has(k)) M.set(k, n); });
+    return [...M.values()];
+  }
+  function renderForn() {
+    const el = $('#fo-body'); if (!el) return;
+    sub('Anagrafica dei fornitori · spesa e fatture');
+    const L = FOR().slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it')), S = fornStats(), y = new Date().getFullYear(), nuovi = fornNuovi();
+    const q = nh(foQ), F = q ? L.filter(f => nh([f.nome, f.piva, f.citta, f.categoria, f.referente].join(' ')).includes(q)) : L;
+    const sum = k => [...S.values()].reduce((s, x) => s + x[k], 0);
+    const warn = isLocal() || !db.v || db.v >= 'cdc-4.5' ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google alla versione cdc-4.5</b><span>Serve per salvare i fornitori (ora lo script è la versione ${esc(db.v)}).</span></div>`;
+    el.innerHTML = warn + `<div class="gx-bar"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="fo-q" placeholder="Cerca nome, P.IVA, categoria…" value="${esc(foQ)}"></label>
+      <div class="gx-act">${nuovi.length ? `<button type="button" class="btn sm" data-gx="forn-imp">Aggiungi quelli già usati (${nuovi.length})</button>` : ''}<a class="btn sm" href="#preventivi">Cataloghi</a><button type="button" class="btn sm primary" data-gx="forn-new">+ Fornitore</button></div></div>
+      ${gxKpi([['Fornitori', fmtNum(L.length, 0), nuovi.length ? `${nuovi.length} da aggiungere dagli acquisti` : 'in anagrafica'], [`Spesa ${y}`, eur0(sum('spesa')), 'acquisti IVA esclusa'], ['Da pagare', eur0(sum('open')), 'fatture non pagate', sum('open') > 0 ? 'warn' : ''], ['Scadute', eur0(sum('late')), sum('late') > 0 ? 'da saldare subito' : 'nessuna', sum('late') > 0 ? 'bad' : '']])}
+      ${!L.length ? gxEmpty('<path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/>', 'Nessun fornitore in anagrafica', nuovi.length ? `Negli acquisti e nelle fatture ci sono già ${nuovi.length} fornitori: aggiungili con un clic e completa i dati.` : 'Aggiungi i fornitori con partita IVA, contatti, pagamento e IBAN: vedi quanto spendi con ognuno e cosa devi pagare.', `${nuovi.length ? `<button type="button" class="btn primary" data-gx="forn-imp">Aggiungi i ${nuovi.length} fornitori già usati</button> ` : ''}<button type="button" class="btn${nuovi.length ? '' : ' primary'}" data-gx="forn-new">+ Fornitore</button>`)
+        : `<div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Fornitore</th><th>Categoria</th><th>Contatti</th><th class="r">Spesa ${y}</th><th class="r">Da pagare</th><th>Ultimo</th></tr></thead><tbody>
+        ${F.map(f => { const x = S.get(f.id) || {}; return `<tr data-forn="${esc(f.id)}"><td data-l="Fornitore"><b>${esc(f.nome)}</b><small>${esc(f.piva ? 'P.IVA ' + f.piva : [f.citta, f.prov ? `(${f.prov})` : ''].filter(Boolean).join(' ') || '')}</small></td><td data-l="Categoria">${esc(f.categoria || '—')}${fCat(f) ? '<small>catalogo nei Preventivi</small>' : ''}</td><td data-l="Contatti">${esc(f.referente || f.tel || f.email || '—')}${f.referente && (f.tel || f.email) ? `<small>${esc(f.tel || f.email)}</small>` : ''}</td><td class="r" data-l="Spesa">${x.spesa ? eur(x.spesa) : '—'}</td><td class="r" data-l="Da pagare">${x.open ? `<span class="chip ${x.late ? 'late' : 'soon'}">${eur(x.open)}</span>` : '—'}</td><td data-l="Ultimo">${x.ultimo ? esc(dIt(x.ultimo)) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessun fornitore trovato</td></tr>'}
+        </tbody></table></div>`}`;
+    const qi = $('#fo-q'); if (qi) qi.oninput = () => { foQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderForn(); const x = $('#fo-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
+  }
+  function fornForm(f0) {
+    const n = !f0, f = f0 ? { ...f0 } : { id: uid(), pagamento: PAG[2], creato: today() };
+    const fi = (k, l, ph = '') => `<label class="f"><span>${l}</span><input name="${k}" value="${esc(f[k] || '')}" placeholder="${esc(ph)}"${k === 'nome' ? ' data-focus required' : ''}></label>`;
+    const x = n ? null : fornStats().get(f.id), cat = n ? null : fCat(f);
+    const FA = n ? [] : faRows().filter(r => fMatch(f, r.fornitore)).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 6);
+    openSheet(n ? 'Nuovo fornitore' : f.nome, `${!n && x ? `<div class="gx-kpis fo-k">${[['Spesa ' + new Date().getFullYear(), eur0(x.spesa), `${x.righe} righe di acquisto`], ['Da pagare', eur0(x.open), x.late ? `${eur0(x.late)} scaduti` : `${x.nf} fatture`]].map(([l, v, s2]) => `<div class="gx-k"><span>${l}</span><b>${v}</b><small>${s2}</small></div>`).join('')}</div>` : ''}
+      ${fi('nome', 'Ragione sociale', 'Es. Molino del Sud S.r.l.')}
+      <div class="f-row">${fi('piva', 'Partita IVA', '11 cifre')}${fi('cf', 'Codice fiscale', 'se diverso')}</div>
+      ${fi('indirizzo', 'Indirizzo', 'Via e numero civico')}
+      <div class="f-row f3">${fi('cap', 'CAP')}${fi('citta', 'Città')}${fi('prov', 'Prov.', 'RM')}</div>
+      <div class="f-row">${fi('referente', 'Referente / agente')}${fi('tel', 'Telefono')}</div>
+      <div class="f-row">${fi('email', 'Email ordini')}${fi('pec', 'PEC')}</div>
+      <div class="f-row"><label class="f"><span>Categoria</span><input name="categoria" list="fo-cats" value="${esc(f.categoria || '')}" placeholder="Es. materie prime"><datalist id="fo-cats">${categorie().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label><label class="f"><span>Pagamento</span><select name="pagamento">${PAG.map(p => `<option${p === f.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label></div>
+      ${fi('iban', 'IBAN per i bonifici', 'IT…')}
+      <label class="f"><span>Note</span><textarea name="note" rows="2" placeholder="es. giorni di consegna, minimo d'ordine, sconti concordati">${esc(f.note || '')}</textarea></label>
+      ${FA.length ? `<div class="gx-mini"><b>Ultime fatture</b>${FA.map(r => `<div class="gx-mr"><span>n. ${esc(r.numero || '—')}<small>${esc(dIt(r.data))}${r.scadenza ? ' · scade ' + esc(dIt(r.scadenza)) : ''}</small></span><span class="chip ${faPaid(r) ? 'paid' : faLate(r) ? 'late' : 'soon'}">${faPaid(r) ? 'pagata' : faLate(r) ? 'scaduta' : 'da pagare'}</span><b>${eur(num(r.totale))}</b></div>`).join('')}</div>` : ''}
+      ${!n ? `<div class="gx-docact">${cat ? `<a class="btn sm" href="#preventivi" data-focat="${cat[0]}">Apri il catalogo ${esc(cat[1].n)}</a>` : ''}${f.email ? `<a class="btn sm" href="mailto:${esc(f.email)}">Scrivi un ordine</a>` : ''}${f.tel ? `<a class="btn sm" href="tel:${esc(String(f.tel).replace(/\s+/g, ''))}">Chiama</a>` : ''}</div>` : ''}`, fd => {
+      const o = { ...f };
+      ['nome', 'piva', 'cf', 'indirizzo', 'cap', 'citta', 'prov', 'referente', 'tel', 'email', 'pec', 'categoria', 'pagamento', 'iban', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
+      if (o.nome.length < 2) { toast('Scrivi il nome del fornitore'); return; }
+      o.prov = o.prov.toUpperCase().slice(0, 2); o.piva = o.piva.replace(/\s|^IT/gi, ''); o.iban = o.iban.replace(/\s+/g, '').toUpperCase(); o.cf = o.cf.toUpperCase();
+      if (o.piva && !/^\d{11}$/.test(o.piva)) toast('Attenzione: la partita IVA italiana ha 11 cifre');
+      if (FOR().some(z => z.id !== o.id && fKey(z.nome) === fKey(o.nome))) { toast('Esiste già un fornitore con questo nome'); return; }
+      write([{ action: 'upsert', sheet: 'Fornitori', row: o }]); toast(n ? 'Fornitore aggiunto' : 'Fornitore aggiornato'); return true;
+    }, n ? null : () => { if (!confirm(`Eliminare ${f.nome} dall'anagrafica? Acquisti e fatture restano.`)) return; write([{ action: 'delete', sheet: 'Fornitori', id: f.id }]); toast('Fornitore eliminato'); return true; }, n ? 'Aggiungi fornitore' : 'Salva');
+    $('#sheet-form').classList.add('wide');
+  }
+  function fornImport() {
+    const N = fornNuovi(); if (!N.length) return toast('Tutti i fornitori sono già in anagrafica');
+    write(N.map(nome => ({ action: 'upsert', sheet: 'Fornitori', row: { id: uid(), nome, pagamento: PAG[2], creato: today() } })));
+    toast(`${N.length} fornitori aggiunti · completa P.IVA e contatti aprendoli`);
   }
 
   /* ================= Eventi ================= */
