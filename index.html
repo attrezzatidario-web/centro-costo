@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=99">
-  <link rel="stylesheet" href="cdc.css?v=99">
+  <link rel="stylesheet" href="style.css?v=100">
+  <link rel="stylesheet" href="cdc.css?v=100">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -63,22 +63,25 @@
           <li><svg viewBox="0 0 24 24"><path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6"/></svg>Preventivi con cataloghi di 17 fornitori</li>
           <li><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Fatture, spedizioni, carburante e ordini</li>
           <li><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/></svg>Su misura per bar, ristoranti, pizzerie, lavanderie, edilizia e altro</li>
-          <li><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Accesso privato con utenti approvati</li>
+          <li><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Accesso privato: le credenziali le ricevi da noi</li>
         </ul>
       </div>
-      <p class="auth-foot"><button type="button" class="auth-tour" data-tour>Scopri cosa può fare <span>→</span></button><span>Vuoi provarlo? Registrati con il codice <b>DEMO2026</b>.</span></p>
+      <p class="auth-foot"><button type="button" class="auth-tour" data-tour>Scopri cosa può fare <span>→</span></button><span>Vuoi provarlo? <button type="button" class="auth-demo2" data-demo>Apri la demo</button>, senza registrazione.</span></p>
     </aside>
     <div class="auth-main">
       <div class="auth-card">
         <div class="auth-top"><img src="logo.svg" alt="Centro di Costo" width="52" height="52"><h1 id="auth-title">Accedi</h1><p class="muted" id="auth-sub">Entra con la tua email e la tua password.</p></div>
-        <div class="auth-tabs" role="tablist"><button type="button" role="tab" data-auth="login" class="on" aria-selected="true">Accedi</button><button type="button" role="tab" data-auth="reg" aria-selected="false">Registrati</button></div>
+        <div class="auth-tabs" role="tablist" hidden></div>
         <form id="login-form" class="auth-form" data-pane="login" autocomplete="on" novalidate>
           <label class="f"><span>Email</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" required placeholder="nome@azienda.it"></label>
           <label class="f"><span>Password</span><span class="pw-w"><input id="login-pw" name="password" type="password" autocomplete="current-password" required placeholder="La tua password"><button type="button" class="pw-eye" data-pweye aria-label="Mostra password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
           <button id="login-go" class="btn primary block" type="submit">Entra</button>
           <button type="button" class="link auth-link" data-auth="forgot">Password dimenticata?</button>
+          <div class="auth-or"><span>oppure</span></div>
+          <button type="button" class="btn block auth-demo" data-demo><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Prova la demo, senza account</button>
+          <p class="auth-hint auth-cred">Non hai ancora le credenziali? Le ricevi quando attivi il tuo gestionale: <button type="button" class="link" data-tour>scopri come funziona</button>.</p>
         </form>
-        <form id="reg-form" class="auth-form" data-pane="reg" autocomplete="on" novalidate hidden>
+        <form id="reg-form" class="auth-form" data-pane="reg" autocomplete="off" novalidate hidden aria-hidden="true">
           <div class="reg-mode" role="tablist" aria-label="Tipo di registrazione"><button type="button" role="tab" data-regm="code" class="on" aria-selected="true">Ho un codice</button><button type="button" role="tab" data-regm="new" aria-selected="false">Nuova azienda</button><i></i></div>
           <div class="f-row"><label class="f"><span>Nome e cognome</span><input name="nome" autocomplete="name" required placeholder="Mario Rossi"></label><label class="f"><span>Azienda</span><input name="azienda" autocomplete="organization" placeholder="facoltativo"></label></div>
           <label class="f"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required placeholder="nome@azienda.it"></label>
@@ -105,8 +108,7 @@
         </form>
         <p id="login-err" class="auth-msg err" role="alert" hidden></p>
         <p id="login-ok" class="auth-msg ok" role="status" hidden></p>
-        <button type="button" class="auth-tour2" data-tour><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Scopri cosa può fare il gestionale</button>
-        <p class="muted small login-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Connessione cifrata · le password non vengono mai salvate in chiaro</p>
+                <p class="muted small login-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Connessione cifrata · le password non vengono mai salvate in chiaro</p>
       </div>
     </div>
   </section>
@@ -488,7 +490,7 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="settori.js?v=99"></script>
-  <script src="app.js?v=99"></script>
+  <script src="settori.js?v=100"></script>
+  <script src="app.js?v=100"></script>
 </body>
 </html>
