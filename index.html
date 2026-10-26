@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=96">
-  <link rel="stylesheet" href="cdc.css?v=96">
+  <link rel="stylesheet" href="style.css?v=97">
+  <link rel="stylesheet" href="cdc.css?v=97">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -66,7 +66,7 @@
           <li><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Accesso privato con utenti approvati</li>
         </ul>
       </div>
-      <p class="auth-foot">Vuoi provarlo? Registrati con il codice <b>DEMO2026</b>.</p>
+      <p class="auth-foot"><button type="button" class="auth-tour" data-tour>Scopri cosa può fare <span>→</span></button><span>Vuoi provarlo? Registrati con il codice <b>DEMO2026</b>.</span></p>
     </aside>
     <div class="auth-main">
       <div class="auth-card">
@@ -105,6 +105,7 @@
         </form>
         <p id="login-err" class="auth-msg err" role="alert" hidden></p>
         <p id="login-ok" class="auth-msg ok" role="status" hidden></p>
+        <button type="button" class="auth-tour2" data-tour><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Scopri cosa può fare il gestionale</button>
         <p class="muted small login-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Connessione cifrata · le password non vengono mai salvate in chiaro</p>
       </div>
     </div>
@@ -473,7 +474,7 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="settori.js?v=96"></script>
-  <script src="app.js?v=96"></script>
+  <script src="settori.js?v=97"></script>
+  <script src="app.js?v=97"></script>
 </body>
 </html>

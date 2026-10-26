@@ -327,6 +327,15 @@
         <small class="di-mail">${esc(C.email)}${C.tel ? ' · ' + esc(C.tel) : ''}</small></div>`, () => { logout(true).then(() => regMode('new')); return true; }, null, 'Richiedi il tuo gestionale');
     $('#sheet-form').classList.add('wide');
   }
+  // v97: presentazione «Scopri cosa può fare» (tour.js + tour.css, caricati solo quando servono)
+  async function openTour() {
+    try { await loadLib('tour.js?v=97'); } catch { return demoInfo(); }
+    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 97, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
+      onDemo: () => { authPane('reg'); regMode('code'); const c = $('#reg-form').elements.codice; c.value = 'DEMO2026'; setTimeout(() => $('#reg-form [name=nome]').focus(), 80); },
+      onRequest: id => { const after = () => { authPane('reg'); regMode('new'); const f = $('#reg-form'); if (id && SET.get(id)) { f.elements.settore.value = id; regMode('new'); } setTimeout(() => $('#reg-form [name=nome]').focus(), 80); };
+        if (DEMO) logout(true).then(after); else if (me) location.href = `mailto:${CONTATTI.email}?subject=${encodeURIComponent('Centro di Costo · richiesta')}`; else after(); } }) : demoInfo();
+    if (window.CDC_TOUR) go(); else setTimeout(go, 150);
+  }
   function renderDemoBar() {
     let bar = $('#demo-bar');
     if (me && (DEMO || me.ruolo === 'lettura')) {
@@ -336,7 +345,7 @@
         : `<span><b>Sola lettura</b> · puoi consultare i dati ma non modificarli. Per i permessi chiedi all'amministratore.</span>`;
       const o = $('#demo-out'); if (o) o.onclick = () => logout(true);
       const c = $('#demo-set'); if (c) c.onclick = () => setForm(true);
-      const inf = $('#demo-info'); if (inf) inf.onclick = () => demoInfo();
+      const inf = $('#demo-info'); if (inf) inf.onclick = () => openTour();
     } else if (bar) bar.remove();
   }
   function setSession(u, t) {
@@ -456,6 +465,7 @@
     $('#setup').addEventListener('click', e => {
       const t = e.target.closest('[data-auth]'); if (t) { authPane(t.dataset.auth); return; }
       const ey = e.target.closest('[data-pweye]'); if (ey) { const i = ey.parentElement.querySelector('input'); const sh = i.type === 'password'; i.type = sh ? 'text' : 'password'; ey.classList.toggle('on', sh); ey.setAttribute('aria-label', sh ? 'Nascondi password' : 'Mostra password'); return; }
+      if (e.target.closest('[data-tour]')) { openTour(); return; }
       if (e.target.closest('[data-democode]')) { const c = $('#reg-form').elements.codice; c.value = 'DEMO2026'; c.focus(); }
       const rm = e.target.closest('[data-regm]'); if (rm) { regMode(rm.dataset.regm); return; }
     });
