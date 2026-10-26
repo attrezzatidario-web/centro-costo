@@ -309,15 +309,34 @@
     applySettore();
     renderDemoBar();
   }
+  // v96: contatti per chi prova la demo (modificabili qui)
+  const CONTATTI = { nome: 'Dario', email: 'attrezzatidario@gmail.com', tel: '', wa: '' };
+  function demoInfo() {
+    const s = settore(), C = CONTATTI, subj = encodeURIComponent(`Centro di Costo · ${s.n}`);
+    const body = encodeURIComponent(`Ciao ${C.nome},\nho provato la demo del Centro di Costo (attività: ${s.n}) e vorrei maggiori informazioni.\n\nAzienda:\nCittà:\nCosa mi servirebbe:\n`);
+    const P = [
+      ['<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 'Su misura per la tua attività', 'Sezioni, categorie e report adattati a come lavori. Se ti serve una funzione che non c\'è, la aggiungo.'],
+      ['<path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6"/>', 'I tuoi fornitori', 'Inserisco i cataloghi e i listini dei fornitori con cui lavori, con foto, codici e prezzi.'],
+      ['<path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/>', 'I tuoi dati, già pronti', 'Importo fatture, Excel e storico che hai già, così parti subito senza ricopiare nulla.'],
+      ['<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 'Privato e sicuro', 'Ogni azienda ha il suo archivio separato, con accesso personale per ogni collaboratore.']
+    ];
+    openSheet('Il gestionale per la tua azienda', `<p class="pvx-intro">Quello che vedi nella demo è il punto di partenza: ogni gestionale si personalizza secondo le richieste del cliente.</p>
+      <div class="di-grid">${P.map(([ic, t, d]) => `<div class="di-p"><span class="set-ci"><svg viewBox="0 0 24 24">${ic}</svg></span><div><b>${t}</b><small>${d}</small></div></div>`).join('')}</div>
+      <div class="di-c"><div class="di-ch"><b>Parliamone</b><small>Raccontami di cosa hai bisogno: ti rispondo personalmente.</small></div>
+        <div class="di-cb"><a class="btn primary" href="mailto:${esc(C.email)}?subject=${subj}&body=${body}"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Scrivimi</a>${C.wa ? `<a class="btn" href="https://wa.me/${esc(C.wa)}?text=${body}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/></svg>WhatsApp</a>` : ''}${C.tel ? `<a class="btn" href="tel:${esc(C.tel.replace(/\s+/g, ''))}"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>${esc(C.tel)}</a>` : ''}</div>
+        <small class="di-mail">${esc(C.email)}${C.tel ? ' · ' + esc(C.tel) : ''}</small></div>`, () => { logout(true).then(() => regMode('new')); return true; }, null, 'Richiedi il tuo gestionale');
+    $('#sheet-form').classList.add('wide');
+  }
   function renderDemoBar() {
     let bar = $('#demo-bar');
     if (me && (DEMO || me.ruolo === 'lettura')) {
       if (!bar) { bar = document.createElement('div'); bar.id = 'demo-bar'; bar.className = 'demo-bar'; $('#app main .top').after(bar); }
       const s = settore();
-      bar.innerHTML = DEMO ? `<span><b>Versione demo</b> · <button type="button" class="demo-set" id="demo-set" title="Cambia attività"><svg viewBox="0 0 24 24">${s.ic || ''}</svg>${esc(s.s || s.n)}<em>Cambia</em></button> · dati di prova: le modifiche non vengono salvate.</span><button type="button" class="btn sm" id="demo-out">Esci dalla demo</button>`
+      bar.innerHTML = DEMO ? `<span><b>Versione demo</b> · <button type="button" class="demo-set" id="demo-set" title="Cambia attività"><svg viewBox="0 0 24 24">${s.ic || ''}</svg>${esc(s.s || s.n)}<em>Cambia</em></button> · dati di prova: le modifiche non vengono salvate.</span><span class="demo-acts"><button type="button" class="btn sm demo-info" id="demo-info">Maggiori informazioni</button><button type="button" class="btn sm" id="demo-out">Esci dalla demo</button></span>`
         : `<span><b>Sola lettura</b> · puoi consultare i dati ma non modificarli. Per i permessi chiedi all'amministratore.</span>`;
       const o = $('#demo-out'); if (o) o.onclick = () => logout(true);
       const c = $('#demo-set'); if (c) c.onclick = () => setForm(true);
+      const inf = $('#demo-info'); if (inf) inf.onclick = () => demoInfo();
     } else if (bar) bar.remove();
   }
   function setSession(u, t) {
