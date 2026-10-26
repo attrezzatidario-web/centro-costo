@@ -94,9 +94,9 @@ svg.il { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 /* spese */
 .il-bars rect { fill: color-mix(in srgb, var(--tr-a) 75%, transparent); transform-box: fill-box; transform-origin: bottom; transform: scaleY(0); }
 .in .il-bars rect { animation: il-grow 3.6s var(--out, ease) infinite; animation-delay: calc(var(--i) * 80ms); }
-.il-bars rect:nth-child(6) { fill: var(--tr-red); }
+.il-bars .rv1 { fill: #1baf7a; } .il-bars .cv1 { fill: color-mix(in srgb, var(--tr-a) 45%, transparent); }
 @keyframes il-grow { 0% { transform: scaleY(0); } 25%, 80% { transform: scaleY(1); } 100% { transform: scaleY(0); } }
-.il-bars .il-line { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: .55; }
+.il-bars .il-line { stroke: var(--tr-a); stroke-width: 2.4; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: .55; }
 .in .il-bars .il-line { animation: il-draw 3.6s ease infinite; }
 @keyframes il-draw { 0%, 15% { stroke-dashoffset: 1; } 50%, 85% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
 

@@ -26,12 +26,12 @@
     { id: 'veicoli', n: 'Allestimento veicoli e attrezzature', s: 'Veicoli e attrezzature', d: 'Officine, allestimenti, ricambi, abbigliamento da lavoro, spedizioni e mezzi',
       ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>',
       sede: ['Piazzale', 'Piazzali'], acq: 'Attrezzatura',
-      mod: { piazzali: true, gls: true, gasolio: true, lyreco: true, amazon: true, torental: true , clienti: true, magazzino: true, vendite: true }, cat: null },
+      mod: { piazzali: true, gls: true, gasolio: true, lyreco: true, amazon: true, torental: true, incassi: true, clienti: true, magazzino: true, vendite: true }, cat: null },
 
     { id: 'bar', n: 'Bar e caffetteria', s: 'Bar', d: 'Bar, caffetterie, pasticcerie e gelaterie',
       ic: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M11 3v3M14 3v3"/>',
-      sede: ['Locale', 'Locali'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: false , clienti: false, magazzino: false, vendite: false },
+      sede: ['Locale', 'Locali'], acq: 'Acquisti', ivaInc: 10,
+      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: false, incassi: true, clienti: false, magazzino: false, vendite: false },
       cat: [
         ['Caffè e bevande calde', ['CAFFE', 'CAFFÈ', 'ESPRESSO', 'MISCELA', 'DECAFFEINATO', 'ORZO', 'GINSENG', 'CIOCCOLATA', 'CAMOMILLA', ' TÈ ', ' TE ', ' THE ', 'TISANA', 'INFUSO', 'CAPSULE', 'CIALDE']],
         ['Bevande e alcolici', ['ACQUA MINERALE', 'ACQUA NATURALE', 'ACQUA FRIZZANTE', 'ACQUA LISCIA', 'BIBIT', 'COCA', 'ARANCIATA', 'CHINOTTO', 'SUCCO', 'SUCCHI', 'BIRRA', 'VINO', 'PROSECCO', 'SPUMANTE', 'APEROL', 'CAMPARI', 'SPRITZ', 'GIN ', 'VODKA', 'RUM ', 'WHISKY', 'AMARO', 'LIQUOR', 'SCIROPP', 'TONICA', 'ENERGY', 'LATTINE']],
@@ -45,8 +45,8 @@
 
     { id: 'pizzeria', n: 'Pizzeria', s: 'Pizzeria', d: 'Pizzerie al taglio, da asporto e con servizio al tavolo',
       ic: '<path d="M12 3 3.5 18.5a17 17 0 0 0 17 0z"/><path d="M6 13.5a14 14 0 0 0 12 0"/><circle cx="11" cy="9.5" r="1"/><circle cx="13.5" cy="15" r="1"/><circle cx="9.5" cy="15.5" r="1"/>',
-      sede: ['Locale', 'Locali'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: false , clienti: false, magazzino: false, vendite: false },
+      sede: ['Locale', 'Locali'], acq: 'Acquisti', ivaInc: 10,
+      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: false, incassi: true, clienti: false, magazzino: false, vendite: false },
       cat: [
         ['Farine e impasti', ['FARINA', 'SEMOLA', 'LIEVITO', 'MANITOBA', 'CAPUTO', 'MOLINO', 'MALTO', 'BIGA', 'IMPASTO']],
         ['Latticini e formaggi', ['MOZZARELLA', 'FIOR DI LATTE', 'FIORDILATTE', 'BUFALA', 'PROVOLA', 'RICOTTA', 'PARMIGIANO', 'GRANA', 'GORGONZOLA', 'STRACCHINO', 'BURRATA', 'STRACCIATELLA', 'PECORINO', 'SCAMORZA', 'FORMAGG', 'LATTE', 'PANNA', 'BURRO']],
@@ -64,8 +64,8 @@
 
     { id: 'ristorante', n: 'Ristorante', s: 'Ristorante', d: 'Ristoranti, trattorie, osterie e agriturismi',
       ic: '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 1-3 3.5-3 6v3h3v9"/>',
-      sede: ['Locale', 'Locali'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: false , clienti: false, magazzino: true, vendite: false },
+      sede: ['Locale', 'Locali'], acq: 'Acquisti', ivaInc: 10,
+      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: false, incassi: true, clienti: false, magazzino: true, vendite: false },
       cat: [
         ['Carne', ['MANZO', 'VITELLO', 'MAIALE', 'POLLO', 'TACCHINO', 'AGNELLO', 'ABBACCHIO', 'FILETTO', 'BISTECCA', 'TAGLIATA', 'MACINATO', 'SALSICCIA', 'COSTAT', 'CARNE', 'GUANCIALE', 'PANCETTA', 'PROSCIUTTO', 'SALUM']],
         ['Pesce', ['PESCE', 'SALMONE', 'TONNO', 'GAMBER', 'SCAMPI', 'COZZE', 'VONGOLE', 'CALAMAR', 'POLPO', 'TOTANI', 'ORATA', 'BRANZINO', 'SPIGOLA', 'BACCAL', 'ALICI', 'SEPPI', 'CROSTACE', 'ASTICE']],
@@ -83,7 +83,7 @@
     { id: 'lavanderia', n: 'Lavanderia', s: 'Lavanderia', d: 'Lavanderie, tintorie, lavasecco e self-service',
       ic: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="13" r="4.5"/><path d="M7.5 6.5h.01M10.5 6.5h3"/>',
       sede: ['Punto vendita', 'Punti vendita'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: true, lyreco: false, amazon: false , clienti: true, magazzino: false, vendite: true },
+      mod: { piazzali: true, gls: false, gasolio: true, lyreco: false, amazon: false, incassi: true, clienti: true, magazzino: false, vendite: true },
       cat: [
         ['Detersivi e prodotti chimici', ['DETERS', 'AMMORBID', 'SMACCHIA', 'CANDEGG', 'PERCLOR', 'SOLVENTE', 'IGIENIZZ', 'ADDITIV', 'ENZIM', 'SAPONE', 'ANTICALCARE', 'PROFUM', 'APPRETTO', 'NEUTRALIZZ', 'SBIANCANTE', 'DETERGENTE']],
         ['Grucce e imballi', ['GRUCC', 'APPENDIABIT', 'BUSTE', 'CELLOPHANE', 'FILM', 'COPRIABITI', 'CARTELLIN', 'ETICHETT', 'SACCHI', 'SCATOL', 'SPILLI', 'CARTONCIN']],
@@ -96,7 +96,7 @@
     { id: 'edile', n: 'Ingrosso edile (smorzo)', s: 'Ingrosso edile', d: 'Rivendite e depositi di materiali da costruzione',
       ic: '<path d="M3 21V10l9-6 9 6v11"/><path d="M7 21v-5h4v5M13 13h4v3h-4zM3 21h18"/>',
       sede: ['Deposito', 'Depositi'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: true, lyreco: false, amazon: false , clienti: true, magazzino: true, vendite: true },
+      mod: { piazzali: true, gls: false, gasolio: true, lyreco: false, amazon: false, incassi: true, clienti: true, magazzino: true, vendite: true },
       cat: [
         ['Cementi, malte e premiscelati', ['CEMENTO', 'MALTA', 'CALCE', 'GESSO', 'INTONAC', 'MASSETTO', 'RASANTE', 'COLLA PER PIASTRELLE', 'COLLA PIASTRELLE', 'ADESIVO CEMENTIZIO', 'STUCCO', 'PREMISCEL', 'BETON', 'AUTOLIVELLANTE']],
         ['Laterizi e blocchi', ['MATTON', 'FORATO', 'FORATI', 'BLOCCO', 'BLOCCHI', 'LATERIZ', 'TEGOL', 'COPPI', 'COPPO', 'PIGNATT', 'POROTON', 'GASBETON', 'YTONG', 'CORDOLO']],
@@ -114,7 +114,7 @@
     { id: 'impresa', n: 'Impresa edile', s: 'Impresa edile', d: 'Costruzioni, ristrutturazioni, impiantisti e artigiani',
       ic: '<path d="M4 18h16M6 18v-5a6 6 0 0 1 12 0v5M12 7V4M9.5 7.5 8 5M14.5 7.5 16 5"/><path d="M3 21h18"/>',
       sede: ['Cantiere', 'Cantieri'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: true, lyreco: false, amazon: false , clienti: true, magazzino: true, vendite: false },
+      mod: { piazzali: true, gls: false, gasolio: true, lyreco: false, amazon: false, incassi: true, clienti: true, magazzino: true, vendite: false },
       cat: [
         ['Subappalti e manodopera', ['SUBAPPALT', 'MANODOPERA', 'LAVORAZIONE', 'LAVORAZIONI', 'POSA IN OPERA', 'PRESTAZIONE', ' SAL ', 'STATO AVANZAMENTO']],
         ['Noleggi mezzi e attrezzature', ['NOLEGGIO', 'NOLO', 'ESCAVATORE', 'MINIESCAVATORE', 'PONTEGGI', 'AUTOGRU', 'GRU ', 'PIATTAFORMA', 'BETONIERA', 'BAGNO CHIMICO', 'MARTELLO DEMOLITORE']],
@@ -128,7 +128,7 @@
     { id: 'negozio', n: 'Negozio e commercio', s: 'Negozio', d: 'Negozi, botteghe, minimarket e commercio al dettaglio',
       ic: '<path d="M4 9h16l-1 11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8.5 9V7a3.5 3.5 0 0 1 7 0v2"/>',
       sede: ['Punto vendita', 'Punti vendita'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: true, gasolio: false, lyreco: false, amazon: true , clienti: true, magazzino: true, vendite: false },
+      mod: { piazzali: true, gls: true, gasolio: false, lyreco: false, amazon: true, incassi: true, clienti: true, magazzino: true, vendite: false },
       cat: [
         ['Spedizioni e-commerce', ['CORRIERE', 'SPEDIZ', ' GLS', ' BRT', 'BARTOLINI', ' SDA', ' DHL', ' UPS ', 'POSTE ITALIANE', 'POSTE']],
         ['Imballi e shopper', ['SHOPPER', 'BUSTE', 'SACCHETT', 'CARTA REGALO', 'CARTA DA PACCHI', 'NASTRO', 'SCATOL', 'ETICHETT', 'CARTELLIN', 'IMBALL', 'PLURIBALL']],
@@ -141,7 +141,7 @@
     { id: 'estetica', n: 'Parrucchiere ed estetica', s: 'Parrucchiere ed estetica', d: 'Parrucchieri, barbieri, centri estetici e nail bar',
       ic: '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="6.5" cy="17.5" r="2.5"/><path d="M8.6 8 20 18M8.6 16 20 6"/>',
       sede: ['Salone', 'Saloni'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: true , clienti: true, magazzino: true, vendite: false },
+      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: true, incassi: true, clienti: true, magazzino: true, vendite: false },
       cat: [
         ['Prodotti per la rivendita', ['RIVENDITA', 'KIT VENDITA', 'LINEA RETAIL', 'RETAIL']],
         ['Prodotti professionali', ['TINTA', 'TINTE', 'COLORE', 'OSSIGENO', 'DECOLOR', 'SHAMPOO', 'BALSAMO', 'MASCHERA', 'TRATTAMENT', 'PERMANENTE', 'CHERATIN', 'CERA', 'SMALTO', 'SEMIPERMANENTE', ' GEL', 'CREMA', 'OLIO', 'SIERO', 'LOZIONE', 'FIALE', 'LACCA', 'SPUMA']],
@@ -155,8 +155,8 @@
 
     { id: 'hotel', n: 'Hotel e B&B', s: 'Hotel e B&B', d: 'Hotel, B&B, case vacanza e affittacamere',
       ic: '<path d="M3 20V6M3 16h18v4M21 16v-4a3 3 0 0 0-3-3h-7v7"/><circle cx="7" cy="11.5" r="2"/>',
-      sede: ['Struttura', 'Strutture', 'f'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: true , clienti: false, magazzino: true, vendite: false },
+      sede: ['Struttura', 'Strutture', 'f'], acq: 'Acquisti', ivaInc: 10,
+      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: true, incassi: true, clienti: false, magazzino: true, vendite: false },
       cat: [
         ['Commissioni portali', ['BOOKING', 'EXPEDIA', 'AIRBNB', 'COMMISSION', ' OTA', 'CHANNEL MANAGER']],
         ['Kit cortesia', ['KIT CORTESIA', 'SAPONETT', 'SHAMPOO', 'BAGNOSCHIUMA', 'BAGNODOCCIA', 'CIABATTE', 'AMENITIES', 'CUFFIA DOCCIA', 'KIT DENTALE']],
@@ -171,7 +171,7 @@
     { id: 'altro', n: 'Altra attività', s: 'Altra attività', d: 'Uffici, studi, servizi e ogni altro tipo di azienda',
       ic: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>',
       sede: ['Sede', 'Sedi', 'f'], acq: 'Acquisti',
-      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: true , clienti: true, magazzino: true, vendite: true },
+      mod: { piazzali: true, gls: false, gasolio: false, lyreco: false, amazon: true, incassi: true, clienti: true, magazzino: true, vendite: true },
       cat: [C.ufficio, C.pulizia, C.trasporti, C.mezzi,
         ['Merci e materiali', ['MATERIAL', 'MERCE', 'ARTICOLI', 'FORNITURA']],
         ['Servizi', ['SERVIZIO', 'SERVIZI', 'CANONE', 'ABBONAMENTO']],
@@ -186,6 +186,7 @@
     { k: 'gls', t: () => 'Spedizioni GLS', d: () => 'Analisi delle fatture GLS: costi per spedizione, destinazioni e peso' },
     { k: 'amazon', t: () => 'Amazon Business', d: () => 'Ordini e articoli Amazon ripartiti per sede, con controlli sull\'IVA' },
     { k: 'lyreco', t: () => 'Lyreco', d: () => 'Fatture Lyreco riga per riga: cancelleria, pulizia e consumabili' },
+    { k: 'incassi', t: () => 'Incassi e ricavi', d: () => 'Chiusure di cassa e incassi giornalieri: con le fatture ai clienti danno ricavi e utile in Dashboard' },
     { k: 'clienti', t: () => 'Clienti', d: () => 'Anagrafica dei clienti con dati fiscali, fatturato e documenti' },
     { k: 'magazzino', t: () => 'Magazzino', d: () => 'Articoli, giacenze, carichi e scarichi, avviso sotto scorta' },
     { k: 'vendite', t: () => 'DDT e fatture ai clienti', d: () => 'DDT durante il mese e fatture di fine mese, con PDF e file XML per lo SdI' },

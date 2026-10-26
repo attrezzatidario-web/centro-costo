@@ -153,7 +153,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -218,7 +218,7 @@
   /* ================= v95: settore di attività, moduli e nomi ================= */
   const SET = window.CDC_SETTORI || { list: [], moduli: [], sempre: [], piani: {}, get: () => null };
   const SET_DEF = { id: 'veicoli', n: 'Allestimento veicoli e attrezzature', sede: ['Piazzale', 'Piazzali'], acq: 'Attrezzatura', mod: {}, cat: null };
-  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'clienti', 'magazzino', 'vendite'];
+  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'incassi', 'clienti', 'magazzino', 'vendite'];
   const AREA_MOD = { gls: 'gls', gas: 'gasolio', ly: 'lyreco', am: 'amazon' };
   // la demo ricorda sul dispositivo il settore scelto; gli altri gestionali lo prendono dal registro «Gestionali»
   const settoreId = () => DEMO ? (LS.get('cdc_demo_set', '') || 'veicoli') : ((me && me.wsSettore) || (isMain() ? 'veicoli' : 'altro'));
@@ -329,8 +329,8 @@
   }
   // v97: presentazione «Scopri cosa può fare» (tour.js + tour.css, caricati solo quando servono)
   async function openTour() {
-    try { await loadLib('tour.js?v=98'); } catch { return demoInfo(); }
-    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 98, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
+    try { await loadLib('tour.js?v=99'); } catch { return demoInfo(); }
+    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 99, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
       onDemo: () => { authPane('reg'); regMode('code'); const c = $('#reg-form').elements.codice; c.value = 'DEMO2026'; setTimeout(() => $('#reg-form [name=nome]').focus(), 80); },
       onRequest: id => { const after = () => { authPane('reg'); regMode('new'); const f = $('#reg-form'); if (id && SET.get(id)) { f.elements.settore.value = id; regMode('new'); } setTimeout(() => $('#reg-form [name=nome]').focus(), 80); };
         if (DEMO) logout(true).then(after); else if (me) location.href = `mailto:${CONTATTI.email}?subject=${encodeURIComponent('Centro di Costo · richiesta')}`; else after(); } }) : demoInfo();
@@ -528,7 +528,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [] };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [], incassi: j.data.incassi || [] };
       if (j.data.user) applyMe(j.data.user);
       applyMany(queue);
       online = true; save(); render();
@@ -565,7 +565,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -590,8 +590,8 @@
     document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = ['clienti', 'magazzino', 'vendite'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = ['clienti', 'magazzino', 'vendite', 'incassi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite', 'incassi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -621,7 +621,7 @@
   function render() {
     applySettore();
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin, clienti: renderCli, magazzino: renderMag, vendite: renderVen }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -2767,7 +2767,7 @@
     $('#ov-per').innerHTML = `<option value=""${ovP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === ovP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
     const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(ovP);
     $('#ov-prev').disabled = ix >= opts.length - 1; $('#ov-next').disabled = ix <= 0;
-    sub(`${ivaLbl()} · tutte le aree di spesa`);
+    sub(modOn('incassi') || modOn('vendite') ? `${ivaLbl()} · ricavi, spese e utile` : `${ivaLbl()} · tutte le aree di spesa`);
     const pick = (k, m) => m ? D[k].filter(r => ovMonthOf[k](r) === m) : D[k];
     const P = {}, V = {};
     AREAS_ALL.forEach(a => { const on = areaOn(a.k); P[a.k] = on ? pick(a.k, ovP) : []; V[a.k] = on ? ovVal[a.k](P[a.k], ovP) : 0; });
@@ -2824,7 +2824,7 @@
     const F = P.fat, open = F.filter(r => !faPaid(r)), late = F.filter(faLate);
     let TK = null; try { const TD = trData(); if (TD && TD.kit && TD.kit.length) { const pr = TD.kit.map(k => trCalc(k, TD).fattura).filter(v => v > 0); TK = { n: TD.kit.length, s: (TD.sing || []).length, min: Math.min(...pr), max: Math.max(...pr), tr: num(TD.transferta), kits: TD.kit.map(k => ({ n: trShort(k.n), cod: k.cod, p: trCalc(k, TD).fattura })).sort((a, b) => b.p - a.p) }; } } catch { TK = null; }
 
-    body.innerHTML = `
+    body.innerHTML = ovPL() + `
       <div class="gl-hero db-hero">
         <div class="db-top">
           <div class="db-hl">
@@ -2905,7 +2905,7 @@
       <div class="card ov-aic db-ai" id="ov-ai"></div>
       <div class="ov-3 db-tops" id="ov-tops"></div>`;
 
-    countTo($('.k-ovt', body), T, eur0);
+    countTo($('.k-ovt', body), T, eur0); ovPLAfter(body);
     const KV = [avgM, nDocs, CK.length];
     $$('[data-ovk]', body).forEach(el => { const i = +el.dataset.ovk; el._v = 0; countTo(el, KV[i], i ? x => fmtNum(Math.round(x), 0) : eur0); });
     $$('[data-ova]', body).forEach(el => { const a = AREAS[+el.dataset.ova]; el._v = 0; countTo(el, V[a.k], eur0); });
@@ -8250,6 +8250,9 @@
       if (b.disabled) return;
       e.preventDefault();
       if (k === 'az') return azForm(() => { render(); });
+      if (k === 'inc-new') return incForm();
+      if (k === 'inc-imp') return incImport();
+      if (k === 'inc-xls') return incExport();
       if (k === 'cli-new') return cliForm();
       if (k === 'cli-imp') return cliImport();
       if (k === 'cli-open') { const c = cliOf(id); if (c) cliForm(c); return; }
@@ -8276,6 +8279,7 @@
       }
       return;
     }
+    const ipb = t.closest('[data-incp]'); if (ipb && !ipb.disabled) { const ms = [...new Set([...INC().map(r => String(r.data).slice(0, 7)), today().slice(0, 7)].filter(k => /^\d{4}-\d\d$/.test(k)))].sort(), opts = ['', ...ms.reverse()], i = opts.indexOf(incP) - Number(ipb.dataset.incp); incP = opts[Math.max(0, Math.min(opts.length - 1, i))] || ''; renderInc(); return; }
     const tb = t.closest('[data-mgtab]'); if (tb) { mgTab = tb.dataset.mgtab; renderMag(); return; }
     const lw = t.closest('[data-mglow]'); if (lw) { mgLow = lw.dataset.mglow === '1'; renderMag(); return; }
     const vt = t.closest('[data-vntab]'); if (vt) { vnTab = vt.dataset.vntab; renderVen(); return; }
@@ -8284,7 +8288,151 @@
     const rc = t.closest('[data-cli]'); if (rc) { const c = cliOf(rc.dataset.cli); if (c) cliForm(c); return; }
     const ra = t.closest('[data-art]'); if (ra) { const a = artOf(ra.dataset.art); if (a) artForm(a); return; }
     const rd = t.closest('[data-ddt]'); if (rd) { const d = GX.ddt().find(x => x.id === rd.dataset.ddt); if (d) docForm('ddt', d); return; }
+    const ri = t.closest('[data-inc]'); if (ri) { const r = INC().find(x => x.id === ri.dataset.inc); if (r) incForm(r); return; }
     const rf = t.closest('[data-fv]'); if (rf) { const f = GX.fv().find(x => x.id === rf.dataset.fv); if (f) docForm('fv', f); }
+  }
+
+  /* =========================================================
+     v99 · INCASSI, RICAVI E UTILE
+     Ricavi = incassi (al netto dell'IVA) + fatture ai clienti (imponibile).
+     Costi = le aree della dashboard (acquisti, GLS, carburante, Lyreco, Amazon) e, fuori dal settore veicoli,
+     le fatture dei fornitori che non trovano righe negli acquisti (così non si contano due volte).
+     ========================================================= */
+  const INC = () => db.incassi || (db.incassi = []);
+  const incNet = r => r2(num(r.importo) / (1 + num(r.iva) / 100));
+  const ivaIncDef = () => settore().ivaInc || 22;
+  function plModel() {
+    const keep = ivaOn; ivaOn = false;
+    try {
+      const D = ovRows(), M = new Map();
+      const add = (m, k, v) => { if (!/^\d{4}-\d\d$/.test(m) || !v) return; const o = M.get(m) || { m, inc: 0, fv: 0, cost: 0 }; o[k] += v; M.set(m, o); };
+      AREAS.forEach(a => groupBy(D[a.k], ovMonthOf[a.k]).forEach((arr, m) => add(m, 'cost', ovVal[a.k](arr, m))));
+      if (settoreId() !== 'veicoli') faRows().forEach(r => { let lk = null; try { lk = faLink(r); } catch {} if (!lk || !lk.rows || !lk.rows.length) add(String(r.data).slice(0, 7), 'cost', num(r.imponibile)); });
+      if (modOn('vendite')) GX.fv().forEach(f => add(String(f.data).slice(0, 7), 'fv', num(f.imponibile)));
+      if (modOn('incassi')) INC().forEach(r => add(String(r.data).slice(0, 7), 'inc', incNet(r)));
+      return [...M.values()].sort((a, b) => a.m.localeCompare(b.m)).map(o => ({ ...o, inc: r2(o.inc), fv: r2(o.fv), ric: r2(o.inc + o.fv), cost: r2(o.cost), ut: r2(o.inc + o.fv - o.cost) }));
+    } finally { ivaOn = keep; }
+  }
+  function ovPL() {
+    if (!modOn('incassi') && !modOn('vendite')) return '';
+    const L = plModel(), hasR = L.some(x => x.ric > 0);
+    if (!hasR) return `<div class="card pl pl-empty"><div><h3>Quanto guadagni</h3><p>Registra gli incassi${modOn('vendite') ? ' o le fatture ai clienti' : ''}: qui vedi ricavi, costi e utile, mese per mese e per sede.</p></div><div class="pl-cta">${modOn('incassi') ? '<a class="btn primary sm" href="#incassi">+ Registra un incasso</a>' : ''}${modOn('vendite') ? '<a class="btn sm" href="#vendite">DDT e fatture</a>' : ''}</div></div>`;
+    const sel = ovP ? L.filter(x => x.m === ovP) : L.slice(-12), prev = ovP ? L[L.findIndex(x => x.m === ovP) - 1] : null;
+    const S = k => r2(sel.reduce((s, x) => s + x[k], 0)), R = S('ric'), C = S('cost'), U = r2(R - C), mg = R ? U / R * 100 : 0;
+    const dl = (a, b, good) => { if (!b) return ''; const p = (a / b - 1) * 100; if (!isFinite(p)) return ''; const up = p >= 0; return `<em class="pl-d ${up === good ? 'ok' : 'ko'}">${up ? '▲' : '▼'} ${fmtNum(Math.abs(p), 0)}%</em>`; };
+    const per = ovP ? mLabel(ovP) : sel.length ? (sel.length > 1 ? `${mLabel(sel[0].m)} – ${mLabel(sel[sel.length - 1].m)}` : mLabel(sel[0].m)) : '';
+    const CH = L.slice(-12), mx = Math.max(1, ...CH.map(x => Math.max(x.ric, x.cost))), mn = Math.min(0, ...CH.map(x => x.ut));
+    const W = 600, H = 170, top = 14, base = H - 26, span = base - top, sc = v => (v / (mx - mn)) * span, zero = base + sc(mn);
+    const bw = W / Math.max(CH.length, 1), gw = Math.min(16, bw * .28);
+    const pts = CH.map((x, i) => [i * bw + bw / 2, zero - sc(x.ut)]);
+    const chart = `<svg class="pl-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" x2="${W}" y1="${zero}" y2="${zero}" class="pl-0"/>
+      ${CH.map((x, i) => { const cx = i * bw + bw / 2; return `<g class="pl-g${x.m === ovP ? ' on' : ''}" style="--d:${i * 40}ms"><rect class="pl-r" x="${cx - gw - 1.5}" y="${zero - sc(x.ric)}" width="${gw}" height="${sc(x.ric)}" rx="3"/><rect class="pl-c" x="${cx + 1.5}" y="${zero - sc(x.cost)}" width="${gw}" height="${sc(x.cost)}" rx="3"/></g>`; }).join('')}
+      <path class="pl-u" pathLength="1" d="${pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')}"/>
+      ${pts.map((p, i) => `<circle class="pl-p${CH[i].ut < 0 ? ' neg' : ''}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.6"/>`).join('')}
+    </svg><div class="pl-x">${CH.map(x => `<span class="${x.m === ovP ? 'on' : ''}" data-ovm="${x.m}" title="${esc(mLabel(x.m))}: ricavi ${esc(eur0(x.ric))} · costi ${esc(eur0(x.cost))} · utile ${esc(eur0(x.ut))}">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}</span>`).join('')}</div>`;
+    // per sede: incassi della sede contro gli acquisti dello stesso centro
+    const inP = r => ovP ? String(r.data).slice(0, 7) === ovP : sel.some(x => x.m === String(r.data).slice(0, 7));
+    const SD = new Map(), up = s => String(s || '').trim().toUpperCase();
+    if (modOn('incassi')) INC().filter(inP).forEach(r => { const k = up(r.sede); if (!k) return; const o = SD.get(k) || { r: 0, c: 0 }; o.r += incNet(r); SD.set(k, o); });
+    if (SD.size) { const keep = ivaOn; ivaOn = false; try { (db.movimenti || []).filter(r => validD(r.data) && inP(r)).forEach(r => { const k = up(r.centro); if (SD.has(k)) SD.get(k).c += tot(r); }); } finally { ivaOn = keep; } }
+    const sedi = [...SD].map(([k, o]) => ({ k, r: r2(o.r), c: r2(o.c), u: r2(o.r - o.c) })).sort((a, b) => b.r - a.r);
+    const sedeT = settore().sede ? settore().sede[1] : 'Sedi';
+    return `<div class="card pl">
+      <div class="pl-h"><div><h3>Ricavi, costi e utile</h3><span class="muted small">IVA esclusa · ${esc(per)}</span></div><div class="pl-lg"><span class="r"><i></i>Ricavi</span><span class="c"><i></i>Costi</span><span class="u"><i></i>Utile</span></div></div>
+      <div class="pl-k">
+        <div class="pl-kr"><span>Ricavi</span><b data-plk="0">0 €</b><small>${[S('inc') ? `incassi ${eur0(S('inc'))}` : '', S('fv') ? `fatture ${eur0(S('fv'))}` : ''].filter(Boolean).join(' · ')} ${prev ? dl(R, prev.ric, true) : ''}</small></div>
+        <div class="pl-kc"><span>Costi</span><b data-plk="1">0 €</b><small>tutte le aree di spesa ${prev ? dl(C, prev.cost, false) : ''}</small></div>
+        <div class="pl-ku ${U < 0 ? 'neg' : ''}"><span>Utile</span><b data-plk="2">0 €</b><small>margine ${fmtNum(mg, 1)}% ${prev ? dl(U, prev.ut, true) : ''}</small></div>
+      </div>
+      <div class="pl-ch">${chart}</div>
+      ${sedi.length > 1 ? `<div class="pl-sd"><div class="pl-sdh"><b>${esc(sedeT)}</b><span>Ricavi</span><span>Acquisti</span><span>Utile</span></div>${sedi.map(x => `<div class="pl-sdr"><b>${esc(x.k)}</b><span>${eur0(x.r)}</span><span>${eur0(x.c)}</span><span class="${x.u < 0 ? 'neg' : 'pos'}">${eur0(x.u)}</span></div>`).join('')}</div>` : ''}
+    </div>`;
+  }
+  function ovPLAfter(body) {
+    const L = plModel(), sel = ovP ? L.filter(x => x.m === ovP) : L.slice(-12), S = k => sel.reduce((s, x) => s + x[k], 0);
+    const V = [S('ric'), S('cost'), S('ric') - S('cost')];
+    $$('[data-plk]', body).forEach(el => { el._v = 0; countTo(el, V[+el.dataset.plk], eur0); });
+  }
+
+  /* ---------- INCASSI ---------- */
+  let incP = null;
+  function renderInc() {
+    const el = $('#in-body'); if (!el) return;
+    sub('Incassi giornalieri e chiusure di cassa');
+    const A = INC(), cur = today().slice(0, 7);
+    const months = [...new Set([...A.map(r => String(r.data).slice(0, 7)), cur].filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+    if (incP === null || (incP && !months.includes(incP))) incP = cur;
+    const L = A.filter(r => !incP || String(r.data).slice(0, 7) === incP).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    const lordo = L.reduce((s, r) => s + num(r.importo), 0), netto = L.reduce((s, r) => s + incNet(r), 0), days = new Set(L.map(r => r.data)).size;
+    const cont = L.reduce((s, r) => s + num(r.contanti), 0), pos = L.reduce((s, r) => s + num(r.pos), 0);
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(incP);
+    const per = `<div class="gl-month gx-per"><button type="button" class="icon-btn" data-incp="-1" ${ix >= opts.length - 1 ? 'disabled' : ''} aria-label="Periodo precedente">‹</button><select id="in-per" aria-label="Periodo">${opts.map(k => `<option value="${k}"${k === incP ? ' selected' : ''}>${k ? esc(mLabel(k)) : 'Tutto il periodo'}</option>`).join('')}</select><button type="button" class="icon-btn" data-incp="1" ${ix <= 0 ? 'disabled' : ''} aria-label="Periodo successivo">›</button></div>`;
+    // grafico: giorno per giorno nel mese, mese per mese in tutto il periodo
+    let bars = [];
+    if (incP) { const [y, m] = incP.split('-').map(Number), nd = new Date(y, m, 0).getDate(), by = groupBy(L, r => Number(String(r.data).slice(8, 10))); bars = Array.from({ length: nd }, (_, i) => ({ k: String(i + 1), t: `${i + 1} ${MESI[m - 1]}`, v: (by.get(i + 1) || []).reduce((s, r) => s + num(r.importo), 0), wk: [0, 6].includes(new Date(y, m - 1, i + 1).getDay()) })); }
+    else bars = months.map(k => ({ k: MESI[Number(k.slice(5)) - 1].slice(0, 3), t: mLabel(k), v: A.filter(r => String(r.data).slice(0, 7) === k).reduce((s, r) => s + num(r.importo), 0) }));
+    const bm = Math.max(1, ...bars.map(b => b.v));
+    const sedi = [...groupBy(L, r => String(r.sede || '').trim() || 'Tutta l\'azienda')].map(([k, v]) => ({ k, v: v.reduce((s, r) => s + num(r.importo), 0) })).sort((a, b) => b.v - a.v);
+    el.innerHTML = (isLocal() || !db.v || db.v >= 'cdc-4.3' ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google alla versione cdc-4.3</b><span>Serve per salvare gli incassi (ora lo script è la versione ${esc(db.v)}).</span></div>`) + `<div class="gx-bar">${per}<div class="gx-act"><button type="button" class="btn sm" data-gx="inc-imp"><span class="lb-d">Importa Excel</span><span class="lb-m">Importa</span></button><button type="button" class="btn sm" data-gx="inc-xls">Esporta</button><button type="button" class="btn sm primary" data-gx="inc-new">+ Incasso</button></div></div>
+      ${gxKpi([['Incassato', eur0(lordo), 'IVA inclusa'], ['Ricavo netto', eur0(netto), 'IVA esclusa'], ['Media al giorno', eur0(days ? lordo / days : 0), `${days} ${days === 1 ? 'giorno' : 'giorni'} registrati`], ['Contanti / carte', lordo ? `${fmtNum(cont / lordo * 100, 0)}% · ${fmtNum(pos / lordo * 100, 0)}%` : '—', lordo ? `${eur0(cont)} · ${eur0(pos)}` : 'nessun incasso']])}
+      ${A.length ? `<div class="gl-2 in-2"><div class="card"><div class="card-h"><h3>${incP ? 'Giorno per giorno' : 'Mese per mese'}</h3><span class="muted small">IVA inclusa</span></div>
+          <div class="in-bars${incP ? ' days' : ''}">${bars.map((b, i) => `<div class="in-b${b.wk ? ' wk' : ''}" title="${esc(b.t)}: ${esc(eur(b.v))}" style="--d:${i * 18}ms"><i style="height:${(b.v / bm * 100).toFixed(1)}%"></i><span>${esc(b.k)}</span></div>`).join('')}</div></div>
+        <div class="card"><div class="card-h"><h3>Per sede</h3><span class="muted small">${esc(incP ? mLabel(incP) : 'tutto il periodo')}</span></div><div class="bars">${barRows(sedi, lordo)}</div></div></div>
+      <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Data</th><th>Sede</th><th class="r">Contanti</th><th class="r">Carte / POS</th><th class="r">Altro</th><th class="r">Totale</th><th class="r">IVA</th></tr></thead><tbody>
+        ${L.slice(0, 400).map(r => `<tr data-inc="${esc(r.id)}"><td data-l="Data"><b>${esc(dIt(r.data))}</b>${r.tipo === 'altro' ? '<small>altra entrata</small>' : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</td><td data-l="Sede">${esc(r.sede || '—')}</td><td class="r" data-l="Contanti">${num(r.contanti) ? eur(num(r.contanti)) : '—'}</td><td class="r" data-l="Carte">${num(r.pos) ? eur(num(r.pos)) : '—'}</td><td class="r" data-l="Altro">${num(r.altro) ? eur(num(r.altro)) : '—'}</td><td class="r" data-l="Totale"><b>${eur(num(r.importo))}</b></td><td class="r" data-l="IVA">${num(r.iva)}%</td></tr>`).join('') || '<tr><td colspan="7" class="gx-none">Nessun incasso nel periodo</td></tr>'}
+      </tbody></table></div>`
+      : gxEmpty('<path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/>', 'Nessun incasso registrato', 'Ogni sera registra la chiusura di cassa (contanti e carte): in Dashboard vedi subito ricavi, costi e utile.', '<button type="button" class="btn primary" data-gx="inc-new">+ Registra il primo incasso</button>')}`;
+    const ps = $('#in-per'); if (ps) ps.onchange = () => { incP = ps.value; renderInc(); };
+  }
+  function incForm(r0) {
+    const n = !r0, r = r0 ? { ...r0 } : { id: uid(), data: today(), sede: LS.get('cdc_inc_sede', ''), iva: ivaIncDef(), tipo: 'corrispettivi', creato: today() };
+    const CC = [...new Set([...centri(), ...INC().map(x => x.sede).filter(Boolean)])];
+    const nf = (k, l) => `<label class="f"><span>${l}</span><input name="${k}" type="number" step="any" min="0" inputmode="decimal" value="${num(r[k]) || ''}" placeholder="0,00"></label>`;
+    openSheet(n ? 'Nuovo incasso' : `Incasso del ${dIt(r.data)}`, `<div class="gx-seg wide in-tp"><button type="button" data-intp="corrispettivi" class="${r.tipo !== 'altro' ? 'on' : ''}">Chiusura di cassa</button><button type="button" data-intp="altro" class="${r.tipo === 'altro' ? 'on' : ''}">Altra entrata</button><i></i></div>
+      <div class="f-row"><label class="f"><span>Data</span><input name="data" type="date" value="${esc(r.data)}" max="${today()}" required></label><label class="f"><span>Sede</span><select name="sede"><option value="">Tutta l'azienda</option>${CC.map(c => `<option${c === r.sede ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label></div>
+      <div class="f-row f3">${nf('contanti', 'Contanti €')}${nf('pos', 'Carte / POS €')}${nf('altro', 'Altro €')}</div>
+      <div class="f-row"><label class="f"><span>IVA compresa</span><select name="iva">${IVE.map(v => `<option value="${v}"${num(r.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select></label><div class="f"><span>Totale incassato</span><div class="gx-ro in-tot" id="in-tot">0,00 €</div></div></div>
+      <label class="f"><span>Note</span><input name="note" value="${esc(r.note || '')}" placeholder="es. evento, catering, buoni pasto…"></label>`, fd => {
+      const o = { ...r, data: String(fd.get('data') || today()), sede: String(fd.get('sede') || ''), iva: num(fd.get('iva')), note: String(fd.get('note') || '').trim() };
+      ['contanti', 'pos', 'altro'].forEach(k => { o[k] = r2(num(fd.get(k))); });
+      o.importo = r2(o.contanti + o.pos + o.altro);
+      if (!o.importo) { toast('Scrivi almeno un importo'); return; }
+      if (o.data > today()) { toast('La data non può essere nel futuro'); return; }
+      if (n && o.tipo !== 'altro' && INC().some(x => x.data === o.data && String(x.sede || '') === o.sede && x.tipo !== 'altro') && !confirm(`C'è già una chiusura di cassa del ${dIt(o.data)}${o.sede ? ' per ' + o.sede : ''}. Aggiungerla lo stesso?`)) return;
+      LS.set('cdc_inc_sede', o.sede);
+      write([{ action: 'upsert', sheet: 'Incassi', row: o }]); toast(`Incasso di ${eur(o.importo)} registrato`); return true;
+    }, n ? null : () => { if (!confirm('Eliminare questo incasso?')) return; write([{ action: 'delete', sheet: 'Incassi', id: r.id }]); toast('Incasso eliminato'); return true; }, n ? 'Registra' : 'Salva');
+    const body = $('#sheet-body'), upd = () => { const t = ['contanti', 'pos', 'altro'].reduce((s, k) => s + num(body.querySelector(`[name=${k}]`).value), 0); $('#in-tot').textContent = eur(t); };
+    body.addEventListener('input', upd); upd();
+    body.querySelector('.in-tp').onclick = e => { const b = e.target.closest('[data-intp]'); if (!b) return; r.tipo = b.dataset.intp; $$('[data-intp]', body).forEach(x => x.classList.toggle('on', x === b)); };
+    const f = body.querySelector('[name=contanti]'); if (f && matchMedia('(min-width: 640px)').matches) setTimeout(() => f.focus(), 60);
+  }
+  async function incImport() {
+    try {
+      const file = await pickFile('.xlsx,.xls,.csv'); await loadXlsx(); busy('Leggo il file…');
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }), rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      const key = (r, ...ks) => { const e = Object.keys(r).find(h => ks.some(k => nh(h).includes(k))); return e == null ? '' : r[e]; };
+      const dt = v => { if (v instanceof Date) return ymd(v); const s = String(v).trim(); let m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/); if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; m = s.match(/^\d{4}-\d{2}-\d{2}/); return m ? m[0] : ''; };
+      const ops = [];
+      rows.forEach(r => {
+        const data = dt(key(r, 'data', 'giorno')); if (!data) return;
+        const c = num(key(r, 'contanti')), p = num(key(r, 'pos', 'carte', 'bancomat')), a = num(key(r, 'altro')), t = num(key(r, 'totale', 'importo', 'incasso', 'corrispettiv'));
+        const o = { id: uid(), data, sede: String(key(r, 'sede', 'locale', 'negozio', 'punto')).trim(), contanti: c, pos: p, altro: c || p || a ? a : t, iva: String(key(r, 'iva', 'aliquota')).trim() !== '' ? num(key(r, 'iva', 'aliquota')) : ivaIncDef(), tipo: 'corrispettivi', note: String(key(r, 'note')).trim(), creato: today() };
+        o.importo = r2(o.contanti + o.pos + o.altro); if (o.importo) ops.push({ action: 'upsert', sheet: 'Incassi', row: o });
+      });
+      busy(); if (!ops.length) return toast('Nessun incasso trovato: servono le colonne Data e Importo (oppure Contanti e POS)');
+      write(ops); toast(`${ops.length} incassi importati`);
+    } catch (e) { busy(); if (e.message !== 'annullato') toast(e.message); }
+  }
+  async function incExport() {
+    try {
+      await loadXlsx();
+      const rows = INC().slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).map(r => ({ Data: r.data, Sede: r.sede || '', Contanti: num(r.contanti), 'Carte / POS': num(r.pos), Altro: num(r.altro), Totale: num(r.importo), 'IVA %': num(r.iva), 'Netto IVA': incNet(r), Tipo: r.tipo === 'altro' ? 'Altra entrata' : 'Chiusura di cassa', Note: r.note || '' }));
+      const wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Data: '', Sede: '', Contanti: '', 'Carte / POS': '', Altro: '', Totale: '', 'IVA %': '', 'Netto IVA': '', Tipo: '', Note: '' }]);
+      ws['!cols'] = [12, 20, 12, 12, 10, 12, 7, 12, 18, 30].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, 'Incassi');
+      XLSX.writeFile(wb, `incassi-${today()}.xlsx`); toast('Excel scaricato');
+    } catch (e) { toast(e.message); }
   }
 
   /* ================= Eventi ================= */

@@ -276,7 +276,7 @@
     return { movimenti, gls, gasolio, fatture, lyreco: [], lyfatture: [], amazon, amazonart, pdf: [], config, ai: false, aik: { gemini: false }, aiFirst: 'gemini', v: 'demo' };
   }
   /* v98: clienti, magazzino, DDT e fatture di prova (uguali per tutte le attività, con gli articoli della demo) */
-  function addSales(D) {
+  function addSales(D, id) {
     seed = 777; const ids = () => 'dx' + uid();
     const CL = [['Rossi Costruzioni S.r.l.', 'Via Appia Nuova 120', '00179', 'Roma', 'RM'], ['Bianchi & Figli S.n.c.', 'Corso Italia 45', '20122', 'Milano', 'MI'], ['Verdi Servizi S.r.l.', 'Via Emilia 300', '40138', 'Bologna', 'BO'],
       ['Hotel Bellavista S.r.l.', 'Lungomare Colombo 12', '84129', 'Salerno', 'SA'], ['Esposito Group S.p.A.', 'Via Toledo 210', '80134', 'Napoli', 'NA'], ['Studio Neri Associati', 'Via dei Mille 8', '10123', 'Torino', 'TO']];
@@ -305,7 +305,21 @@
         const f = { id: 'dv' + (++nf), numero: String(nf), anno: String(yy), data: last, tipo: 'TD24', cliente: c.id, ddt: JSON.stringify(L.map(d => d.id)), righe: JSON.stringify(righe), imponibile: imp, imposta: iva, totale: r2(imp + iva), pagamento: c.pagamento, scadenza: ds(sc), stato: rnd() < .5 ? 'pagata' : 'emessa', pagata: '', note: '', creato: last };
         if (f.stato === 'pagata') f.pagata = last; vendite.push(f); L.forEach(d => { d.fattura = f.id; }); }); });
     Object.assign(D.config.azienda = D.config.azienda || {}, { piva: '01234567890', cf: '01234567890', indirizzo: 'Via Roma 10', cap: '00100', regime: 'RF01', iban: 'IT60X0542811101000000123456', email: 'info@azienda-demo.example', tel: '06 1234567' });
-    return Object.assign(D, { clienti, articoli, magmov, ddt, vendite });
+    // v99: incassi giornalieri per sede, in modo che i ricavi superino i costi del 15–35% (utile realistico)
+    const S = window.CDC_SETTORI && window.CDC_SETTORI.get(id || 'veicoli'), ivaI = (S && S.ivaInc) || 22, CEN = (D.config.centri || []).slice(0, 5), WS = [5, 3, 2, 2, 1].slice(0, CEN.length);
+    const cost = {}, addC = (d, v) => { const m = String(d).slice(0, 7); cost[m] = (cost[m] || 0) + v; };
+    D.movimenti.forEach(r => addC(r.data, r.quantita * r.prezzo)); D.gasolio.forEach(r => addC(r.data, r.litri * r.prezzo)); D.amazon.forEach(o => addC(o.data, o.imponibile)); D.lyreco.forEach(r => addC(r.data, r.importo)); D.gls.forEach(r => addC(r.data, r.totale)); if (id && id !== 'veicoli') D.fatture.forEach(f => addC(f.data, f.imponibile));
+    const fvM = {}; vendite.forEach(f => { fvM[f.data.slice(0, 7)] = (fvM[f.data.slice(0, 7)] || 0) + f.imponibile; });
+    const incassi = [];
+    Object.keys(cost).sort().forEach(m => {
+      const [yy, mm] = m.split('-').map(Number), last = Math.min(new Date(yy, mm, 0).getDate(), m === ds(now).slice(0, 7) ? now.getDate() : 31);
+      const target = Math.max(0, cost[m] * (1.15 + rnd() * .2) - (fvM[m] || 0)) * (1 + ivaI / 100); if (!target || !CEN.length) return;
+      const days = []; for (let g = 1; g <= last; g++) { const wd = new Date(yy, mm - 1, g).getDay(); if (wd !== 0 || rnd() < .4) days.push([g, wd === 5 || wd === 6 ? 1.5 : 1]); }
+      const wT = days.reduce((a, d) => a + d[1], 0) * WS.reduce((a, b) => a + b, 0);
+      days.forEach(([g, wd]) => CEN.forEach((c, j) => { const v = r2(target * wd * WS[j] / wT * (.8 + rnd() * .4)); if (v < 1) return; const pos = r2(v * (.55 + rnd() * .25)), dd = ds(new Date(yy, mm - 1, g));
+        incassi.push({ id: 'di' + uid(), data: dd, sede: c, importo: v, contanti: r2(v - pos), pos, altro: 0, iva: ivaI, tipo: 'corrispettivi', note: '', creato: dd }); }));
+    });
+    return Object.assign(D, { clienti, articoli, magmov, ddt, vendite, incassi });
   }
-  window.CDC_DEMO = id => addSales(PROF[id] ? sector(id) : vei());
+  window.CDC_DEMO = id => addSales(PROF[id] ? sector(id) : vei(), PROF[id] ? id : 'veicoli');
 })();

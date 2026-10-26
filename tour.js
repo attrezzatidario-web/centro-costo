@@ -29,7 +29,7 @@
 
   // illustrazioni animate delle funzioni (SVG + classi CSS)
   const ILL = {
-    spese: `<svg viewBox="0 0 200 110" class="il il-bars">${[34, 58, 46, 72, 52, 86, 64, 78].map((h, i) => `<rect x="${14 + i * 22}" y="${100 - h}" width="13" height="${h}" rx="3" style="--i:${i}"/>`).join('')}<path class="il-line" d="M20 70 L42 52 L64 60 L86 36 L108 50 L130 22 L152 40 L174 28" pathLength="1"/></svg>`,
+    spese: `<svg viewBox="0 0 200 110" class="il il-bars">${[[46, 34], [58, 40], [52, 44], [70, 46], [64, 42], [84, 50], [78, 48]].map(([r, c], i) => `<rect class="rv1" x="${16 + i * 25}" y="${100 - r}" width="9" height="${r}" rx="2.5" style="--i:${i}"/><rect class="cv1" x="${26 + i * 25}" y="${100 - c}" width="9" height="${c}" rx="2.5" style="--i:${i}"/>`).join('')}<path class="il-line" d="M25 78 L50 70 L75 76 L100 62 L125 64 L150 52 L175 54" pathLength="1"/></svg>`,
     forn: `<div class="il il-logos"><div class="il-track">${[...LOGOS, ...LOGOS].map(l => `<img src="logo-${l}.svg" alt="" loading="lazy">`).join('')}</div></div>`,
     prev: `<svg viewBox="0 0 200 110" class="il il-doc"><rect x="58" y="8" width="84" height="96" rx="6" class="pg"/>${[24, 34, 44, 58, 68, 78].map((y, i) => `<path d="M70 ${y} H${i % 3 === 2 ? 112 : 130}" pathLength="1" style="--i:${i}"/>`).join('')}<g class="bdg"><rect x="118" y="74" width="44" height="22" rx="6"/><text x="140" y="89">PDF</text></g></svg>`,
     mag: `<svg viewBox="0 0 200 110" class="il il-shelf"><path d="M30 34 H170 M30 68 H170 M30 102 H170" class="sh"/>${[[40, 12], [66, 12], [92, 12], [44, 46], [70, 46], [118, 46], [40, 80], [96, 80], [122, 80], [148, 80]].map(([x, y], i) => `<rect x="${x}" y="${y}" width="22" height="22" rx="3" style="--i:${i}"/>`).join('')}<g class="cnt"><rect x="142" y="8" width="44" height="22" rx="11"/><text x="164" y="23">128</text></g></svg>`,
@@ -40,7 +40,7 @@
     acc: `<svg viewBox="0 0 200 110" class="il il-dev"><rect x="26" y="18" width="96" height="62" rx="5" class="lp"/><path d="M16 86 H132" class="lp"/><rect x="148" y="30" width="34" height="62" rx="6" class="ph"/>${[0, 1, 2].map(i => `<circle class="dt" cx="${128 + i * 7}" cy="56" r="2.2" style="--i:${i}"/>`).join('')}<path class="ck" d="M60 48 L70 58 L88 40" pathLength="1"/></svg>`
   };
   const FEAT = [
-    ['spese', 'Spese sotto controllo', 'Dashboard con spesa per mese, per sede e per categoria. Vedi subito dove vanno i soldi.'],
+    ['spese', 'Quanto guadagni, davvero', 'Incassi, fatture e spese in un unico conto: ricavi, costi e utile mese per mese e per ogni sede.'],
     ['forn', 'Tutti i fornitori', 'Cataloghi con foto, codici e listini di 17 fornitori. Aggiungiamo anche i tuoi.'],
     ['prev', 'Preventivi in un clic', 'Scegli i prodotti, applichi ricarico e sconti, scarichi un PDF professionale da mandare al cliente.'],
     ['ai', 'Fatture lette dall\'IA', 'Fotografi o carichi la fattura del fornitore: righe, importi e categorie si compilano da soli.'],
@@ -64,7 +64,7 @@
   function heroMock() {
     return `<div class="tr-mock" aria-hidden="true">
       <div class="tm-top"><i></i><i></i><i></i><span>Dashboard</span></div>
-      <div class="tm-kpi"><div><small>Spesa del mese</small><b data-cnt="12840">0 €</b><em class="up">▼ 8% rispetto al mese prima</em></div>
+      <div class="tm-kpi"><div><small>Utile del mese</small><b data-cnt="8460">0 €</b><em class="up">▲ 12% rispetto al mese prima</em></div>
         <svg class="tm-donut" viewBox="0 0 42 42"><circle r="15.9" cx="21" cy="21" class="bg"/>${[[38, 0], [27, 38], [20, 65], [15, 85]].map(([v, o], i) => `<circle r="15.9" cx="21" cy="21" class="sg s${i}" style="--v:${v};--o:${o};--i:${i}"/>`).join('')}</svg></div>
       <div class="tm-bars">${Array.from({ length: 12 }, (_, i) => `<i style="--i:${i};--h:${30 + ((i * 37) % 60)}%"></i>`).join('')}</div>
       <div class="tm-rows">${[['Fattura letta dall\'IA', '14 righe · categorie assegnate'], ['Preventivo inviato', 'PDF con foto dei prodotti'], ['Sotto scorta', '3 articoli da riordinare']].map(([t, d], i) => `<div class="tm-r" style="--i:${i}"><span class="tm-ic"></span><span><b>${t}</b><small>${d}</small></span></div>`).join('')}</div>
@@ -84,7 +84,7 @@
         <div class="tr-hl rv">
           <span class="tr-eye">Gestionale aziendale su misura</span>
           <h1>Il gestionale su misura per <span class="tr-word" data-word>${esc(word)}</span></h1>
-          <p>Spese, fornitori, preventivi, clienti e magazzino in un unico posto, su PC e telefono. Preparato su misura per come lavori, e personalizzabile quanto vuoi.</p>
+          <p>Quanto incassi, quanto spendi e quanto ti resta. Fornitori, preventivi, clienti, magazzino e fatture in un unico posto, su PC e telefono. Preparato su misura per come lavori, e personalizzabile quanto vuoi.</p>
           <div class="tr-cta">${opts.demo ? '' : `<button type="button" class="tr-btn" data-tr="demo">Prova la demo</button>`}<button type="button" class="tr-btn ${opts.demo ? '' : 'alt'}" data-tr="req">Richiedi il tuo gestionale</button><a class="tr-btn ghost" href="${esc(mail)}">Scrivimi</a></div>
         </div>
         <div class="tr-hr rv">${heroMock()}</div>
