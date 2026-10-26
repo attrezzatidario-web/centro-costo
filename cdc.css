@@ -2384,10 +2384,10 @@ body.pv-all #pv-tools { display: none; }
 .pv-gbar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p, 0%); background: var(--accent); border-radius: 3px; transition: width .35s ease; }
 .pv-gspin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: pvgspin .8s linear infinite; flex: none; }
 @keyframes pvgspin { to { transform: rotate(360deg); } }
-.pv-ghero .pv-gs { width: 100%; max-width: none; justify-self: stretch; margin: 0; }
-.pv-gs { height: 60px; border-radius: 16px; box-shadow: 0 10px 30px -18px rgba(20, 40, 80, .45); }
-.pv-gs input { font-size: 17px; text-align: left !important; width: 100%; min-width: 0; }
-.pv-gs:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), 0 10px 30px -18px rgba(20, 40, 80, .45); }
+.pv-ghero .pv-gsx { width: 100%; max-width: none; justify-self: stretch; margin: 0; }
+.pv-ghero .pv-gsx { height: 60px; border-radius: 16px; box-shadow: 0 10px 30px -18px rgba(20, 40, 80, .45); }
+.pv-ghero .pv-gsx input { font-size: 17px; text-align: left !important; width: 100%; min-width: 0; }
+.pv-ghero .pv-gsx:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), 0 10px 30px -18px rgba(20, 40, 80, .45); }
 .pv-gsug { display: flex; flex-wrap: wrap; gap: 8px; }
 .pv-gsug button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: border-color .2s, color .2s, transform .15s; }
 .pv-gsug button:hover { border-color: var(--accent); color: var(--accent); }
@@ -2440,7 +2440,7 @@ body.pv-all #pv-tools { display: none; }
 .pv-gtl { font-size: 13px; color: var(--muted); font-weight: 600; margin-right: auto; }
 @media (max-width: 899px) {
   .pv-ghero { padding: 20px 16px; border-radius: 20px; gap: 14px; }
-  .pv-gs { height: 54px; }
+  .pv-ghero .pv-gsx { height: 54px; }
   .pv-gsug { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
   .pv-gsug::-webkit-scrollbar { display: none; }
   .pv-gsug button { flex: none; }
@@ -2473,3 +2473,57 @@ body.pv-all #pv-tools { display: none; }
   .pv-gxr > span:first-child { display: none; }
   .pv-gxm { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
 }
+/* v89: righe spostabili, sostituzione, modifica prodotto, scheda tecnica */
+.dr-th { width: 30px; }
+.pv-lt td.dr-c, .tro-lt td.dr-c { width: 30px; padding-left: 0 !important; padding-right: 0 !important; }
+.dr-h { width: 28px; height: 34px; display: inline-grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: grab; touch-action: none; padding: 0; }
+.dr-h svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+.dr-h:hover, .dr-h:focus-visible { background: var(--bg); color: var(--ink); }
+.dr-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+body.dr-busy, body.dr-busy * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
+tbody > tr { transition: transform .18s ease; }
+tbody > tr.dr-on { position: relative; z-index: 5; transition: none; background: var(--surface); box-shadow: 0 14px 34px -12px rgba(15, 23, 42, .4); border-radius: 12px; }
+.pv-lt td.pv-la, .tro-lt td.tro-c-x { white-space: nowrap; }
+@media (max-width: 699px) {
+  .pv-lt tr, .tro-lt tr { position: relative; }
+  .pv-lt td.dr-c, .tro-lt td.dr-c { grid-column: 3; grid-row: 1; justify-self: end; width: auto; }
+  .pv-lt td.pv-la { grid-column: 1 / -1; grid-row: auto; justify-self: stretch; justify-content: flex-end; flex-wrap: wrap; }
+  .tro-lt td.tro-c-x { grid-column: 1 / -1; grid-row: auto; justify-self: end; }
+  .dr-h { width: 40px; height: 40px; background: var(--bg); }
+}
+.pvx-bar.plain { color: var(--muted); }
+.pvx-ba { display: flex; gap: 8px; flex-wrap: wrap; }
+.pvx-ba .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-right: 5px; vertical-align: -2px; }
+.pvx-sch { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)) !important; color: var(--accent) !important; }
+/* sostituisci prodotto */
+.pv-rs { margin-bottom: 10px; }
+.pv-rres { display: grid; gap: 6px; max-height: min(56vh, 520px); overflow-y: auto; margin: 0 -4px; padding: 2px 4px; }
+.pv-rrow { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font: inherit; color: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.pv-rrow.tr { grid-template-columns: minmax(0, 1fr) auto; }
+.pv-rrow:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.pv-rrow .pv-img { width: 46px !important; height: 46px !important; border-radius: 10px; }
+.pv-rrow b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-rrow small { color: var(--muted); font-size: 12px; }
+.pv-rrow > img { height: 18px; max-width: 64px; object-fit: contain; }
+.pv-rrow em { font-style: normal; font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+.pv-rg { margin: 12px 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.pv-rsel { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; align-items: center; }
+.pv-rsel .pv-img { width: 84px !important; height: 84px !important; border-radius: 14px; }
+.pv-rsel b { display: block; font-size: 16px; margin: 2px 0 4px; }
+.pv-rvars { display: flex; flex-wrap: wrap; gap: 8px; max-height: 40vh; overflow-y: auto; }
+.pv-rvars button { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; }
+.pv-rvars button.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--ink); }
+.pv-rvars em { font-style: normal; color: var(--muted); font-weight: 500; }
+/* modifica prodotto: prezzi per variante */
+.pvm-vt { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; margin-top: 4px; }
+.pvm-vh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.pvm-vh small { color: var(--muted); font-size: 12px; }
+.pvm-v { display: grid; grid-template-columns: 110px minmax(0, 1fr) 130px; gap: 8px; align-items: center; }
+.pvm-v:only-of-type, .pvm-v:has(> .pvm-pi:first-child) { grid-template-columns: 1fr; }
+.pvm-c { font-size: 12px; font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.pvm-v input { width: 100%; height: 38px; }
+.pvm-pi { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.pvm-pi input { text-align: right; }
+.pvm-all { margin-top: 4px; }
+.pvm-vt { max-height: 46vh; overflow-y: auto; }
+@media (max-width: 520px) { .pvm-v { grid-template-columns: 1fr 110px; } .pvm-c { grid-column: 1 / -1; } }
