@@ -153,7 +153,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -218,7 +218,7 @@
   /* ================= v95: settore di attività, moduli e nomi ================= */
   const SET = window.CDC_SETTORI || { list: [], moduli: [], sempre: [], piani: {}, get: () => null };
   const SET_DEF = { id: 'veicoli', n: 'Allestimento veicoli e attrezzature', sede: ['Piazzale', 'Piazzali'], acq: 'Attrezzatura', mod: {}, cat: null };
-  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental'];
+  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'clienti', 'magazzino', 'vendite'];
   const AREA_MOD = { gls: 'gls', gas: 'gasolio', ly: 'lyreco', am: 'amazon' };
   // la demo ricorda sul dispositivo il settore scelto; gli altri gestionali lo prendono dal registro «Gestionali»
   const settoreId = () => DEMO ? (LS.get('cdc_demo_set', '') || 'veicoli') : ((me && me.wsSettore) || (isMain() ? 'veicoli' : 'altro'));
@@ -329,8 +329,8 @@
   }
   // v97: presentazione «Scopri cosa può fare» (tour.js + tour.css, caricati solo quando servono)
   async function openTour() {
-    try { await loadLib('tour.js?v=97'); } catch { return demoInfo(); }
-    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 97, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
+    try { await loadLib('tour.js?v=98'); } catch { return demoInfo(); }
+    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 98, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
       onDemo: () => { authPane('reg'); regMode('code'); const c = $('#reg-form').elements.codice; c.value = 'DEMO2026'; setTimeout(() => $('#reg-form [name=nome]').focus(), 80); },
       onRequest: id => { const after = () => { authPane('reg'); regMode('new'); const f = $('#reg-form'); if (id && SET.get(id)) { f.elements.settore.value = id; regMode('new'); } setTimeout(() => $('#reg-form [name=nome]').focus(), 80); };
         if (DEMO) logout(true).then(after); else if (me) location.href = `mailto:${CONTATTI.email}?subject=${encodeURIComponent('Centro di Costo · richiesta')}`; else after(); } }) : demoInfo();
@@ -528,7 +528,7 @@
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
       const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) };
+      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [] };
       if (j.data.user) applyMe(j.data.user);
       applyMany(queue);
       online = true; save(); render();
@@ -565,7 +565,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -590,8 +590,8 @@
     document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = ['clienti', 'magazzino', 'vendite'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -621,7 +621,7 @@
   function render() {
     applySettore();
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin, clienti: renderCli, magazzino: renderMag, vendite: renderVen }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -1196,6 +1196,7 @@
   function modToggle(k) {
     if (me && me.ruolo === 'lettura') return toast('Il tuo account è in sola lettura');
     const c = { ...(cfg('moduli') || {}) }; c[k] = !modOn(k);
+    if (k === 'vendite' && c[k]) c.clienti = true; // i documenti ai clienti hanno bisogno dell'anagrafica
     setConfig('moduli', c);
     const m = SET.moduli.find(x => x.k === k); toast(`${m ? m.t(settore()) : k} ${c[k] ? 'accesa' : 'spenta'}`);
   }
@@ -1204,6 +1205,7 @@
     sub('');
     renderMe();
     renderSetMod();
+    renderDocSet();
     renderBackup();
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
     const stat = (l, v, s2) => `<div class="st-stat"><span>${l}</span><b>${v}</b>${s2 ? `<small>${s2}</small>` : ''}</div>`;
@@ -7721,9 +7723,574 @@
     if (k === 'copy' && w) { navigator.clipboard && navigator.clipboard.writeText(w.codice).then(() => toast('Codice copiato'), () => toast(w.codice)); return; }
     if (k === 'enter' && w) return adEnter(w);
   }
+  /* =========================================================
+     v98 · CLIENTI, MAGAZZINO, DDT E FATTURE DI FINE MESE
+     Fogli Google: Clienti, Articoli, MagMov, DDT, Vendite (Code.gs cdc-4.2).
+     Le righe dei documenti sono JSON: { art, c, d, um, q, p, sc, iva } e { h: 1, d, ddt } per le intestazioni dei DDT.
+     ========================================================= */
+  const GX = { cli: () => db.clienti || (db.clienti = []), art: () => db.articoli || (db.articoli = []), mov: () => db.magmov || (db.magmov = []), ddt: () => db.ddt || (db.ddt = []), fv: () => db.vendite || (db.vendite = []) };
+  const gxOk = () => isLocal() || !db.v || db.v >= 'cdc-4.2';
+  const gxWarn = () => gxOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google alla versione cdc-4.2</b><span>Serve per salvare clienti, magazzino, DDT e fatture (ora lo script è la versione ${esc(db.v)}).</span></div>`;
+  const jp = (v, d) => { if (v && typeof v === 'object') return v; try { const x = JSON.parse(v || ''); return x == null ? d : x; } catch { return d; } };
+  const cliOf = id => GX.cli().find(c => c.id === id) || null;
+  const cliName = id => (cliOf(id) || {}).nome || 'Cliente eliminato';
+  const artOf = id => GX.art().find(a => a.id === id) || null;
+  const giacMap = () => { const M = new Map(); GX.mov().forEach(m => M.set(m.articolo, r2((M.get(m.articolo) || 0) + num(m.quantita)))); return M; };
+  const lnTot = l => r2(num(l.q) * num(l.p) * (1 - num(l.sc) / 100));
+  function docTot(righe) {
+    const by = {};
+    (righe || []).filter(l => !l.h).forEach(l => { const a = String(num(l.iva)); by[a] = by[a] || { imp: 0 }; by[a].imp = r2(by[a].imp + lnTot(l)); });
+    let imp = 0, iva = 0;
+    Object.entries(by).forEach(([a, x]) => { x.iva = r2(x.imp * num(a) / 100); imp += x.imp; iva += x.iva; });
+    return { imp: r2(imp), iva: r2(iva), tot: r2(imp + iva), by };
+  }
+  const dnum = d => `${d.numero}/${d.anno}`;
+  const nextNum = (arr, anno) => arr.filter(x => String(x.anno) === String(anno)).reduce((m, x) => Math.max(m, parseInt(x.numero, 10) || 0), 0) + 1;
+  const dIt = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const PAG = ['Rimessa diretta', 'Bonifico vista fattura', 'Bonifico 30 gg d.f.f.m.', 'Bonifico 60 gg d.f.f.m.', 'Ri.Ba. 30 gg d.f.f.m.', 'Ri.Ba. 60 gg d.f.f.m.', 'Contanti'];
+  const IVE = [22, 10, 5, 4, 0];
+  function scadDi(data, pag) {
+    const d = parseD(data); if (!d) return data;
+    const n = parseInt((String(pag || '').match(/(\d+)\s*gg/) || [])[1] || '0', 10);
+    d.setDate(d.getDate() + n); if (/f\.?\s*m/i.test(pag || '')) d.setMonth(d.getMonth() + 1, 0);
+    return ymd(d);
+  }
+  const fvLate = f => f.stato !== 'pagata' && validD(f.scadenza) && f.scadenza < today();
+  const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  const gxKpi = K => `<div class="gx-kpis">${K.map(([l, v, s2, cls]) => `<div class="gx-k${cls ? ' ' + cls : ''}"><span>${l}</span><b>${v}</b><small>${s2 || ''}</small></div>`).join('')}</div>`;
+  const gxEmpty = (ic, t, d, btn) => `<div class="card gx-empty"><span class="set-ci lg"><svg viewBox="0 0 24 24">${ic}</svg></span><h3>${t}</h3><p>${d}</p>${btn || ''}</div>`;
+  const GIC = {
+    cli: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 11h6M19 8v6"/>',
+    mag: '<path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/>',
+    doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 14l2 2 4-4"/>'
+  };
+
+  /* ---------- dati della propria azienda (DDT, fatture, XML) ---------- */
+  function azForm(done) {
+    const a = { ...(cfg('azienda') || {}) };
+    const f = (k, l, ph = '') => `<label class="f"><span>${l}</span><input name="${k}" value="${esc(a[k] || '')}" placeholder="${esc(ph)}"></label>`;
+    openSheet('Dati della tua azienda', `<p class="pvx-intro">Compaiono su DDT e fatture e servono per il file XML della fattura elettronica.</p>
+      ${f('nome', 'Ragione sociale', 'Es. Rossi S.r.l.')}
+      <div class="f-row">${f('piva', 'Partita IVA', '11 cifre')}${f('cf', 'Codice fiscale', 'se diverso dalla P.IVA')}</div>
+      ${f('indirizzo', 'Indirizzo della sede', 'Via e numero civico')}
+      <div class="f-row f3">${f('cap', 'CAP')}${f('citta', 'Città')}${f('prov', 'Prov.', 'RM')}</div>
+      <div class="f-row"><label class="f"><span>Regime fiscale</span><select name="regime"><option value="RF01"${a.regime !== 'RF19' ? ' selected' : ''}>Ordinario (RF01)</option><option value="RF19"${a.regime === 'RF19' ? ' selected' : ''}>Forfettario (RF19)</option></select></label>${f('iban', 'IBAN per i bonifici', 'IT…')}</div>
+      <div class="f-row f3">${f('email', 'Email')}${f('pec', 'PEC')}${f('tel', 'Telefono')}</div>`, fd => {
+      const o = { ...a };
+      ['nome', 'piva', 'cf', 'indirizzo', 'cap', 'citta', 'prov', 'regime', 'iban', 'email', 'pec', 'tel'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
+      o.piva = o.piva.replace(/\s|^IT/gi, ''); o.prov = o.prov.toUpperCase().slice(0, 2); o.iban = o.iban.replace(/\s+/g, '').toUpperCase(); o.cf = o.cf.toUpperCase();
+      if (o.piva && !/^\d{11}$/.test(o.piva)) toast('Attenzione: la partita IVA italiana ha 11 cifre');
+      setConfig('azienda', o); toast('Dati dell\'azienda salvati'); done && setTimeout(done, 50); return true;
+    }, null, 'Salva');
+    $('#sheet-form').classList.add('wide');
+  }
+  function renderDocSet() {
+    const el = $('#s-doc'); if (!el) return;
+    const sec = $('#st-doc'), nav = $('[data-st-go="st-doc"]'), on = modOn('vendite');
+    if (sec) sec.hidden = !on; if (nav) nav.hidden = !on;
+    if (!on) return;
+    const a = cfg('azienda') || {}, y = new Date().getFullYear(), ok = /^\d{11}$/.test(a.piva || '') && a.indirizzo && a.cap && a.citta;
+    el.innerHTML = `<div class="st-row"><div class="st-l"><b>${esc(a.nome || ORG.n)}</b><small>${ok ? esc([a.indirizzo, [a.cap, a.citta, a.prov ? `(${a.prov})` : ''].filter(Boolean).join(' '), 'P.IVA ' + a.piva].join(' · ')) : '<b class="st-warn">Mancano partita IVA o indirizzo: servono per le fatture elettroniche</b>'}</small></div><button type="button" class="btn sm${ok ? '' : ' primary'}" data-gx="az">${ok ? 'Modifica' : 'Completa'}</button></div>
+      <div class="st-row"><div class="st-l"><b>Numerazione ${y}</b><small>Prossimo DDT n. ${nextNum(GX.ddt(), y)}/${y} · prossima fattura n. ${nextNum(GX.fv(), y)}/${y}. Si può cambiare a mano nel documento.</small></div></div>
+      <div class="st-row"><div class="st-l"><b>Fattura elettronica</b><small>Per ogni fattura scarichi il PDF di cortesia e il file XML (FatturaPA) da caricare sul portale «Fatture e Corrispettivi» dell'Agenzia delle Entrate o dal tuo commercialista.</small></div></div>`;
+  }
+
+  /* ---------- CLIENTI ---------- */
+  let clQ = '';
+  function cliStats() {
+    const y = String(new Date().getFullYear()), S = new Map();
+    GX.cli().forEach(c => S.set(c.id, { fat: 0, open: 0, ddt: 0, ddtV: 0, nf: 0 }));
+    GX.fv().forEach(f => { const x = S.get(f.cliente); if (!x) return; if (String(f.anno) === y) x.fat += num(f.imponibile); if (f.stato !== 'pagata') x.open += num(f.totale); x.nf++; });
+    GX.ddt().forEach(d => { const x = S.get(d.cliente); if (!x || d.fattura) return; x.ddt++; x.ddtV += docTot(jp(d.righe, [])).imp; });
+    return S;
+  }
+  const pvKey = n => typeof pvCliKey === 'function' ? pvCliKey(n) : nh(n);
+  function renderCli() {
+    const el = $('#cl-body'); if (!el) return;
+    sub('Anagrafica dei clienti · dati per DDT e fatture');
+    const L = GX.cli().slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it')), S = cliStats(), y = new Date().getFullYear();
+    const q = nh(clQ), F = q ? L.filter(c => nh([c.nome, c.piva, c.cf, c.citta, c.email].join(' ')).includes(q)) : L;
+    const sum = k => [...S.values()].reduce((s, x) => s + x[k], 0);
+    const pvMiss = (Array.isArray(cfg('pvClienti')) ? cfg('pvClienti') : []).filter(p => p && p.nome && !L.some(c => pvKey(c.nome) === pvKey(p.nome)));
+    const noFisc = L.filter(c => !c.piva && !c.cf).length;
+    el.innerHTML = gxWarn() + `<div class="gx-bar"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="cl-q" placeholder="Cerca nome, P.IVA, città…" value="${esc(clQ)}"></label>
+      <div class="gx-act">${pvMiss.length ? `<button type="button" class="btn sm" data-gx="cli-imp">Importa dai preventivi (${pvMiss.length})</button>` : ''}<button type="button" class="btn sm primary" data-gx="cli-new">+ Cliente</button></div></div>
+      ${gxKpi([['Clienti', fmtNum(L.length, 0), noFisc ? `${noFisc} senza dati fiscali` : 'con dati fiscali'], [`Fatturato ${y}`, eur0(sum('fat')), 'imponibile'], ['Da incassare', eur0(sum('open')), 'fatture non pagate', sum('open') > 0 ? 'warn' : ''], ['DDT da fatturare', fmtNum(sum('ddt'), 0), eur0(sum('ddtV')) + ' imponibile']])}
+      ${!L.length ? gxEmpty(GIC.cli, 'Nessun cliente', 'Aggiungi i tuoi clienti con partita IVA, indirizzo e codice SDI: li ritrovi nei DDT, nelle fatture e nei preventivi.', '<button type="button" class="btn primary" data-gx="cli-new">+ Aggiungi il primo cliente</button>')
+        : `<div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Cliente</th><th>P.IVA / CF</th><th>Città</th><th class="r">Fatturato ${y}</th><th class="r">Da incassare</th><th class="r">DDT aperti</th></tr></thead><tbody>
+        ${F.map(c => { const x = S.get(c.id) || {}; return `<tr data-cli="${esc(c.id)}"><td data-l="Cliente"><b>${esc(c.nome)}</b>${c.email ? `<small>${esc(c.email)}</small>` : ''}</td><td data-l="P.IVA / CF">${esc(c.piva || c.cf || '—')}${!c.sdi && !c.pec ? '' : `<small>${c.sdi ? 'SDI ' + esc(c.sdi) : 'PEC'}</small>`}</td><td data-l="Città">${esc([c.citta, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' ') || '—')}</td><td class="r" data-l="Fatturato">${x.fat ? eur(x.fat) : '—'}</td><td class="r" data-l="Da incassare">${x.open ? `<span class="chip late">${eur(x.open)}</span>` : '—'}</td><td class="r" data-l="DDT aperti">${x.ddt ? `<span class="chip soon">${x.ddt}</span>` : '—'}</td></tr>`; }).join('') || `<tr><td colspan="6" class="gx-none">Nessun cliente trovato</td></tr>`}
+        </tbody></table></div>`}`;
+    const qi = $('#cl-q'); if (qi) qi.oninput = () => { clQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderCli(); const x = $('#cl-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
+  }
+  function cliForm(c, done) {
+    const n = !c; c = c ? { ...c } : { id: uid(), nazione: 'IT', pagamento: PAG[2], creato: today() };
+    const f = (k, l, ph = '') => `<label class="f"><span>${l}</span><input name="${k}" value="${esc(c[k] || '')}" placeholder="${esc(ph)}"${k === 'nome' ? ' data-focus required' : ''}></label>`;
+    const D = n ? [] : GX.ddt().filter(d => d.cliente === c.id), FV = n ? [] : GX.fv().filter(x => x.cliente === c.id);
+    openSheet(n ? 'Nuovo cliente' : c.nome, `${f('nome', 'Ragione sociale o nome', 'Es. Rossi S.r.l.')}
+      <div class="f-row">${f('piva', 'Partita IVA', '11 cifre')}${f('cf', 'Codice fiscale', 'se diverso dalla P.IVA')}</div>
+      ${f('indirizzo', 'Indirizzo', 'Via e numero civico')}
+      <div class="f-row f3">${f('cap', 'CAP')}${f('citta', 'Città')}${f('prov', 'Prov.', 'RM')}</div>
+      <div class="f-row">${f('sdi', 'Codice destinatario SDI', '7 caratteri')}${f('pec', 'PEC')}</div>
+      <div class="f-row">${f('email', 'Email')}${f('tel', 'Telefono')}</div>
+      <label class="f"><span>Pagamento</span><select name="pagamento">${PAG.map(p => `<option${p === c.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+      <label class="f"><span>Note</span><textarea name="note" rows="2">${esc(c.note || '')}</textarea></label>
+      ${D.length || FV.length ? `<div class="gx-mini"><b>Documenti</b>${[...FV.map(x => [x.data, `Fattura ${dnum(x)}`, eur(num(x.totale)), x.stato === 'pagata' ? 'paid' : fvLate(x) ? 'late' : 'soon', x.stato === 'pagata' ? 'pagata' : fvLate(x) ? 'scaduta' : 'da incassare']), ...D.map(d => [d.data, `DDT ${dnum(d)}`, eur(docTot(jp(d.righe, [])).imp), d.fattura ? '' : 'soon', d.fattura ? 'fatturato' : 'da fatturare'])].sort((a, b) => String(b[0]).localeCompare(String(a[0]))).slice(0, 8).map(([dt, t, v, cl, st]) => `<div class="gx-mr"><span>${esc(t)}<small>${esc(dIt(dt))}</small></span><span class="chip ${cl}">${st}</span><b>${v}</b></div>`).join('')}</div>` : ''}`, fd => {
+      const o = { ...c };
+      ['nome', 'piva', 'cf', 'indirizzo', 'cap', 'citta', 'prov', 'sdi', 'pec', 'email', 'tel', 'pagamento', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
+      if (o.nome.length < 2) { toast('Scrivi il nome del cliente'); return; }
+      o.prov = o.prov.toUpperCase().slice(0, 2); o.sdi = o.sdi.toUpperCase(); o.piva = o.piva.replace(/\s|^IT/gi, ''); o.cf = o.cf.toUpperCase();
+      if (o.piva && !/^\d{11}$/.test(o.piva)) toast('Attenzione: la partita IVA italiana ha 11 cifre');
+      if (o.sdi && o.sdi.length !== 7) toast('Attenzione: il codice SDI ha 7 caratteri');
+      write([{ action: 'upsert', sheet: 'Clienti', row: o }]); toast(n ? 'Cliente aggiunto' : 'Cliente aggiornato');
+      if (done) setTimeout(() => done(o), 30); return true;
+    }, n ? null : () => {
+      if (D.length || FV.length) { toast('Il cliente ha DDT o fatture: non si può eliminare'); return; }
+      if (!confirm(`Eliminare ${c.nome}?`)) return;
+      write([{ action: 'delete', sheet: 'Clienti', id: c.id }]); toast('Cliente eliminato'); return true;
+    }, n ? 'Aggiungi cliente' : 'Salva');
+    $('#sheet-form').classList.add('wide');
+  }
+  function cliImport() {
+    const L = GX.cli(), P = (cfg('pvClienti') || []).filter(p => p && p.nome && !L.some(c => pvKey(c.nome) === pvKey(p.nome)));
+    if (!P.length) return toast('Tutti i clienti dei preventivi sono già presenti');
+    write(P.map(p => ({ action: 'upsert', sheet: 'Clienti', row: { id: uid(), nome: p.nome, indirizzo: p.ind || '', email: p.email || '', tel: p.tel || '', nazione: 'IT', pagamento: PAG[2], note: p.ref ? `Referente: ${p.ref}` : '', creato: today() } })));
+    toast(`${P.length} clienti importati dai preventivi · completa P.IVA e indirizzo per le fatture`);
+  }
+
+  /* ---------- MAGAZZINO ---------- */
+  let mgTab = 'art', mgQ = '', mgLow = false;
+  function renderMag() {
+    const el = $('#mg-body'); if (!el) return;
+    sub('Articoli, giacenze, carichi e scarichi');
+    const A = GX.art().slice().sort((a, b) => String(a.descrizione).localeCompare(String(b.descrizione), 'it')), G = giacMap(), q = nh(mgQ);
+    const low = a => num(a.scorta) > 0 && (G.get(a.id) || 0) <= num(a.scorta);
+    const val = A.reduce((s, a) => s + Math.max(0, G.get(a.id) || 0) * num(a.costo), 0);
+    const m0 = today().slice(0, 7), MM = GX.mov().filter(m => String(m.data).slice(0, 7) === m0), nLow = A.filter(low).length;
+    const tabs = `<div class="gx-seg" role="tablist"><button type="button" data-mgtab="art" class="${mgTab === 'art' ? 'on' : ''}">Articoli</button><button type="button" data-mgtab="mov" class="${mgTab === 'mov' ? 'on' : ''}">Movimenti</button></div>`;
+    let h = gxWarn() + `<div class="gx-bar">${tabs}<label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="mg-q" placeholder="Cerca codice o descrizione…" value="${esc(mgQ)}"></label>
+      <div class="gx-act"><button type="button" class="btn sm" data-gx="mag-imp"><span class="lb-d">Importa Excel</span><span class="lb-m">Importa</span></button><button type="button" class="btn sm" data-gx="mag-xls"><span class="lb-d">Esporta</span><span class="lb-m">Esporta</span></button><button type="button" class="btn sm" data-gx="mov-new">Carico / scarico</button><button type="button" class="btn sm primary" data-gx="art-new">+ Articolo</button></div></div>
+      ${gxKpi([['Articoli', fmtNum(A.length, 0), `${A.filter(a => (G.get(a.id) || 0) > 0).length} disponibili`], ['Valore del magazzino', eur0(val), 'giacenze al costo'], ['Sotto scorta', fmtNum(nLow, 0), nLow ? 'da riordinare' : 'tutto a posto', nLow ? 'warn' : ''], ['Movimenti del mese', fmtNum(MM.length, 0), `${MM.filter(m => num(m.quantita) > 0).length} carichi · ${MM.filter(m => num(m.quantita) < 0).length} scarichi`]])}`;
+    if (!A.length) h += gxEmpty(GIC.mag, 'Magazzino vuoto', 'Aggiungi gli articoli che tieni in magazzino, oppure importali da Excel. Le giacenze si aggiornano da sole con carichi, DDT e fatture.', '<button type="button" class="btn primary" data-gx="art-new">+ Aggiungi il primo articolo</button>');
+    else if (mgTab === 'art') {
+      const F = A.filter(a => (!q || nh([a.codice, a.descrizione, a.categoria, a.fornitore, a.barcode].join(' ')).includes(q)) && (!mgLow || low(a)));
+      h += `<div class="gx-chips"><button type="button" class="chip-f${mgLow ? '' : ' on'}" data-mglow="0">Tutti <em>${A.length}</em></button><button type="button" class="chip-f${mgLow ? ' on' : ''}" data-mglow="1">Sotto scorta <em>${nLow}</em></button></div>
+      <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Articolo</th><th class="r">Giacenza</th><th class="r">Scorta min.</th><th class="r">Costo</th><th class="r">Prezzo</th><th class="r">Valore</th><th></th></tr></thead><tbody>
+      ${F.slice(0, 400).map(a => { const g = G.get(a.id) || 0; return `<tr data-art="${esc(a.id)}"><td data-l="Articolo"><b>${esc(a.descrizione)}</b><small>${esc([a.codice, a.categoria, a.fornitore].filter(Boolean).join(' · '))}</small></td><td class="r" data-l="Giacenza"><span class="gx-q${low(a) ? ' low' : g <= 0 ? ' zero' : ''}">${fmtNum(g, g % 1 ? 2 : 0)} ${esc(a.um || '')}</span></td><td class="r" data-l="Scorta min.">${num(a.scorta) ? fmtNum(num(a.scorta), 0) : '—'}</td><td class="r" data-l="Costo">${num(a.costo) ? eur(num(a.costo)) : '—'}</td><td class="r" data-l="Prezzo">${num(a.prezzo) ? eur(num(a.prezzo)) : '—'}</td><td class="r" data-l="Valore">${g > 0 && num(a.costo) ? eur0(g * num(a.costo)) : '—'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="mov-art" data-id="${esc(a.id)}">±</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="gx-none">Nessun articolo trovato</td></tr>'}
+      </tbody></table>${F.length > 400 ? `<p class="muted small gx-more">Mostrati 400 articoli su ${F.length}: usa la ricerca.</p>` : ''}</div>`;
+    } else {
+      const M = GX.mov().map(m => ({ m, a: artOf(m.articolo) })).filter(x => !q || nh([x.a && x.a.codice, x.a && x.a.descrizione, x.m.causale].join(' ')).includes(q)).sort((x, y) => String(y.m.data).localeCompare(String(x.m.data)) || String(y.m.creato).localeCompare(String(x.m.creato)));
+      const TP = { carico: ['Carico', 'paid'], scarico: ['Scarico', 'late'], rettifica: ['Inventario', 'soon'] };
+      h += `<div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Data</th><th>Articolo</th><th>Tipo</th><th class="r">Quantità</th><th>Causale</th><th></th></tr></thead><tbody>
+      ${M.slice(0, 400).map(({ m, a }) => `<tr><td data-l="Data">${esc(dIt(m.data))}</td><td data-l="Articolo"><b>${esc(a ? a.descrizione : 'Articolo eliminato')}</b>${a && a.codice ? `<small>${esc(a.codice)}</small>` : ''}</td><td data-l="Tipo"><span class="chip ${(TP[m.tipo] || TP.rettifica)[1]}">${(TP[m.tipo] || TP.rettifica)[0]}</span></td><td class="r" data-l="Quantità"><b class="${num(m.quantita) < 0 ? 'gx-neg' : 'gx-pos'}">${num(m.quantita) > 0 ? '+' : ''}${fmtNum(num(m.quantita), num(m.quantita) % 1 ? 2 : 0)}</b></td><td data-l="Causale">${esc(m.causale || '—')}</td><td class="r gx-ra">${m.doc ? '' : `<button type="button" class="btn sm ghost" data-gx="mov-del" data-id="${esc(m.id)}" aria-label="Elimina movimento">✕</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="gx-none">Nessun movimento</td></tr>'}
+      </tbody></table></div>`;
+    }
+    el.innerHTML = h;
+    const qi = $('#mg-q'); if (qi) qi.oninput = () => { mgQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderMag(); const x = $('#mg-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
+  }
+  function artForm(a) {
+    const n = !a; a = a ? { ...a } : { id: uid(), um: 'PZ', iva: 22, creato: today() };
+    const g = n ? 0 : (giacMap().get(a.id) || 0);
+    const f = (k, l, t = 'text', ph = '') => `<label class="f"><span>${l}</span><input name="${k}" type="${t}"${t === 'number' ? ' step="any" inputmode="decimal"' : ''} value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"${k === 'descrizione' ? ' data-focus required' : ''}></label>`;
+    const CAT = categorie();
+    openSheet(n ? 'Nuovo articolo' : a.descrizione, `${f('descrizione', 'Descrizione', 'Es. Cemento 32,5 R sacco 25 kg')}
+      <div class="f-row f3">${f('codice', 'Codice', 'facoltativo')}<label class="f"><span>Unità</span><select name="um">${UM.map(u => `<option${u === a.um ? ' selected' : ''}>${u}</option>`).join('')}</select></label>${f('barcode', 'Codice a barre', 'EAN')}</div>
+      <div class="f-row"><label class="f"><span>Categoria</span><input name="categoria" list="art-cats" value="${esc(a.categoria || '')}"><datalist id="art-cats">${CAT.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>${f('fornitore', 'Fornitore')}</div>
+      <div class="f-row f3">${f('costo', 'Costo d\'acquisto €', 'number', 'IVA esclusa')}${f('prezzo', 'Prezzo di vendita €', 'number', 'IVA esclusa')}<label class="f"><span>IVA</span><select name="iva">${IVE.map(v => `<option value="${v}"${num(a.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select></label></div>
+      <div class="f-row">${f('scorta', 'Scorta minima', 'number', 'avviso sotto questa quantità')}${n ? f('giac0', 'Giacenza iniziale', 'number', '0') : `<div class="f"><span>Giacenza attuale</span><div class="gx-giac"><b>${fmtNum(g, g % 1 ? 2 : 0)} ${esc(a.um || '')}</b><button type="button" class="btn sm" data-gx="mov-art" data-id="${esc(a.id)}">Carico / scarico</button></div></div>`}</div>
+      <label class="f"><span>Note</span><input name="note" value="${esc(a.note || '')}"></label>`, fd => {
+      const o = { ...a };
+      ['descrizione', 'codice', 'um', 'barcode', 'categoria', 'fornitore', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
+      ['costo', 'prezzo', 'iva', 'scorta'].forEach(k => { const v = String(fd.get(k) ?? '').trim(); o[k] = v === '' ? '' : num(v); });
+      if (o.descrizione.length < 2) { toast('Scrivi la descrizione'); return; }
+      if (o.codice && GX.art().some(x => x.id !== o.id && String(x.codice).trim().toUpperCase() === o.codice.toUpperCase())) { toast('Esiste già un articolo con questo codice'); return; }
+      const ops = [{ action: 'upsert', sheet: 'Articoli', row: o }], g0 = n ? num(fd.get('giac0')) : 0;
+      if (g0) ops.push({ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: today(), articolo: o.id, tipo: 'carico', quantita: g0, costo: num(o.costo), causale: 'Giacenza iniziale', doc: '', note: '', creato: new Date().toISOString() } });
+      write(ops); toast(n ? 'Articolo aggiunto' : 'Articolo aggiornato'); return true;
+    }, n ? null : () => {
+      if (!confirm(`Eliminare «${a.descrizione}» e i suoi movimenti? I DDT e le fatture già fatti restano.`)) return;
+      write([{ action: 'delete', sheet: 'Articoli', id: a.id }, ...GX.mov().filter(m => m.articolo === a.id).map(m => ({ action: 'delete', sheet: 'MagMov', id: m.id }))]); toast('Articolo eliminato'); return true;
+    }, n ? 'Aggiungi articolo' : 'Salva');
+    $('#sheet-form').classList.add('wide');
+  }
+  function movForm(artId) {
+    const A = GX.art().slice().sort((a, b) => String(a.descrizione).localeCompare(String(b.descrizione), 'it')), G = giacMap();
+    if (!A.length) return toast('Aggiungi prima un articolo');
+    let tipo = 'carico';
+    const CAUS = { carico: ['Acquisto da fornitore', 'Reso da cliente', 'Produzione', 'Altro'], scarico: ['Uso interno', 'Merce danneggiata', 'Omaggio', 'Reso a fornitore', 'Altro'], rettifica: ['Inventario'] };
+    openSheet('Carico / scarico', `<div class="gx-seg wide" data-mvseg><button type="button" data-mv="carico" class="on">Carico</button><button type="button" data-mv="scarico">Scarico</button><button type="button" data-mv="rettifica">Inventario</button></div>
+      <label class="f"><span>Articolo</span><select name="articolo" data-focus>${A.map(a => `<option value="${esc(a.id)}"${a.id === artId ? ' selected' : ''}>${esc(a.descrizione)}${a.codice ? ' · ' + esc(a.codice) : ''} — ${fmtNum(G.get(a.id) || 0, 0)} ${esc(a.um || '')}</option>`).join('')}</select></label>
+      <div class="f-row f3"><label class="f"><span data-mvq>Quantità caricata</span><input name="q" type="number" step="any" inputmode="decimal" required></label><label class="f" data-mvc><span>Costo unitario €</span><input name="costo" type="number" step="any" inputmode="decimal" placeholder="IVA esclusa"></label><label class="f"><span>Data</span><input name="data" type="date" value="${today()}"></label></div>
+      <div class="f-row"><label class="f"><span>Causale</span><select name="causale">${CAUS.carico.map(c => `<option>${c}</option>`).join('')}</select></label><label class="f"><span>Note</span><input name="note" placeholder="es. numero DDT del fornitore"></label></div>
+      <p class="muted small" data-mvh>La quantità si aggiunge alla giacenza.</p>`, fd => {
+      const id = String(fd.get('articolo')), a = artOf(id), q = num(fd.get('q'));
+      if (!a) return; if (!String(fd.get('q') || '').trim()) { toast('Scrivi la quantità'); return; }
+      let qty = tipo === 'carico' ? Math.abs(q) : tipo === 'scarico' ? -Math.abs(q) : r2(q - (giacMap().get(id) || 0));
+      if (tipo === 'rettifica' && !qty) { toast('La giacenza è già questa'); return true; }
+      write([{ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: String(fd.get('data') || today()), articolo: id, tipo, quantita: qty, costo: tipo === 'carico' ? num(fd.get('costo')) || num(a.costo) : num(a.costo), causale: String(fd.get('causale') || ''), doc: '', note: String(fd.get('note') || '').trim(), creato: new Date().toISOString() } }]);
+      toast(tipo === 'rettifica' ? 'Giacenza aggiornata' : tipo === 'carico' ? 'Carico registrato' : 'Scarico registrato'); return true;
+    }, null, 'Registra');
+    const sel = $('#sheet-body [name=articolo]'), cst = $('#sheet-body [name=costo]');
+    const fillCost = () => { const a = artOf(sel.value); cst.placeholder = a && num(a.costo) ? `${fmtNum(num(a.costo), 2)} (costo dell'articolo)` : 'IVA esclusa'; };
+    sel.onchange = fillCost; fillCost();
+    $('[data-mvseg]').onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; tipo = b.dataset.mv; $$('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
+      $('[data-mvq]').textContent = tipo === 'carico' ? 'Quantità caricata' : tipo === 'scarico' ? 'Quantità scaricata' : 'Giacenza contata';
+      $('[data-mvc]').hidden = tipo !== 'carico'; $('[data-mvh]').textContent = tipo === 'carico' ? 'La quantità si aggiunge alla giacenza.' : tipo === 'scarico' ? 'La quantità si toglie dalla giacenza.' : 'Scrivi quanti pezzi hai contato: la differenza viene registrata come inventario.';
+      $('#sheet-body [name=causale]').innerHTML = CAUS[tipo].map(c => `<option>${c}</option>`).join(''); };
+  }
+  async function magImport() {
+    try {
+      const file = await pickFile('.xlsx,.xls,.csv'); await loadXlsx(); busy('Leggo il file…');
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }), rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      const key = (r, ...ks) => { const e = Object.keys(r).find(h => ks.some(k => nh(h).includes(k))); return e == null ? '' : r[e]; };
+      const A = GX.art(), ops = []; let nNew = 0, nUp = 0;
+      rows.forEach(r => {
+        const desc = String(key(r, 'descrizione', 'articolo', 'nome', 'prodotto')).trim(); if (!desc) return;
+        const cod = String(key(r, 'codice', 'cod', 'sku')).trim();
+        const ex = (cod && A.find(a => String(a.codice).trim().toUpperCase() === cod.toUpperCase())) || A.find(a => nh(a.descrizione) === nh(desc));
+        const o = ex ? { ...ex } : { id: uid(), um: 'PZ', iva: 22, creato: today() };
+        o.descrizione = desc; if (cod) o.codice = cod;
+        const um = String(key(r, 'um', 'unita')).trim().toUpperCase(); if (um) o.um = um;
+        [['costo', 'costo', 'acquisto'], ['prezzo', 'prezzo', 'vendita', 'listino'], ['iva', 'iva', 'aliquota'], ['scorta', 'scorta', 'minimo']].forEach(([k, ...ks]) => { const v = key(r, ...ks); if (String(v).trim() !== '') o[k] = num(v); });
+        const cat = String(key(r, 'categoria')).trim(); if (cat) o.categoria = cat;
+        const fo = String(key(r, 'fornitore')).trim(); if (fo) o.fornitore = fo;
+        ops.push({ action: 'upsert', sheet: 'Articoli', row: o }); ex ? nUp++ : nNew++;
+        const gq = key(r, 'giacenza', 'quantita', 'qta', 'esistenza');
+        if (String(gq).trim() !== '') { const diff = r2(num(gq) - (giacMap().get(o.id) || 0)); if (diff) ops.push({ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: today(), articolo: o.id, tipo: ex ? 'rettifica' : 'carico', quantita: diff, costo: num(o.costo), causale: ex ? 'Inventario da Excel' : 'Giacenza iniziale', doc: '', note: '', creato: new Date().toISOString() } }); }
+      });
+      busy(); if (!ops.length) return toast('Nessun articolo trovato: servono almeno le colonne Descrizione (e Codice, Giacenza, Costo, Prezzo)');
+      write(ops); toast(`${nNew} articoli nuovi · ${nUp} aggiornati`);
+    } catch (e) { busy(); if (e.message !== 'annullato') toast(e.message); }
+  }
+  async function magExport() {
+    try {
+      await loadXlsx(); const G = giacMap();
+      const rows = GX.art().map(a => { const g = G.get(a.id) || 0; return { Codice: a.codice || '', Descrizione: a.descrizione, UM: a.um || '', Categoria: a.categoria || '', Fornitore: a.fornitore || '', Giacenza: g, 'Scorta minima': num(a.scorta) || '', Costo: num(a.costo) || '', Prezzo: num(a.prezzo) || '', IVA: num(a.iva), Valore: r2(Math.max(0, g) * num(a.costo)) }; });
+      const wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Codice: '', Descrizione: '', UM: '', Categoria: '', Fornitore: '', Giacenza: '', 'Scorta minima': '', Costo: '', Prezzo: '', IVA: '', Valore: '' }]);
+      ws['!cols'] = [12, 40, 6, 18, 18, 10, 12, 10, 10, 6, 12].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, 'Magazzino');
+      XLSX.writeFile(wb, `magazzino-${today()}.xlsx`); toast('Excel scaricato');
+    } catch (e) { toast(e.message); }
+  }
+
+  /* ---------- DDT E FATTURE ---------- */
+  let vnTab = 'ddt', vnP = '', vnQ = '';
+  function renderVen() {
+    const el = $('#vn-body'); if (!el) return;
+    sub('DDT e fatture ai clienti');
+    const D = GX.ddt(), F = GX.fv(), az = cfg('azienda') || {};
+    const months = [...new Set([...D, ...F].map(x => String(x.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+    if (vnP && !months.includes(vnP)) vnP = '';
+    const inP = x => !vnP || String(x.data).slice(0, 7) === vnP, q = nh(vnQ);
+    const openD = D.filter(d => !d.fattura), openV = openD.reduce((s, d) => s + docTot(jp(d.righe, [])).imp, 0);
+    const FP = F.filter(inP), toPay = F.filter(f => f.stato !== 'pagata'), late = toPay.filter(fvLate);
+    const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(vnP);
+    const per = `<div class="gl-month gx-per"><button type="button" class="icon-btn" data-vnp="-1" ${ix >= opts.length - 1 ? 'disabled' : ''} aria-label="Periodo precedente">‹</button><select id="vn-per" aria-label="Periodo">${opts.map(k => `<option value="${k}"${k === vnP ? ' selected' : ''}>${k ? esc(mLabel(k)) : 'Tutto il periodo'}</option>`).join('')}</select><button type="button" class="icon-btn" data-vnp="1" ${ix <= 0 ? 'disabled' : ''} aria-label="Periodo successivo">›</button></div>`;
+    let h = gxWarn() + (/^\d{11}$/.test(az.piva || '') && az.indirizzo ? '' : `<div class="card gx-note"><span><b>Completa i dati della tua azienda</b> · partita IVA e indirizzo compaiono su DDT e fatture e servono per il file XML.</span><button type="button" class="btn sm primary" data-gx="az">Completa</button></div>`)
+      + `<div class="gx-bar"><div class="gx-seg" role="tablist"><button type="button" data-vntab="ddt" class="${vnTab === 'ddt' ? 'on' : ''}">DDT</button><button type="button" data-vntab="fv" class="${vnTab === 'fv' ? 'on' : ''}">Fatture</button></div>${per}
+        <div class="gx-act"><button type="button" class="btn sm" data-gx="fv-new"><span class="lb-d">+ Fattura immediata</span><span class="lb-m">+ Fattura</span></button><button type="button" class="btn sm" data-gx="ddt-new">+ DDT</button><button type="button" class="btn sm primary" data-gx="fm"${openD.length ? '' : ' disabled'}><span class="lb-d">Fatture di fine mese</span><span class="lb-m">Fine mese</span>${openD.length ? `<em class="gx-badge">${openD.length}</em>` : ''}</button></div></div>
+      ${gxKpi([['DDT', fmtNum(D.filter(inP).length, 0), vnP ? mLabel(vnP) : 'tutto il periodo'], ['Da fatturare', eur0(openV), `${openD.length} DDT aperti`, openD.length ? 'warn' : ''], ['Fatturato', eur0(FP.reduce((s, f) => s + num(f.imponibile), 0)), `${FP.length} fatture · imponibile`], ['Da incassare', eur0(toPay.reduce((s, f) => s + num(f.totale), 0)), late.length ? `${late.length} scadute` : `${toPay.length} fatture`, late.length ? 'bad' : '']])}`;
+    if (vnTab === 'ddt') {
+      const L = D.filter(d => inP(d) && (!q || nh([dnum(d), cliName(d.cliente), d.causale].join(' ')).includes(q))).sort((a, b) => String(b.data).localeCompare(String(a.data)) || (parseInt(b.numero, 10) || 0) - (parseInt(a.numero, 10) || 0));
+      h += !D.length ? gxEmpty(GIC.doc, 'Nessun DDT', 'Fai i DDT durante il mese: a fine mese con un clic diventano le fatture dei tuoi clienti, con PDF e file XML.', '<button type="button" class="btn primary" data-gx="ddt-new">+ Crea il primo DDT</button>')
+        : `<div class="gx-bar sm"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="vn-q" placeholder="Cerca numero o cliente…" value="${esc(vnQ)}"></label></div>
+        <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>DDT</th><th>Cliente</th><th>Causale</th><th class="r">Imponibile</th><th>Stato</th><th></th></tr></thead><tbody>
+        ${L.map(d => { const T = docTot(jp(d.righe, [])), f = d.fattura && F.find(x => x.id === d.fattura); return `<tr data-ddt="${esc(d.id)}"><td data-l="DDT"><b>n. ${esc(dnum(d))}</b><small>${esc(dIt(d.data))}</small></td><td data-l="Cliente">${esc(cliName(d.cliente))}</td><td data-l="Causale">${esc(d.causale || '')}</td><td class="r" data-l="Imponibile">${eur(T.imp)}</td><td data-l="Stato">${f ? `<span class="chip paid">Fattura ${esc(dnum(f))}</span>` : '<span class="chip soon">Da fatturare</span>'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="ddt-pdf" data-id="${esc(d.id)}">PDF</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessun DDT nel periodo</td></tr>'}
+        </tbody></table></div>`;
+    } else {
+      const L = F.filter(f => inP(f) && (!q || nh([dnum(f), cliName(f.cliente)].join(' ')).includes(q))).sort((a, b) => String(b.data).localeCompare(String(a.data)) || (parseInt(b.numero, 10) || 0) - (parseInt(a.numero, 10) || 0));
+      h += !F.length ? gxEmpty(GIC.doc, 'Nessuna fattura', openD.length ? `Hai ${openD.length} DDT da fatturare: premi «Fatture di fine mese» e crea in un colpo le fatture di tutti i clienti.` : 'Crea le fatture di fine mese dai DDT, oppure una fattura immediata.', openD.length ? '<button type="button" class="btn primary" data-gx="fm">Fatture di fine mese</button>' : '<button type="button" class="btn primary" data-gx="fv-new">+ Fattura immediata</button>')
+        : `<div class="gx-bar sm"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="vn-q" placeholder="Cerca numero o cliente…" value="${esc(vnQ)}"></label></div>
+        <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Fattura</th><th>Cliente</th><th class="r">Totale</th><th>Scadenza</th><th>Stato</th><th></th></tr></thead><tbody>
+        ${L.map(f => { const nd = jp(f.ddt, []).length; return `<tr data-fv="${esc(f.id)}"><td data-l="Fattura"><b>n. ${esc(dnum(f))}</b><small>${esc(dIt(f.data))} · ${f.tipo === 'TD24' ? `differita, ${nd} DDT` : 'immediata'}</small></td><td data-l="Cliente">${esc(cliName(f.cliente))}</td><td class="r" data-l="Totale"><b>${eur(num(f.totale))}</b><small>imp. ${eur(num(f.imponibile))}</small></td><td data-l="Scadenza">${esc(dIt(f.scadenza) || '—')}<small>${esc(f.pagamento || '')}</small></td><td data-l="Stato">${f.stato === 'pagata' ? '<span class="chip paid">Pagata</span>' : fvLate(f) ? '<span class="chip late">Scaduta</span>' : '<span class="chip soon">Da incassare</span>'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="fv-pdf" data-id="${esc(f.id)}">PDF</button><button type="button" class="btn sm ghost" data-gx="fv-xml" data-id="${esc(f.id)}">XML</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessuna fattura nel periodo</td></tr>'}
+        </tbody></table></div>`;
+    }
+    el.innerHTML = h;
+    const ps = $('#vn-per'); if (ps) ps.onchange = () => { vnP = ps.value; renderVen(); };
+    const qi = $('#vn-q'); if (qi) qi.oninput = () => { vnQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderVen(); const x = $('#vn-q'); if (x) { x.focus(); try { x.setSelectionRange(p, p); } catch {} } }, 160); };
+  }
+
+  // editor di DDT e fatture immediate, con le righe
+  function docForm(kind, d0, copy) {
+    const isD = kind === 'ddt', y = String(new Date().getFullYear()), n = !d0 || copy;
+    const d = n ? { ...(copy ? d0 : {}), id: uid(), numero: String(nextNum(isD ? GX.ddt() : GX.fv(), y)), anno: y, data: today(), fattura: '', stato: '', pagata: '', creato: today() } : { ...d0 };
+    if (n && !copy) Object.assign(d, isD ? { cliente: '', causale: 'Vendita', trasporto: 'Mittente', aspetto: 'Scatole', prezzi: '' } : { tipo: 'TD01', cliente: '', pagamento: '' });
+    let R = jp(d.righe, []).filter(l => !l.h).map(x => ({ ...x }));
+    const hdr = jp(d.righe, []).filter(l => l.h);
+    if (!R.length) R = [{ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: 22 }];
+    const lock = !n && isD && d.fattura && GX.fv().some(f => f.id === d.fattura), lockF = !n && !isD && d.tipo === 'TD24';
+    const C = GX.cli().slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it')), A = GX.art();
+    const sel = (k, L, v) => `<select name="${k}">${L.map(x => `<option${x === v ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+    const title = isD ? (n ? 'Nuovo DDT' : `DDT n. ${dnum(d)}`) : (n ? 'Nuova fattura immediata' : `Fattura n. ${dnum(d)}`);
+    openSheet(title, `${lock ? `<div class="gx-note warn"><span>Questo DDT è nella <b>fattura n. ${esc(dnum(GX.fv().find(f => f.id === d.fattura)))}</b>: per modificarlo elimina prima la fattura.</span></div>` : ''}${lockF ? '<div class="gx-note"><span>Fattura di fine mese: le righe vengono dai DDT. Per cambiarle elimina la fattura, modifica i DDT e rifalla.</span></div>' : ''}
+      <div class="f-row gx-r3"><label class="f"><span>Numero</span><input name="numero" value="${esc(d.numero)}" inputmode="numeric" required></label><label class="f"><span>Data</span><input name="data" type="date" value="${esc(d.data)}" required></label>
+        <label class="f"><span>Cliente <button type="button" class="link" data-gx="doc-cli">+ nuovo</button></span><select name="cliente" required><option value="">Scegli il cliente…</option>${C.map(c => `<option value="${esc(c.id)}"${c.id === d.cliente ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label></div>
+      ${isD ? `<div class="f-row f3"><label class="f"><span>Causale</span>${sel('causale', ['Vendita', 'Conto visione', 'Conto lavorazione', 'Reso', 'Riparazione', 'Omaggio'], d.causale)}</label><label class="f"><span>Trasporto a cura</span>${sel('trasporto', ['Mittente', 'Destinatario', 'Vettore'], d.trasporto)}</label><label class="f"><span>Aspetto dei beni</span>${sel('aspetto', ['Scatole', 'Pallet', 'Sfuso', 'Buste', 'A vista'], d.aspetto)}</label></div>
+        <div class="f-row f3"><label class="f"><span>Colli</span><input name="colli" type="number" min="0" value="${esc(d.colli ?? '')}"></label><label class="f"><span>Peso kg</span><input name="peso" type="number" step="any" min="0" value="${esc(d.peso ?? '')}"></label><label class="f"><span>Vettore</span><input name="vettore" value="${esc(d.vettore || '')}"></label></div>
+        <label class="f"><span>Luogo di destinazione</span><input name="destinazione" value="${esc(d.destinazione || '')}" placeholder="Se diverso dalla sede del cliente"></label>
+        <label class="gx-chk"><input type="checkbox" name="prezzi"${d.prezzi ? ' checked' : ''}> Mostra i prezzi nel PDF del DDT</label>`
+        : `<div class="f-row"><label class="f"><span>Pagamento</span><select name="pagamento"><option value="">Come da cliente</option>${PAG.map(p => `<option${p === d.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label><div class="f"><span>Tipo</span><div class="gx-ro">${d.tipo === 'TD24' ? 'Fattura differita (TD24) dai DDT' : 'Fattura immediata (TD01)'}</div></div></div>`}
+      <div class="dx"><div class="dx-h"><span>Articolo / descrizione</span><span>UM</span><span>Q.tà</span><span>Prezzo €</span><span>Sc.%</span><span>IVA</span><span>Totale</span><span></span></div><div id="dx-rows"></div>
+        ${lock || lockF ? '' : '<button type="button" class="btn sm" data-dx="add">+ Riga</button>'}<div class="dx-tot" id="dx-tot"></div></div>
+      <datalist id="dx-arts">${A.map(a => `<option value="${esc((a.codice ? a.codice + ' — ' : '') + a.descrizione)}">`).join('')}</datalist>
+      <label class="f"><span>Note</span><textarea name="note" rows="2">${esc(d.note || '')}</textarea></label>
+      ${n ? '' : `<div class="gx-docact"><button type="button" class="btn sm" data-gx="${isD ? 'ddt' : 'fv'}-pdf" data-id="${esc(d.id)}">Scarica PDF</button>${isD ? '' : `<button type="button" class="btn sm" data-gx="fv-xml" data-id="${esc(d.id)}">File XML</button><button type="button" class="btn sm" data-gx="fv-paid" data-id="${esc(d.id)}">${d.stato === 'pagata' ? 'Segna da incassare' : 'Segna pagata'}</button>`}${isD ? `<button type="button" class="btn sm ghost" data-gx="ddt-copy" data-id="${esc(d.id)}">Duplica</button>` : ''}</div>`}`,
+      fd => {
+        if (lock || lockF) {
+          if (lockF) { const o = { ...d, note: String(fd.get('note') || ''), pagamento: String(fd.get('pagamento') || d.pagamento) }; o.scadenza = scadDi(o.data, o.pagamento); write([{ action: 'upsert', sheet: 'Vendite', row: o }]); toast('Fattura aggiornata'); }
+          return true;
+        }
+        const cli = String(fd.get('cliente') || ''); if (!cli) { toast('Scegli il cliente'); return; }
+        const rows = R.filter(l => String(l.d || '').trim() || l.art).map(l => ({ ...l, q: num(l.q), p: num(l.p), sc: num(l.sc), iva: num(l.iva) }));
+        if (!rows.length) { toast('Aggiungi almeno una riga'); return; }
+        const o = { ...d, numero: String(parseInt(fd.get('numero'), 10) || d.numero), data: String(fd.get('data') || today()), cliente: cli, note: String(fd.get('note') || '').trim() };
+        if (!isD && o.data > today()) { toast('La data della fattura non può essere nel futuro'); return; }
+        o.anno = o.data.slice(0, 4);
+        if ((isD ? GX.ddt() : GX.fv()).some(x => x.id !== o.id && String(x.anno) === o.anno && String(x.numero) === o.numero) && !confirm(`Esiste già ${isD ? 'un DDT' : 'una fattura'} n. ${o.numero}/${o.anno}. Salvare lo stesso?`)) return;
+        if (isD) { ['causale', 'trasporto', 'aspetto', 'vettore', 'destinazione'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); }); o.colli = fd.get('colli') === '' ? '' : num(fd.get('colli')); o.peso = fd.get('peso') === '' ? '' : num(fd.get('peso')); o.prezzi = fd.get('prezzi') ? '1' : ''; o.righe = JSON.stringify(rows); }
+        else {
+          const c = cliOf(cli) || {}; o.pagamento = String(fd.get('pagamento') || '') || c.pagamento || PAG[0];
+          const T = docTot(rows); Object.assign(o, { tipo: 'TD01', righe: JSON.stringify([...hdr, ...rows]), ddt: o.ddt || '[]', imponibile: T.imp, imposta: T.iva, totale: T.tot, scadenza: scadDi(o.data, o.pagamento), stato: o.stato || 'emessa' });
+        }
+        const ops = [{ action: 'upsert', sheet: isD ? 'DDT' : 'Vendite', row: o }, ...GX.mov().filter(m => m.doc === o.id).map(m => ({ action: 'delete', sheet: 'MagMov', id: m.id }))];
+        if (modOn('magazzino') && (isD ? o.causale !== 'Conto visione' : true)) rows.filter(l => l.art && artOf(l.art) && num(l.q)).forEach(l => ops.push({ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: o.data, articolo: l.art, tipo: o.causale === 'Reso' ? 'carico' : 'scarico', quantita: o.causale === 'Reso' ? Math.abs(num(l.q)) : -Math.abs(num(l.q)), costo: num(artOf(l.art).costo), causale: `${isD ? 'DDT' : 'Fattura'} ${o.numero}/${o.anno}`, doc: o.id, note: '', creato: new Date().toISOString() } }));
+        write(ops); toast(`${isD ? 'DDT' : 'Fattura'} n. ${o.numero}/${o.anno} salvat${isD ? 'o' : 'a'}`); return true;
+      }, n ? null : () => {
+        if (lock) { toast('Il DDT è in una fattura: elimina prima la fattura'); return; }
+        if (isD) { if (!confirm(`Eliminare il DDT n. ${dnum(d)}? Le quantità tornano in magazzino.`)) return; write([{ action: 'delete', sheet: 'DDT', id: d.id }, ...GX.mov().filter(m => m.doc === d.id).map(m => ({ action: 'delete', sheet: 'MagMov', id: m.id }))]); toast('DDT eliminato'); return true; }
+        return fvDelete(d);
+      }, lock ? 'Chiudi' : lockF ? 'Salva note' : n ? (isD ? 'Crea DDT' : 'Crea fattura') : 'Salva');
+    $('#sheet-form').classList.add('xwide');
+    const box = $('#dx-rows'), ro = lock || lockF;
+    const draw = () => {
+      box.innerHTML = R.map((l, i) => `<div class="dx-r" data-i="${i}"><input data-k="d" list="dx-arts" value="${esc(l.c && l.art ? l.c + ' — ' + l.d : l.d || '')}" placeholder="Cerca un articolo o scrivi la descrizione"${ro ? ' disabled' : ''}>
+        <select data-k="um"${ro ? ' disabled' : ''}>${[...new Set([...UM, l.um || 'PZ'])].map(u => `<option${u === (l.um || 'PZ') ? ' selected' : ''}>${u}</option>`).join('')}</select>
+        <input data-k="q" type="number" step="any" inputmode="decimal" value="${esc(l.q ?? '')}"${ro ? ' disabled' : ''}><input data-k="p" type="number" step="any" inputmode="decimal" value="${esc(l.p ?? '')}" placeholder="0,00"${ro ? ' disabled' : ''}><input data-k="sc" type="number" step="any" min="0" max="100" inputmode="decimal" value="${esc(l.sc || '')}" placeholder="0"${ro ? ' disabled' : ''}>
+        <select data-k="iva"${ro ? ' disabled' : ''}>${IVE.map(v => `<option value="${v}"${num(l.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select><b class="dx-t">${eur(lnTot(l))}</b>${ro ? '<span></span>' : `<button type="button" class="dx-x" data-dx="del" aria-label="Togli riga">✕</button>`}${l.art && artOf(l.art) && modOn('magazzino') ? `<small class="dx-g">in magazzino: ${fmtNum(giacMap().get(l.art) || 0, 0)} ${esc(artOf(l.art).um || '')}</small>` : ''}</div>`).join('');
+      tot();
+    };
+    const tot = () => { const T = docTot(R); $('#dx-tot').innerHTML = `${Object.entries(T.by).map(([a, x]) => `<span>Imponibile ${a}% <b>${eur(x.imp)}</b></span><span>IVA ${a}% <b>${eur(x.iva)}</b></span>`).join('')}<span class="dx-big">Totale <b>${eur(T.tot)}</b></span>`; $$('.dx-r', box).forEach(r => { const l = R[+r.dataset.i]; if (l) r.querySelector('.dx-t').textContent = eur(lnTot(l)); }); };
+    box.addEventListener('input', e => { const r = e.target.closest('.dx-r'), k = e.target.dataset.k; if (!r || !k) return; const l = R[+r.dataset.i]; l[k] = e.target.value; if (k === 'd') { l.art = ''; l.c = ''; } tot(); });
+    box.addEventListener('change', e => {
+      const r = e.target.closest('.dx-r'); if (!r || e.target.dataset.k !== 'd') return;
+      const l = R[+r.dataset.i], v = e.target.value.trim(), a = A.find(x => (x.codice ? x.codice + ' — ' : '') + x.descrizione === v);
+      if (a) { Object.assign(l, { art: a.id, c: a.codice || '', d: a.descrizione, um: a.um || 'PZ', p: num(a.prezzo) || l.p, iva: a.iva === '' || a.iva == null ? 22 : num(a.iva) }); const ri = r.dataset.i; setTimeout(() => { draw(); const nx = $(`.dx-r[data-i="${ri}"] [data-k="q"]`); if (nx) nx.select(); }, 0); }
+      else l.d = v;
+    });
+    $('#sheet-body').addEventListener('click', function dx(e) {
+      const b = e.target.closest('[data-dx]'); if (!b || !$('#dx-rows')) return;
+      if (b.dataset.dx === 'add') { R.push({ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: R.length ? R[R.length - 1].iva : 22 }); draw(); const ls = $$('.dx-r [data-k="d"]'); ls[ls.length - 1].focus(); }
+      if (b.dataset.dx === 'del') { R.splice(+b.closest('.dx-r').dataset.i, 1); if (!R.length) R.push({ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: 22 }); draw(); }
+    });
+    draw();
+  }
+  function fvDelete(f) {
+    const last = GX.fv().filter(x => String(x.anno) === String(f.anno)).every(x => (parseInt(x.numero, 10) || 0) <= (parseInt(f.numero, 10) || 0));
+    if (!confirm(`Eliminare la fattura n. ${dnum(f)}?${last ? '' : '\nNon è l\'ultima del ' + f.anno + ': la numerazione resterà con un buco.'}${f.tipo === 'TD24' ? '\nI suoi DDT tornano da fatturare.' : ''}\nSe l'hai già inviata allo SdI, va stornata con una nota di credito.`)) return;
+    const ids = jp(f.ddt, []);
+    write([{ action: 'delete', sheet: 'Vendite', id: f.id }, ...GX.ddt().filter(d => ids.includes(d.id) || d.fattura === f.id).map(d => ({ action: 'upsert', sheet: 'DDT', row: { ...d, fattura: '' } })), ...GX.mov().filter(m => m.doc === f.id).map(m => ({ action: 'delete', sheet: 'MagMov', id: m.id }))]);
+    toast('Fattura eliminata'); return true;
+  }
+  // fatture di fine mese: una fattura differita (TD24) per cliente con tutti i suoi DDT del mese
+  function fmForm() {
+    const open = GX.ddt().filter(d => !d.fattura);
+    if (!open.length) return toast('Nessun DDT da fatturare');
+    const months = [...new Set(open.map(d => String(d.data).slice(0, 7)))].sort(), cur = today().slice(0, 7);
+    let m = months.filter(k => k < cur).pop() || months[months.length - 1];
+    const lastDay = k => { const [yy, mm] = k.split('-').map(Number); return ymd(new Date(yy, mm, 0)); }, minD = v => v > today() ? today() : v;
+    const groups = k => [...groupBy(open.filter(d => String(d.data).slice(0, 7) === k), d => d.cliente)].map(([c, L]) => ({ c, L: L.sort((a, b) => String(a.data).localeCompare(String(b.data))), T: docTot(L.flatMap(d => jp(d.righe, []))) })).sort((a, b) => cliName(a.c).localeCompare(cliName(b.c), 'it'));
+    const table = () => { const G = groups(m); return `<table class="gx-tbl gx-fm"><thead><tr><th><input type="checkbox" data-fmall checked aria-label="Tutti"></th><th>Cliente</th><th class="r">DDT</th><th class="r">Imponibile</th><th class="r">Totale</th></tr></thead><tbody>${G.map(g => { const c = cliOf(g.c) || {}; const miss = !c.piva && !c.cf; return `<tr><td><input type="checkbox" data-fmc="${esc(g.c)}" checked></td><td><b>${esc(cliName(g.c))}</b><small>${g.L.map(d => 'n. ' + d.numero).join(', ')}${miss ? ' · <span class="st-warn">senza P.IVA/CF</span>' : ''}</small></td><td class="r">${g.L.length}</td><td class="r">${eur(g.T.imp)}</td><td class="r"><b>${eur(g.T.tot)}</b></td></tr>`; }).join('')}</tbody></table>`; };
+    openSheet('Fatture di fine mese', `<p class="pvx-intro">Una fattura per ogni cliente con tutti i suoi DDT del mese (fattura differita, tipo TD24). I DDT diventano «fatturati».</p>
+      <div class="f-row"><label class="f"><span>Mese dei DDT</span><select name="mese">${months.map(k => `<option value="${k}"${k === m ? ' selected' : ''}>${esc(mLabel(k))} · ${open.filter(d => String(d.data).slice(0, 7) === k).length} DDT</option>`).join('')}</select></label><label class="f"><span>Data delle fatture</span><input name="data" type="date" value="${minD(lastDay(m))}" max="${today()}"></label></div>
+      <div class="gx-fmt" id="fm-t">${table()}</div><p class="muted small">Numerazione dalla n. <b id="fm-n">${nextNum(GX.fv(), lastDay(m).slice(0, 4))}</b>/${lastDay(m).slice(0, 4)} in ordine alfabetico di cliente.</p>`, fd => {
+      const data = String(fd.get('data') || minD(lastDay(m))), anno = data.slice(0, 4), sel = $$('[data-fmc]').filter(x => x.checked).map(x => x.dataset.fmc);
+      if (!sel.length) { toast('Scegli almeno un cliente'); return; }
+      if (data > today()) { toast('La data della fattura non può essere nel futuro'); return; }
+      if (sel.some(c => groups(m).find(g => g.c === c).L.some(d => d.data > data))) { toast('Ci sono DDT con data successiva alla fattura: cambia la data'); return; }
+      let nn = nextNum(GX.fv(), anno); const ops = [];
+      groups(m).filter(g => sel.includes(g.c)).forEach(g => {
+        const c = cliOf(g.c) || {}, righe = g.L.flatMap(d => [{ h: 1, d: `DDT n. ${dnum(d)} del ${dIt(d.data)}`, ddt: d.id }, ...jp(d.righe, [])]), T = docTot(righe), pag = c.pagamento || PAG[0];
+        const f = { id: uid(), numero: String(nn++), anno, data, tipo: 'TD24', cliente: g.c, ddt: JSON.stringify(g.L.map(d => d.id)), righe: JSON.stringify(righe), imponibile: T.imp, imposta: T.iva, totale: T.tot, pagamento: pag, scadenza: scadDi(data, pag), stato: 'emessa', pagata: '', note: '', creato: new Date().toISOString() };
+        ops.push({ action: 'upsert', sheet: 'Vendite', row: f }, ...g.L.map(d => ({ action: 'upsert', sheet: 'DDT', row: { ...d, fattura: f.id } })));
+      });
+      vnTab = 'fv'; vnP = ''; write(ops); toast(`${sel.length} ${sel.length === 1 ? 'fattura creata' : 'fatture create'} · scarica PDF e XML dall'elenco`); return true;
+    }, null, 'Crea le fatture');
+    $('#sheet-form').classList.add('wide');
+    const body = $('#sheet-body');
+    body.querySelector('[name=mese]').onchange = e => { m = e.target.value; body.querySelector('[name=data]').value = minD(lastDay(m)); $('#fm-t').innerHTML = table(); $('#fm-n').textContent = nextNum(GX.fv(), lastDay(m).slice(0, 4)); };
+    body.addEventListener('change', e => { if (e.target.matches('[data-fmall]')) $$('[data-fmc]').forEach(x => { x.checked = e.target.checked; }); });
+  }
+
+  /* ---------- PDF di DDT e fatture ---------- */
+  async function docPdf(kind, d) {
+    const isD = kind === 'ddt';
+    try {
+      busy('Preparo il PDF…');
+      const cl = cliOf(d.cliente) || { nome: '' }, az = { nome: ORG.n, ...(cfg('azienda') || {}) }, ALL = jp(d.righe, []), T = docTot(ALL), showP = !isD || !!d.prezzi;
+      const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      let FF = 'helvetica';
+      if (fonts) { fonts.forEach(([w, data]) => { doc.addFileToVFS(`Inter-${w}.ttf`, data); doc.addFont(`Inter-${w}.ttf`, 'Inter', w === 'regular' ? 'normal' : w); }); FF = 'Inter'; }
+      const W = 210, H = 297, M = 14, CW = W - 2 * M;
+      const C = { navy: [23, 54, 109], blue: [51, 98, 171], ink: [31, 36, 48], ink2: [74, 81, 96], muted: [120, 128, 142], line: [227, 231, 238], soft: [245, 247, 251], white: [255, 255, 255], red: [226, 39, 38] };
+      const fill = c => doc.setFillColor(...c), stroke = c => doc.setDrawColor(...c), color = c => doc.setTextColor(...c);
+      const font = (st, sz) => { doc.setFont(FF, FF === 'helvetica' && st === 'semibold' ? 'bold' : st); doc.setFontSize(sz); };
+      const money = v => fmtNum(v, 2);
+      // intestazione
+      fill(C.navy); doc.rect(0, 0, W, 30, 'F');
+      if (logo) { fill(C.white); doc.roundedRect(M, 8, 14, 14, 3, 3, 'F'); doc.addImage(logo, 'PNG', M + .7, 8.7, 12.6, 12.6); }
+      color(C.white); font('bold', 12); doc.text(String(az.nome || ''), M + (logo ? 18 : 0), 14.5);
+      font('normal', 8.2); doc.text([az.indirizzo, [az.cap, az.citta, az.prov ? `(${az.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || ORG.sede, M + (logo ? 18 : 0), 19.5);
+      font('bold', 13); doc.text(isD ? 'DOCUMENTO DI TRASPORTO' : 'FATTURA', W - M, 14.5, { align: 'right' });
+      font('normal', 9); doc.text(`n. ${dnum(d)} del ${dIt(d.data)}`, W - M, 20, { align: 'right' });
+      if (!isD) { font('normal', 7.5); doc.text(d.tipo === 'TD24' ? 'Fattura differita (TD24)' : 'Fattura immediata (TD01)', W - M, 24.5, { align: 'right' }); }
+      // riquadri mittente / destinatario
+      let y = 37;
+      const box = (x, w, lab, lines) => { stroke(C.line); fill(C.soft); doc.roundedRect(x, y, w, 33, 2.5, 2.5, 'FD'); color(C.muted); font('bold', 6.8); doc.text(lab, x + 4, y + 5.5); color(C.ink); font('bold', 10); doc.text(doc.splitTextToSize(String(lines[0] || ''), w - 8)[0] || '', x + 4, y + 11.5); font('normal', 8.2); color(C.ink2); lines.slice(1).filter(Boolean).slice(0, 5).forEach((t, i) => doc.text(doc.splitTextToSize(String(t), w - 8)[0], x + 4, y + 16.5 + i * 4)); };
+      const fisc = o => [o.piva ? 'P.IVA ' + o.piva : '', o.cf && o.cf !== o.piva ? 'CF ' + o.cf : ''].filter(Boolean).join(' · ');
+      const bw = (CW - 6) / 2;
+      box(M, bw, isD ? 'MITTENTE' : 'CEDENTE / PRESTATORE', [az.nome, az.indirizzo, [az.cap, az.citta, az.prov ? `(${az.prov})` : ''].filter(Boolean).join(' '), fisc(az), [az.tel, az.email].filter(Boolean).join(' · '), az.pec ? 'PEC ' + az.pec : '']);
+      box(M + bw + 6, bw, isD ? 'DESTINATARIO' : 'CESSIONARIO / COMMITTENTE', [cl.nome, cl.indirizzo, [cl.cap, cl.citta, cl.prov ? `(${cl.prov})` : ''].filter(Boolean).join(' '), fisc(cl), cl.sdi ? 'Codice destinatario ' + cl.sdi : cl.pec ? 'PEC ' + cl.pec : '']);
+      y += 39;
+      if (isD) {
+        const tiles = [['Causale', d.causale], ['Trasporto a cura', d.trasporto], ['Vettore', d.vettore || '—'], ['Colli', d.colli || '—'], ['Peso kg', d.peso ? fmtNum(num(d.peso), 1) : '—'], ['Aspetto', d.aspetto || '—']], tw = CW / tiles.length;
+        tiles.forEach(([l, v], i) => { const x = M + i * tw; stroke(C.line); doc.line(x, y, x, y + 10); color(C.muted); font('normal', 6.8); doc.text(l.toUpperCase(), x + 2.5, y + 3.5); color(C.ink); font('bold', 8.6); doc.text(String(v || '—').slice(0, 22), x + 2.5, y + 8.5); });
+        y += 14;
+        if (d.destinazione) { color(C.muted); font('normal', 7.5); doc.text('LUOGO DI DESTINAZIONE', M, y + 3); color(C.ink); font('bold', 9); doc.text(String(d.destinazione), M + 38, y + 3); y += 7; }
+      }
+      // righe
+      const head = showP ? [['Codice', 'Descrizione', 'UM', 'Q.tà', 'Prezzo', 'Sc.%', 'Importo', 'IVA']] : [['Codice', 'Descrizione', 'UM', 'Q.tà']];
+      const body = ALL.map(l => l.h ? [{ content: l.d, colSpan: head[0].length, styles: { fontStyle: 'bold', fillColor: [234, 240, 250], textColor: C.navy } }]
+        : showP ? [l.c || '', l.d || '', l.um || '', fmtNum(num(l.q), num(l.q) % 1 ? 2 : 0), money(num(l.p)), num(l.sc) ? fmtNum(num(l.sc), 1) : '', money(lnTot(l)), num(l.iva) + '%'] : [l.c || '', l.d || '', l.um || '', fmtNum(num(l.q), num(l.q) % 1 ? 2 : 0)]);
+      doc.autoTable({ startY: y + 2, margin: { left: M, right: M, bottom: 22 }, head, body, theme: 'plain',
+        styles: { font: FF, fontSize: 8.4, cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 }, textColor: C.ink, lineColor: C.line, lineWidth: { bottom: .2 } },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.6 },
+        columnStyles: showP ? { 0: { cellWidth: 22 }, 2: { cellWidth: 11 }, 3: { cellWidth: 14, halign: 'right' }, 4: { cellWidth: 20, halign: 'right' }, 5: { cellWidth: 12, halign: 'right' }, 6: { cellWidth: 23, halign: 'right' }, 7: { cellWidth: 12, halign: 'right' } } : { 0: { cellWidth: 30 }, 2: { cellWidth: 16 }, 3: { cellWidth: 22, halign: 'right' } },
+        didParseCell: h => { if (h.section === 'head' && h.column.index >= 3) h.cell.styles.halign = 'right'; } });
+      y = doc.lastAutoTable.finalY + 6;
+      const need = isD ? 42 : 50; if (y + need > H - 22) { doc.addPage(); y = 20; }
+      if (showP) {
+        // riepilogo IVA e totali
+        const rx = W - M - 78;
+        if (!isD) { color(C.muted); font('bold', 7); doc.text('RIEPILOGO IVA', M, y + 3); font('normal', 8.2); color(C.ink2); Object.entries(T.by).forEach(([a, x], i) => doc.text(`Aliquota ${a}%   imponibile ${money(x.imp)} €   imposta ${money(x.iva)} €${num(a) === 0 ? '   (N2.2)' : ''}`, M, y + 8 + i * 4.5)); }
+        stroke(C.line); fill(C.soft); doc.roundedRect(rx, y, 78, 26, 2.5, 2.5, 'FD');
+        const tl = (l, v, yy, b) => { color(b ? C.ink : C.ink2); font(b ? 'bold' : 'normal', b ? 10.5 : 8.6); doc.text(l, rx + 4, yy); doc.text(v, rx + 74, yy, { align: 'right' }); };
+        tl('Imponibile', money(T.imp) + ' €', y + 7); tl('IVA', money(T.iva) + ' €', y + 12.5); stroke(C.line); doc.line(rx + 4, y + 15.5, rx + 74, y + 15.5); tl(isD ? 'Totale' : 'Totale documento', money(T.tot) + ' €', y + 21.5, true);
+        y += 31;
+      }
+      if (!isD) {
+        color(C.muted); font('bold', 7); doc.text('PAGAMENTO', M, y + 3); color(C.ink); font('normal', 8.6);
+        doc.text([d.pagamento || '—', d.scadenza ? `scadenza ${dIt(d.scadenza)}` : '', /bonifico|ri\.?ba/i.test(d.pagamento || '') && az.iban ? `IBAN ${az.iban}` : ''].filter(Boolean).join('   ·   '), M, y + 8);
+        y += 14;
+      } else {
+        const sw = (CW - 8) / 3;
+        [['Data e ora inizio trasporto', ''], ['Firma del conducente', ''], ['Firma del destinatario', '']].forEach(([l], i) => { const x = M + i * (sw + 4); stroke(C.line); doc.roundedRect(x, y, sw, 18, 2, 2, 'S'); color(C.muted); font('normal', 7); doc.text(l, x + 3, y + 4.5); });
+        y += 22;
+      }
+      if (d.note) { color(C.muted); font('bold', 7); doc.text('NOTE', M, y + 3); color(C.ink2); font('normal', 8.2); doc.text(doc.splitTextToSize(String(d.note), CW), M, y + 8); }
+      const pages = doc.getNumberOfPages();
+      for (let i = 1; i <= pages; i++) { doc.setPage(i); color(C.muted); font('normal', 7); doc.text(isD ? `${az.nome || ''} · DDT n. ${dnum(d)}` : 'Copia di cortesia: il documento fiscale è il file XML trasmesso al Sistema di Interscambio.', M, H - 10); doc.text(`Pagina ${i} di ${pages}`, W - M, H - 10, { align: 'right' }); }
+      doc.save(`${isD ? 'DDT' : 'Fattura'}-${d.numero}-${d.anno}-${slug(cl.nome) || 'cliente'}.pdf`);
+      busy(); toast('PDF scaricato');
+    } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
+  }
+
+  /* ---------- file XML FatturaPA 1.2 (FPR12) ---------- */
+  function fvCheck(f) {
+    const az = cfg('azienda') || {}, cl = cliOf(f.cliente) || {}, miss = [];
+    if (!/^\d{11}$/.test(az.piva || '')) miss.push(['az', 'Partita IVA della tua azienda (11 cifre)']);
+    if (!az.nome && !ORG.n) miss.push(['az', 'Ragione sociale della tua azienda']);
+    if (!az.indirizzo || !/^\d{5}$/.test(az.cap || '') || !az.citta) miss.push(['az', 'Indirizzo, CAP e città della tua azienda']);
+    if (!/^\d{11}$/.test(cl.piva || '') && !/^[A-Z0-9]{11,16}$/i.test(cl.cf || '')) miss.push(['cli', `P.IVA o codice fiscale di ${cl.nome || 'questo cliente'}`]);
+    if (!cl.indirizzo || !/^\d{5}$/.test(cl.cap || '') || !cl.citta) miss.push(['cli', `Indirizzo, CAP e città di ${cl.nome || 'questo cliente'}`]);
+    return miss;
+  }
+  function fvXml(f) {
+    const miss = fvCheck(f), cl = cliOf(f.cliente) || {};
+    if (miss.length) {
+      openSheet('Mancano alcuni dati', `<p class="pvx-intro">Per il file XML della fattura elettronica servono:</p><ul class="gx-miss">${miss.map(([, t]) => `<li>${esc(t)}</li>`).join('')}</ul>
+        <div class="gx-docact">${miss.some(x => x[0] === 'az') ? '<button type="button" class="btn sm primary" data-gx="az">Completa i dati della tua azienda</button>' : ''}${miss.some(x => x[0] === 'cli') && cliOf(f.cliente) ? `<button type="button" class="btn sm primary" data-gx="cli-open" data-id="${esc(f.cliente)}">Completa il cliente</button>` : ''}</div>`, () => true, null, 'Chiudi');
+      return;
+    }
+    const az = { nome: ORG.n, ...(cfg('azienda') || {}) }, R = jp(f.righe, []);
+    const x = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c])).replace(/[^\x20-\x7E -ÿ]/g, ' ').trim();
+    const n2 = v => (Math.round(num(v) * 100) / 100).toFixed(2);
+    const nq = v => { const s = String(Math.round(num(v) * 1e8) / 1e8); const dec = (s.split('.')[1] || '').length; return num(v).toFixed(Math.min(8, Math.max(2, dec))); };
+    const prog = ((num(f.anno) - 2000) % 36).toString(36).toUpperCase() + (parseInt(f.numero, 10) || 0).toString(36).toUpperCase().padStart(4, '0');
+    const T = docTot(R), lines = [], ddtRef = [];
+    let cur = null;
+    R.forEach(l => { if (l.h) { const dd = GX.ddt().find(z => z.id === l.ddt); cur = { n: dd ? dd.numero : (String(l.d).match(/n\.\s*([^\s/]+)/) || [])[1] || '', data: dd ? dd.data : f.data, lines: [] }; ddtRef.push(cur); return; } lines.push(l); if (cur) cur.lines.push(lines.length); });
+    const sede = o => { const m = String(o.citta || '').match(/^(.*?)\s*\(([A-Za-z]{2})\)\s*$/), com = m ? m[1] : o.citta, pr = String(o.prov || (m ? m[2] : '')).toUpperCase().slice(0, 2); return `<Sede><Indirizzo>${x(o.indirizzo)}</Indirizzo><CAP>${x(o.cap)}</CAP><Comune>${x(com)}</Comune>${/^[A-Z]{2}$/.test(pr) ? `<Provincia>${pr}</Provincia>` : ''}<Nazione>${x(o.nazione || 'IT')}</Nazione></Sede>`; };
+    const estero = cl.nazione && cl.nazione !== 'IT';
+    const dest = estero ? 'XXXXXXX' : /^[A-Z0-9]{7}$/i.test(cl.sdi || '') ? String(cl.sdi).toUpperCase() : '0000000';
+    const mp = /ri\.?ba/i.test(f.pagamento || '') ? 'MP12' : /contanti/i.test(f.pagamento || '') ? 'MP01' : 'MP05';
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2 http://www.fatturapa.gov.it/export/fatturazione/sdi/fatturapa/v1.2/Schema_del_file_xml_FatturaPA_versione_1.2.xsd">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione><IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>${x(az.cf || az.piva)}</IdCodice></IdTrasmittente><ProgressivoInvio>${prog}</ProgressivoInvio><FormatoTrasmissione>FPR12</FormatoTrasmissione><CodiceDestinatario>${dest}</CodiceDestinatario>${dest === '0000000' && cl.pec ? `<PECDestinatario>${x(cl.pec)}</PECDestinatario>` : ''}</DatiTrasmissione>
+    <CedentePrestatore><DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>${x(az.piva)}</IdCodice></IdFiscaleIVA>${az.cf ? `<CodiceFiscale>${x(az.cf)}</CodiceFiscale>` : ''}<Anagrafica><Denominazione>${x(az.nome)}</Denominazione></Anagrafica><RegimeFiscale>${x(az.regime || 'RF01')}</RegimeFiscale></DatiAnagrafici>${sede(az)}${az.tel || az.email ? `<Contatti>${az.tel ? `<Telefono>${x(az.tel)}</Telefono>` : ''}${az.email ? `<Email>${x(az.email)}</Email>` : ''}</Contatti>` : ''}</CedentePrestatore>
+    <CessionarioCommittente><DatiAnagrafici>${/^\d{11}$/.test(cl.piva || '') ? `<IdFiscaleIVA><IdPaese>${x(cl.nazione || 'IT')}</IdPaese><IdCodice>${x(cl.piva)}</IdCodice></IdFiscaleIVA>` : ''}${cl.cf ? `<CodiceFiscale>${x(String(cl.cf).toUpperCase())}</CodiceFiscale>` : ''}<Anagrafica><Denominazione>${x(cl.nome)}</Denominazione></Anagrafica></DatiAnagrafici>${sede(cl)}</CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>${f.tipo === 'TD24' ? 'TD24' : 'TD01'}</TipoDocumento><Divisa>EUR</Divisa><Data>${x(f.data)}</Data><Numero>${x(f.numero)}</Numero>${az.regime === 'RF19' && T.tot > 77.47 ? '<DatiBollo><BolloVirtuale>SI</BolloVirtuale><ImportoBollo>2.00</ImportoBollo></DatiBollo>' : ''}<ImportoTotaleDocumento>${n2(T.tot)}</ImportoTotaleDocumento>${f.note ? `<Causale>${x(String(f.note).slice(0, 200))}</Causale>` : ''}</DatiGeneraliDocumento>${ddtRef.map(dd => `<DatiDDT><NumeroDDT>${x(dd.n)}</NumeroDDT><DataDDT>${x(dd.data)}</DataDDT>${dd.lines.map(n => `<RiferimentoNumeroLinea>${n}</RiferimentoNumeroLinea>`).join('')}</DatiDDT>`).join('')}</DatiGenerali>
+    <DatiBeniServizi>${lines.map((l, i) => `<DettaglioLinee><NumeroLinea>${i + 1}</NumeroLinea>${l.c ? `<CodiceArticolo><CodiceTipo>INTERNO</CodiceTipo><CodiceValore>${x(l.c)}</CodiceValore></CodiceArticolo>` : ''}<Descrizione>${x(String(l.d || '').slice(0, 1000)) || '-'}</Descrizione><Quantita>${nq(l.q || 1)}</Quantita>${l.um ? `<UnitaMisura>${x(l.um)}</UnitaMisura>` : ''}<PrezzoUnitario>${nq(l.p)}</PrezzoUnitario>${num(l.sc) ? `<ScontoMaggiorazione><Tipo>SC</Tipo><Percentuale>${n2(l.sc)}</Percentuale></ScontoMaggiorazione>` : ''}<PrezzoTotale>${n2(lnTot(l))}</PrezzoTotale><AliquotaIVA>${n2(l.iva)}</AliquotaIVA>${num(l.iva) === 0 ? '<Natura>N2.2</Natura>' : ''}</DettaglioLinee>`).join('')}${Object.entries(T.by).map(([a, v]) => `<DatiRiepilogo><AliquotaIVA>${n2(a)}</AliquotaIVA>${num(a) === 0 ? '<Natura>N2.2</Natura>' : ''}<ImponibileImporto>${n2(v.imp)}</ImponibileImporto><Imposta>${n2(v.iva)}</Imposta>${num(a) ? '<EsigibilitaIVA>I</EsigibilitaIVA>' : ''}</DatiRiepilogo>`).join('')}</DatiBeniServizi>
+    <DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>${mp}</ModalitaPagamento>${validD(f.scadenza) ? `<DataScadenzaPagamento>${x(f.scadenza)}</DataScadenzaPagamento>` : ''}<ImportoPagamento>${n2(T.tot)}</ImportoPagamento>${mp === 'MP05' && az.iban ? `<IBAN>${x(az.iban)}</IBAN>` : ''}</DettaglioPagamento></DatiPagamento>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>
+`;
+    const blob = new Blob([xml], { type: 'application/xml' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `IT${az.piva}_${prog}.xml`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast(Object.keys(T.by).some(a2 => num(a2) === 0) ? 'XML scaricato · righe con IVA 0%: verifica la natura (N2.2) con il commercialista' : 'File XML scaricato: caricalo sul portale Fatture e Corrispettivi o mandalo al commercialista');
+  }
+
+  // clic su clienti, magazzino e documenti
+  function gxClick(e) {
+    const t = e.target;
+    const b = t.closest('[data-gx]');
+    if (b) {
+      const k = b.dataset.gx, id = b.dataset.id;
+      if (b.disabled) return;
+      e.preventDefault();
+      if (k === 'az') return azForm(() => { render(); });
+      if (k === 'cli-new') return cliForm();
+      if (k === 'cli-imp') return cliImport();
+      if (k === 'cli-open') { const c = cliOf(id); if (c) cliForm(c); return; }
+      if (k === 'art-new') return artForm();
+      if (k === 'mov-new') return movForm();
+      if (k === 'mov-art') return movForm(id);
+      if (k === 'mov-del') { const m = GX.mov().find(x => x.id === id); if (m && confirm('Eliminare questo movimento? La giacenza torna come prima.')) { write([{ action: 'delete', sheet: 'MagMov', id }]); toast('Movimento eliminato'); } return; }
+      if (k === 'mag-imp') return magImport();
+      if (k === 'mag-xls') return magExport();
+      if (k === 'ddt-new') return docForm('ddt');
+      if (k === 'fv-new') return docForm('fv');
+      if (k === 'fm') return fmForm();
+      if (k === 'ddt-copy') { const d = GX.ddt().find(x => x.id === id); if (d) docForm('ddt', d, true); return; }
+      if (k === 'ddt-pdf') { const d = GX.ddt().find(x => x.id === id); if (d) docPdf('ddt', d); return; }
+      if (k === 'fv-pdf') { const f = GX.fv().find(x => x.id === id); if (f) docPdf('fv', f); return; }
+      if (k === 'fv-xml') { const f = GX.fv().find(x => x.id === id); if (f) fvXml(f); return; }
+      if (k === 'fv-paid') { const f = GX.fv().find(x => x.id === id); if (!f) return; const paid = f.stato !== 'pagata'; write([{ action: 'upsert', sheet: 'Vendite', row: { ...f, stato: paid ? 'pagata' : 'emessa', pagata: paid ? today() : '' } }]); closeSheet(); toast(paid ? 'Fattura segnata come pagata' : 'Fattura di nuovo da incassare'); return; }
+      if (k === 'doc-cli') {
+        const nome = (prompt('Nome o ragione sociale del nuovo cliente') || '').trim(); if (nome.length < 2) return;
+        const c = { id: uid(), nome, nazione: 'IT', pagamento: PAG[2], creato: today() };
+        write([{ action: 'upsert', sheet: 'Clienti', row: c }]);
+        const s2 = $('#sheet-body [name=cliente]'); if (s2) { s2.insertAdjacentHTML('beforeend', `<option value="${esc(c.id)}">${esc(c.nome)}</option>`); s2.value = c.id; }
+        toast('Cliente aggiunto · completa P.IVA e indirizzo nella sezione Clienti'); return;
+      }
+      return;
+    }
+    const tb = t.closest('[data-mgtab]'); if (tb) { mgTab = tb.dataset.mgtab; renderMag(); return; }
+    const lw = t.closest('[data-mglow]'); if (lw) { mgLow = lw.dataset.mglow === '1'; renderMag(); return; }
+    const vt = t.closest('[data-vntab]'); if (vt) { vnTab = vt.dataset.vntab; renderVen(); return; }
+    const vp = t.closest('[data-vnp]'); if (vp && !vp.disabled) { const months = [...new Set([...GX.ddt(), ...GX.fv()].map(x => String(x.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort(), opts = ['', ...months.reverse()], i = opts.indexOf(vnP) - Number(vp.dataset.vnp); vnP = opts[Math.max(0, Math.min(opts.length - 1, i))] || ''; renderVen(); return; }
+    if (t.closest('button, a, input, select, label')) return;
+    const rc = t.closest('[data-cli]'); if (rc) { const c = cliOf(rc.dataset.cli); if (c) cliForm(c); return; }
+    const ra = t.closest('[data-art]'); if (ra) { const a = artOf(ra.dataset.art); if (a) artForm(a); return; }
+    const rd = t.closest('[data-ddt]'); if (rd) { const d = GX.ddt().find(x => x.id === rd.dataset.ddt); if (d) docForm('ddt', d); return; }
+    const rf = t.closest('[data-fv]'); if (rf) { const f = GX.fv().find(x => x.id === rf.dataset.fv); if (f) docForm('fv', f); }
+  }
+
   /* ================= Eventi ================= */
   function bind() {
     $('#ad-body').addEventListener('click', adClick);
+    document.addEventListener('click', gxClick);
     $('#sheet-body').addEventListener('click', e => { const c = e.target.closest('[data-copy]'); if (c) { const v = c.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast('Copiato'), () => toast(v)); } });
     window.addEventListener('hashchange', go);
     $('#sheet-form').addEventListener('submit', e => {

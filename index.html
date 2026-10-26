@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=97">
-  <link rel="stylesheet" href="cdc.css?v=97">
+  <link rel="stylesheet" href="style.css?v=98">
+  <link rel="stylesheet" href="cdc.css?v=98">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -120,6 +120,9 @@
       <a href="#gls" data-view="gls"><svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg><span>GLS</span></a>
       <a href="#gasolio" data-view="gasolio"><svg viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7zM15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg><span>Gasolio</span></a>
       <a href="#fatture" data-view="fatture"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg><span>Fatture</span></a>
+      <a href="#vendite" data-view="vendite"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 14l2 2 4-4"/></svg><span><span class="lbl-d">DDT e fatture</span><span class="lbl-m">Vendite</span></span></a>
+      <a href="#clienti" data-view="clienti"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 11h6M19 8v6"/></svg><span>Clienti</span></a>
+      <a href="#magazzino" data-view="magazzino"><svg viewBox="0 0 24 24"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/></svg><span><span class="lbl-d">Magazzino</span><span class="lbl-m">Magazz.</span></span></a>
       <a href="#torental" data-view="torental" class="nv-d"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18.5" cy="17" r="2"/></svg><span>Torental</span></a>
       <a href="#lyreco" data-view="lyreco"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></svg><span>Lyreco</span></a>
       <a href="#amazon" data-view="amazon"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/><path d="M9 14c1.8 1.2 4.2 1.2 6 0"/></svg><span>Amazon</span></a>
@@ -353,12 +356,16 @@
 
       <!-- IMPOSTAZIONI -->
       <!-- UTENTI (solo amministratore) -->
+      <section id="v-vendite" class="view" data-v="vendite" hidden><div id="vn-body"></div></section>
+      <section id="v-clienti" class="view" data-v="clienti" hidden><div id="cl-body"></div></section>
+      <section id="v-magazzino" class="view" data-v="magazzino" hidden><div id="mg-body"></div></section>
       <section id="v-utenti" class="view" data-v="utenti" hidden><div id="ad-body"></div></section>
 
       <section id="v-impostazioni" class="view" data-v="impostazioni" hidden>
         <div class="st-wrap">
           <nav class="st-nav" aria-label="Sezioni delle impostazioni">
             <a href="#st-set" data-st-go="st-set"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/></svg><span>Attività e sezioni</span></a>
+            <a href="#st-doc" data-st-go="st-doc"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg><span>DDT e fatture</span></a>
             <a href="#st-gen" data-st-go="st-gen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/></svg><span>Aspetto</span></a>
             <a href="#st-dati" data-st-go="st-dati"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg><span>Dati e backup</span></a>
             <a href="#st-cdc" data-st-go="st-cdc"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.6-7-11.2A7 7 0 0 1 19 9.8C19 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.6"/></svg><span>Centri e categorie</span></a>
@@ -372,6 +379,11 @@
               <div class="st-sh"><h2>Attività e sezioni</h2><p>Il tipo di attività adatta nomi, categorie e sezioni del gestionale. Puoi accendere e spegnere le sezioni che ti servono.</p></div>
               <div class="card st-card" id="s-set"></div>
               <div class="card st-card"><div class="st-ch"><h3>Sezioni del menu</h3><span class="muted small" id="s-mod-n"></span></div><div id="s-mod"></div></div>
+            </section>
+
+            <section class="st-sec" id="st-doc">
+              <div class="st-sh"><h2>DDT e fatture</h2><p>I dati della tua azienda che compaiono su DDT, fatture e file XML per lo SdI.</p></div>
+              <div class="card st-card" id="s-doc"></div>
             </section>
 
             <section class="st-sec" id="st-gen">
@@ -474,7 +486,7 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="settori.js?v=97"></script>
-  <script src="app.js?v=97"></script>
+  <script src="settori.js?v=98"></script>
+  <script src="app.js?v=98"></script>
 </body>
 </html>

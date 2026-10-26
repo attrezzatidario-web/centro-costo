@@ -275,5 +275,37 @@
     pv('d2', `P${y}-001`, config.pvClienti[1], 'accettato', 15, [{ sup: 'payper', it: '000001', n: 'MIAMI+', cl: 'T-SHIRT', c: '01000', cn: 'GIALLO', sz: ['M', 'L'], q: { M: 10, L: 10 }, p: 6.9, man: true, sc: 5 }]);
     return { movimenti, gls, gasolio, fatture, lyreco: [], lyfatture: [], amazon, amazonart, pdf: [], config, ai: false, aik: { gemini: false }, aiFirst: 'gemini', v: 'demo' };
   }
-  window.CDC_DEMO = id => PROF[id] ? sector(id) : vei();
+  /* v98: clienti, magazzino, DDT e fatture di prova (uguali per tutte le attività, con gli articoli della demo) */
+  function addSales(D) {
+    seed = 777; const ids = () => 'dx' + uid();
+    const CL = [['Rossi Costruzioni S.r.l.', 'Via Appia Nuova 120', '00179', 'Roma', 'RM'], ['Bianchi & Figli S.n.c.', 'Corso Italia 45', '20122', 'Milano', 'MI'], ['Verdi Servizi S.r.l.', 'Via Emilia 300', '40138', 'Bologna', 'BO'],
+      ['Hotel Bellavista S.r.l.', 'Lungomare Colombo 12', '84129', 'Salerno', 'SA'], ['Esposito Group S.p.A.', 'Via Toledo 210', '80134', 'Napoli', 'NA'], ['Studio Neri Associati', 'Via dei Mille 8', '10123', 'Torino', 'TO']];
+    const SDI = ['M5UXCR1', 'KRRH6B9', 'T9K4ZHO', 'SUBM70N', 'W7YVJK9', '0000000'];
+    const clienti = CL.map(([nome, ind, cap, citta, prov], i) => ({ id: 'dc' + (i + 1), nome, piva: String(10000000000 + int(1, 89999999999)).slice(0, 11), cf: '', indirizzo: ind, cap, citta, prov, nazione: 'IT', sdi: SDI[i], pec: i === 5 ? 'studioneri@pec.example' : '', email: `amministrazione@${nome.split(' ')[0].toLowerCase()}.example`, tel: '0' + int(2, 9) + ' ' + int(1000000, 9999999), pagamento: ['Bonifico 30 gg d.f.f.m.', 'Ri.Ba. 60 gg d.f.f.m.', 'Bonifico vista fattura', 'Bonifico 60 gg d.f.f.m.', 'Ri.Ba. 30 gg d.f.f.m.', 'Rimessa diretta'][i], note: '', creato: ds(daysAgo(200)) }));
+    const seen = new Map(); D.movimenti.forEach(r => { if (!seen.has(r.descrizione) && r.prezzo > 0 && r.prezzo < 400 && r.codice) seen.set(r.descrizione, r); });
+    const articoli = [...seen.values()].slice(0, 14).map((r, i) => ({ id: 'da' + (i + 1), codice: 'A' + String(100 + i), descrizione: r.descrizione.charAt(0) + r.descrizione.slice(1).toLowerCase(), um: r.um || 'PZ', categoria: r.categoria, fornitore: r.fornitore, costo: r2(r.prezzo), prezzo: r2(r.prezzo * 1.5), iva: 22, scorta: int(5, 20), barcode: '', note: '', creato: ds(daysAgo(120)) }));
+    const magmov = [], ddt = [], vendite = [];
+    articoli.forEach((a, i) => { magmov.push({ id: ids(), data: ds(daysAgo(110)), articolo: a.id, tipo: 'carico', quantita: int(30, 160), costo: a.costo, causale: 'Giacenza iniziale', doc: '', note: '', creato: ds(daysAgo(110)) }); if (i % 3 === 0) magmov.push({ id: ids(), data: ds(daysAgo(int(10, 40))), articolo: a.id, tipo: 'carico', quantita: int(20, 60), costo: a.costo, causale: 'Acquisto da fornitore', doc: '', note: '', creato: ds(daysAgo(20)) }); });
+    const y = now.getFullYear(), dates = Array.from({ length: 18 }, () => int(1, 62)).sort((a, b) => b - a);
+    dates.forEach((g, k) => {
+      const d = daysAgo(g); if (d.getFullYear() !== y) return;
+      const c = clienti[int(0, 4)], righe = [];
+      for (let j = 0, n = int(2, 4); j < n; j++) { const a = pick(articoli); if (righe.some(l => l.art === a.id)) continue; righe.push({ art: a.id, c: a.codice, d: a.descrizione, um: a.um, q: int(1, 12), p: a.prezzo, sc: rnd() < .2 ? 5 : 0, iva: 22 }); }
+      const dd = { id: 'dd' + (k + 1), numero: String(ddt.filter(x => x.anno === String(y)).length + 1), anno: String(y), data: ds(d), cliente: c.id, destinazione: '', causale: 'Vendita', trasporto: pick(['Mittente', 'Mittente', 'Vettore']), vettore: '', colli: int(1, 6), peso: int(5, 120), aspetto: pick(['Scatole', 'Pallet']), prezzi: '', righe: JSON.stringify(righe), fattura: '', note: '', creato: ds(d) };
+      ddt.push(dd); righe.forEach(l => magmov.push({ id: ids(), data: dd.data, articolo: l.art, tipo: 'scarico', quantita: -l.q, costo: 0, causale: `DDT ${dd.numero}/${dd.anno}`, doc: dd.id, note: '', creato: dd.data }));
+    });
+    // il mese scorso è già fatturato (fatture di fine mese)
+    const cur = ds(now).slice(0, 7), tot = R => { const by = {}; R.filter(l => !l.h).forEach(l => { const t = r2(l.q * l.p * (1 - (l.sc || 0) / 100)); by[l.iva] = r2((by[l.iva] || 0) + t); }); let imp = 0, iva = 0; Object.entries(by).forEach(([a, v]) => { imp += v; iva += r2(v * a / 100); }); return [r2(imp), r2(iva)]; };
+    const prev = [...new Set(ddt.map(d => d.data.slice(0, 7)).filter(m => m < cur))].sort();
+    let nf = 0;
+    prev.forEach(m => { const [yy, mm] = m.split('-').map(Number), last = ds(new Date(yy, mm, 0));
+      clienti.forEach(c => { const L = ddt.filter(d => d.cliente === c.id && d.data.slice(0, 7) === m); if (!L.length) return;
+        const righe = L.flatMap(d => [{ h: 1, d: `DDT n. ${d.numero}/${d.anno} del ${d.data.split('-').reverse().join('/')}`, ddt: d.id }, ...JSON.parse(d.righe)]), [imp, iva] = tot(righe);
+        const sc = new Date(yy, mm, 0); sc.setDate(sc.getDate() + 30); sc.setMonth(sc.getMonth() + 1, 0);
+        const f = { id: 'dv' + (++nf), numero: String(nf), anno: String(yy), data: last, tipo: 'TD24', cliente: c.id, ddt: JSON.stringify(L.map(d => d.id)), righe: JSON.stringify(righe), imponibile: imp, imposta: iva, totale: r2(imp + iva), pagamento: c.pagamento, scadenza: ds(sc), stato: rnd() < .5 ? 'pagata' : 'emessa', pagata: '', note: '', creato: last };
+        if (f.stato === 'pagata') f.pagata = last; vendite.push(f); L.forEach(d => { d.fattura = f.id; }); }); });
+    Object.assign(D.config.azienda = D.config.azienda || {}, { piva: '01234567890', cf: '01234567890', indirizzo: 'Via Roma 10', cap: '00100', regime: 'RF01', iban: 'IT60X0542811101000000123456', email: 'info@azienda-demo.example', tel: '06 1234567' });
+    return Object.assign(D, { clienti, articoli, magmov, ddt, vendite });
+  }
+  window.CDC_DEMO = id => addSales(PROF[id] ? sector(id) : vei());
 })();

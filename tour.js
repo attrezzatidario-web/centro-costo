@@ -6,7 +6,7 @@
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const SOON = new Set(['mag', 'ddt']); // funzioni in preparazione: etichetta «in arrivo»
+  const SOON = new Set(); // funzioni in preparazione: etichetta «in arrivo»
 
   // esempi di righe di fattura riconosciute in automatico, per attività
   const EX = {
