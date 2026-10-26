@@ -38,14 +38,17 @@
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxExGwxVNa08xHz1zp2BmoGkvT1LX7jj-yfdbzbWckqOBsMxPsISmDdKgDmx4uqwRiW/exec';
   let url = SCRIPT_URL;
   LS.set('cdc_url', url);
-  let db = LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
+  // utente collegato (email, gestionale, ruolo) e versione demo
+  let me = LS.get('cdc_me', null);
+  let DEMO = !!(me && me.demo);
+  let db = DEMO ? { movimenti: [], config: {}, ai: false } : LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
   if (!db.gls) db.gls = [];
   if (!db.gasolio) db.gasolio = [];
   if (!db.fatture) db.fatture = [];
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
-  const isLocal = () => url === 'local';
-  const save = () => { prodIdx = null; LS.set('cdc_data', db); LS.set('cdc_queue', queue); };
+  const isLocal = () => url === 'local' || DEMO;
+  const save = () => { prodIdx = null; if (DEMO) return; LS.set('cdc_data', db); LS.set('cdc_queue', queue); };
 
   /* ================= Utils ================= */
   const $ = (s, el = document) => el.querySelector(s);
@@ -136,7 +139,7 @@
   /* ================= Config ================= */
   const cfg = k => (db.config || {})[k];
   const centri = () => {
-    const list = Array.isArray(cfg('centri')) && cfg('centri').length ? [...cfg('centri')] : [...CENTRI_DEF];
+    const list = Array.isArray(cfg('centri')) && cfg('centri').length ? [...cfg('centri')] : isMain() ? [...CENTRI_DEF] : [];
     db.movimenti.forEach(r => { const c = String(r.centro || '').trim(); if (c && !list.includes(c)) list.push(c); });
     return list;
   };
@@ -174,16 +177,19 @@
     if (del.size) db.movimenti = db.movimenti.filter(r => !del.has(String(r.id)));
   }
   function write(ops) {
+    if (me && me.ruolo === 'lettura') { toast('Il tuo account è in sola lettura: le modifiche non vengono salvate'); return; }
     applyMany(ops);
     if (!isLocal()) queue.push(...ops);
     save(); render(); flush();
   }
   const setConfig = (chiave, value) => write([{ action: 'upsert', sheet: 'Config', row: { chiave, valore: JSON.stringify(value) } }]);
 
-  // accesso: token di sessione rilasciato dallo script dopo la password (la password non viene salvata)
+  // accesso con email e password: lo script rilascia un token di sessione (la password non viene mai salvata)
   let tok = LS.get('cdc_tok', '');
   class AuthError extends Error {}
+  const AUTH_ACT = ['login', 'register', 'forgot', 'resetPw', 'ping'];
   async function post(action, extra) {
+    if (DEMO && !AUTH_ACT.includes(action) && action !== 'logout') throw new Error('Nella versione demo questa funzione non è attiva: i dati non vengono salvati');
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: tok, ...extra }), credentials: 'omit', referrerPolicy: 'no-referrer' });
     const j = await r.json();
     if (!j.ok && j.auth) { lockApp(j.error); throw new AuthError(j.error); }
@@ -200,31 +206,165 @@
     return m;
   }
   async function api(action, extra) { return (await post(action, extra)).result; }
+  const isMain = () => !me || !!me.principale;
+  // nome e città dell'azienda per intestazioni e PDF (Config «azienda» o dati del gestionale)
+  const ORG = {
+    get n() { const a = (db.config || {}).azienda; return (a && a.nome) || (me && me.wsNome) || 'Soluzione Veicolare S.r.l.'; },
+    get sede() { const a = (db.config || {}).azienda; return (a && a.citta) || (me && me.wsCitta) || 'San Cesareo (RM)'; },
+    get N() { return this.n.toUpperCase(); }
+  };
+  function applyMe(u) {
+    me = { ...(me || {}), ...u }; LS.set('cdc_me', me);
+    const b = $('#brand-ws'); if (b) b.textContent = DEMO ? 'Versione demo' : (me.wsNome || '').replace(/\s+S\.?r\.?l\.?$|\s+S\.?p\.?A\.?$/i, '') || 'Gestionale';
+    document.body.classList.toggle('is-admin', !!me.admin);
+    document.body.classList.toggle('is-demo', DEMO);
+    document.body.classList.toggle('is-ro', me.ruolo === 'lettura');
+    $$('.nv-admin').forEach(a => { a.hidden = !me.admin; });
+    let bar = $('#demo-bar');
+    if (DEMO || me.ruolo === 'lettura') {
+      if (!bar) { bar = document.createElement('div'); bar.id = 'demo-bar'; bar.className = 'demo-bar'; $('#app main .top').after(bar); }
+      bar.innerHTML = DEMO ? `<span><b>Versione demo</b> · dati di prova: puoi provare tutto, ma le modifiche non vengono salvate e si azzerano quando ricarichi la pagina.</span><button type="button" class="btn sm" id="demo-out">Esci dalla demo</button>`
+        : `<span><b>Sola lettura</b> · puoi consultare i dati ma non modificarli. Per i permessi chiedi all'amministratore.</span>`;
+      const o = $('#demo-out'); if (o) o.onclick = () => logout(true);
+    } else if (bar) bar.remove();
+  }
+  function setSession(u, t) {
+    const same = me && me.email === u.email && me.ws === u.ws && !me.demo && !u.demo;
+    if (!same) { queue = []; LS.set('cdc_queue', []); try { localStorage.removeItem('cdc_data'); } catch {} db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] }; }
+    tok = t; LS.set('cdc_tok', tok);
+    me = null; DEMO = !!u.demo; applyMe(u);
+  }
   function lockApp(msg) {
     tok = ''; LS.set('cdc_tok', '');
+    me = null; DEMO = false; try { localStorage.removeItem('cdc_me'); } catch {}
     db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] };
     try { localStorage.removeItem('cdc_data'); } catch {}
+    document.body.classList.remove('is-admin', 'is-demo', 'is-ro'); const bar = $('#demo-bar'); if (bar) bar.remove();
     showLogin(msg);
+  }
+  async function logout(demoOut) {
+    if (!demoOut && !confirm('Uscire da questo dispositivo? Per entrare di nuovo serviranno email e password.')) return;
+    if (!DEMO && queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate: uscendo andranno perse. Continuare?`)) return;
+    const wasDemo = DEMO; DEMO = false;
+    try { await api('logout'); } catch {}
+    queue = []; LS.set('cdc_queue', []); lockApp(); authPane(wasDemo ? 'reg' : 'login'); toast(wasDemo ? 'Sei uscito dalla demo' : 'Uscito');
+  }
+  // ---------- schermata di accesso / registrazione / password dimenticata ----------
+  const AUTH_TXT = { login: ['Accedi', 'Entra con la tua email e la tua password.'], reg: ['Crea il tuo account', 'Registrati con il codice del gestionale della tua azienda.'], forgot: ['Password dimenticata', 'Ti mandiamo via email un codice per sceglierne una nuova.'] };
+  function authMsg(err, ok) { const e = $('#login-err'), o = $('#login-ok'); e.hidden = !err; e.textContent = err || ''; o.hidden = !ok; o.textContent = ok || ''; }
+  function authPane(p) {
+    $$('#setup [data-pane]').forEach(f => { f.hidden = f.dataset.pane !== p; });
+    $$('#setup .auth-tabs [data-auth]').forEach(b => { const on = b.dataset.auth === p; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    $('#setup .auth-tabs').hidden = p === 'forgot';
+    $('#auth-title').textContent = AUTH_TXT[p][0]; $('#auth-sub').textContent = AUTH_TXT[p][1];
+    if (p === 'forgot') { $$('#forgot-form [data-step]').forEach(d => { d.hidden = d.dataset.step !== '1'; }); const em = $('#login-email').value; if (em) $('#forgot-form [name=email]').value = em; }
+    authMsg();
+    setTimeout(() => { const f = $(`#setup [data-pane="${p}"] input:not([type=hidden])`); if (f && matchMedia('(min-width: 640px)').matches) f.focus(); }, 60);
   }
   function showLogin(msg) {
     $('#app').hidden = true; $('#setup').hidden = false;
-    const e = $('#login-err'); e.hidden = !msg; e.textContent = msg || '';
-    setTimeout(() => $('#login-pw') && $('#login-pw').focus(), 60);
+    authMsg(msg);
+    setTimeout(() => $('#login-email') && ($('#login-email').value ? $('#login-pw') : $('#login-email')).focus(), 60);
   }
+  const device = () => ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '') + (matchMedia('(max-width: 640px)').matches ? ' · telefono' : '');
+  async function authCall(action, body) {
+    if (!url || url === 'local') throw new Error('Gestionale non collegato');
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, ...body }), credentials: 'omit', referrerPolicy: 'no-referrer' });
+    const j = await r.json();
+    if (!j.ok) throw new Error(/Azione sconosciuta|Password non ancora impostata/.test(j.error || '') ? 'Lo script del Foglio Google va aggiornato alla versione cdc-4.0 per entrare con email e password' : j.error || 'Operazione non riuscita');
+    if (action === 'login' && typeof j.result === 'string') throw new Error('Lo script del Foglio Google va aggiornato alla versione cdc-4.0 per entrare con email e password');
+    return j.result;
+  }
+  async function busyBtn(btn, txt, fn) { const t0 = btn.textContent; btn.disabled = true; btn.textContent = txt; try { return await fn(); } finally { btn.disabled = false; btn.textContent = t0; } }
+  const netErr = e => e instanceof TypeError ? 'Nessuna connessione: riprova' : e.message;
   async function doLogin(ev) {
-    ev.preventDefault();
-    const pw = $('#login-pw').value, err = $('#login-err'); err.hidden = true;
-    if (!pw) return;
-    const btn = $('#login-go'); btn.disabled = true; btn.textContent = 'Verifico…';
+    ev.preventDefault(); authMsg();
+    const email = $('#login-email').value.trim(), pw = $('#login-pw').value;
+    if (!email || !pw) return authMsg('Scrivi email e password');
     try {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'login', password: pw, device: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '' }), credentials: 'omit', referrerPolicy: 'no-referrer' });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'Accesso non riuscito');
-      tok = j.result; LS.set('cdc_tok', tok);
+      const r = await busyBtn($('#login-go'), 'Verifico…', () => authCall('login', { email, password: pw, device: device() }));
       $('#login-pw').value = '';
-      start(); toast('Accesso effettuato');
-    } catch (e) { err.textContent = e instanceof TypeError ? 'Nessuna connessione: riprova' : e.message; err.hidden = false; }
-    finally { btn.disabled = false; btn.textContent = 'Entra'; }
+      setSession(r.user, r.token); start(); toast(r.user.demo ? 'Benvenuto nella demo' : `Ciao ${String(r.user.nome || '').split(' ')[0]}`);
+    } catch (e) { authMsg(netErr(e)); }
+  }
+  async function doRegister(ev) {
+    ev.preventDefault(); authMsg();
+    const f = $('#reg-form'), v = k => (f.elements[k].value || '').trim();
+    if (v('nome').length < 2) return authMsg('Scrivi nome e cognome');
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v('email'))) return authMsg('Email non valida');
+    if (f.elements.password.value.length < 8) return authMsg('La password deve avere almeno 8 caratteri');
+    if (f.elements.password.value !== f.elements.password2.value) return authMsg('Le due password non coincidono');
+    if (!v('codice')) return authMsg('Scrivi il codice del gestionale');
+    try {
+      const r = await busyBtn($('#reg-go'), 'Creo l\'account…', () => authCall('register', { nome: v('nome'), azienda: v('azienda'), email: v('email'), password: f.elements.password.value, codice: v('codice').toUpperCase(), device: device() }));
+      if (r.attivo && r.token) { f.reset(); setSession(r.user, r.token); start(); toast(r.user.demo ? 'Benvenuto nella demo' : 'Account creato'); return; }
+      $('#login-email').value = v('email'); f.reset(); authPane('login');
+      authMsg('', 'Richiesta inviata. L\'amministratore deve approvare il tuo account: riceverai una email appena sarà attivo.');
+    } catch (e) { authMsg(netErr(e)); }
+  }
+  async function doForgot(ev) {
+    ev.preventDefault(); authMsg();
+    const f = $('#forgot-form'), step2 = !f.querySelector('[data-step="2"]').hidden, email = f.elements.email.value.trim();
+    try {
+      if (!step2) {
+        if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return authMsg('Scrivi l\'email del tuo account');
+        await busyBtn(f.querySelector('[data-fgo="1"]'), 'Invio…', () => authCall('forgot', { email }));
+        $$('#forgot-form [data-step]').forEach(d => { d.hidden = d.dataset.step !== '2'; });
+        authMsg('', 'Se l\'email è registrata ti arriva un codice entro un minuto.'); setTimeout(() => f.elements.code.focus(), 50); return;
+      }
+      if (f.elements.password.value.length < 8) return authMsg('La nuova password deve avere almeno 8 caratteri');
+      await busyBtn(f.querySelector('[data-fgo="2"]'), 'Salvo…', () => authCall('resetPw', { email, code: f.elements.code.value.trim(), password: f.elements.password.value }));
+      $('#login-email').value = email; f.reset(); authPane('login'); authMsg('', 'Password cambiata: ora puoi entrare.');
+    } catch (e) { authMsg(netErr(e)); }
+  }
+  function authBind() {
+    $('#login-form').addEventListener('submit', doLogin);
+    $('#reg-form').addEventListener('submit', doRegister);
+    $('#forgot-form').addEventListener('submit', doForgot);
+    $('#setup').addEventListener('click', e => {
+      const t = e.target.closest('[data-auth]'); if (t) { authPane(t.dataset.auth); return; }
+      const ey = e.target.closest('[data-pweye]'); if (ey) { const i = ey.parentElement.querySelector('input'); const sh = i.type === 'password'; i.type = sh ? 'text' : 'password'; ey.classList.toggle('on', sh); ey.setAttribute('aria-label', sh ? 'Nascondi password' : 'Mostra password'); return; }
+      if (e.target.closest('[data-democode]')) { const c = $('#reg-form').elements.codice; c.value = 'DEMO2026'; c.focus(); }
+    });
+    $('#reg-form').elements.codice.addEventListener('input', e => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase().replace(/\s+/g, ''); try { e.target.setSelectionRange(p, p); } catch {} });
+  }
+  // ---------- profilo e password (Impostazioni › Account) ----------
+  function meForm() {
+    if (DEMO) return toast('Nella demo il profilo non si può modificare');
+    openSheet('Il tuo profilo', `<label class="f"><span>Nome e cognome</span><input name="nome" data-focus value="${esc(me.nome || '')}" required></label>
+      <label class="f"><span>Azienda</span><input name="azienda" value="${esc(me.azienda || '')}"></label>
+      <label class="f"><span>Telefono</span><input name="telefono" value="${esc(me.telefono || '')}" inputmode="tel"></label>
+      ${me.admin || me.ruolo === 'utente' ? `<p class="pvx-intro" style="margin-top:6px">Ragione sociale e città stampate sui PDF (preventivi, report):</p><div class="f-row"><label class="f"><span>Ragione sociale</span><input name="org" value="${esc(ORG.n)}"></label><label class="f"><span>Città</span><input name="citta" value="${esc(ORG.sede)}"></label></div>` : ''}`, async fd => {
+      try {
+        busy('Salvo…');
+        const u = await api('updateMe', { nome: fd.get('nome'), azienda: fd.get('azienda'), telefono: fd.get('telefono') }); applyMe(u);
+        if (fd.has('org')) { const o = { nome: String(fd.get('org') || '').trim(), citta: String(fd.get('citta') || '').trim() }; const a = cfg('azienda') || {}; if (o.nome !== (a.nome || '') || o.citta !== (a.citta || '')) setConfig('azienda', o); }
+        busy(); toast('Profilo aggiornato'); renderSettings(); return true;
+      } catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
+    }, null, 'Salva');
+  }
+  function pwForm() {
+    if (DEMO) return toast('Nella demo la password non si può cambiare');
+    openSheet('Cambia password', `<label class="f"><span>Password attuale</span><input name="old" type="password" autocomplete="current-password" data-focus required></label>
+      <label class="f"><span>Nuova password</span><input name="n1" type="password" autocomplete="new-password" minlength="8" required placeholder="almeno 8 caratteri"></label>
+      <label class="f"><span>Ripeti la nuova password</span><input name="n2" type="password" autocomplete="new-password" required></label>`, async fd => {
+      const n1 = String(fd.get('n1') || ''); if (n1.length < 8) return toast('La nuova password deve avere almeno 8 caratteri');
+      if (n1 !== fd.get('n2')) return toast('Le due password non coincidono');
+      try { busy('Salvo…'); const r = await api('changePw', { old: fd.get('old'), nuova: n1 }); tok = r.token; LS.set('cdc_tok', tok); busy(); toast('Password cambiata · gli altri dispositivi dovranno entrare di nuovo'); return true; }
+      catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
+    }, null, 'Cambia password');
+  }
+  function renderMe() {
+    const el = $('#s-me'); if (!el || !me) return;
+    const R = { admin: 'Amministratore', utente: 'Utente', lettura: 'Sola lettura', demo: 'Demo' };
+    const ini = String(me.nome || me.email || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    el.innerHTML = `<span class="st-av">${esc(ini)}</span><div><b>${esc(me.nome || '')}</b><span>${esc(me.email || '')}</span><small>${esc(me.wsNome || me.ws || '')} · codice ${esc(me.ws || '')}</small></div><span class="st-pill ${me.admin ? 'on' : ''}">${esc(R[me.ruolo] || me.ruolo || '')}</span>`;
+    $('#s-logout-all').closest('.st-row').hidden = DEMO;
+    $('#s-pw').closest('.st-row').hidden = DEMO;
+    $('#s-me-edit').closest('.st-row').hidden = DEMO;
+    ['#st-ai'].forEach(sel => { const x = $(sel); if (x) x.hidden = !me.admin; });
+    const nav = $('[data-st-go="st-ai"]'); if (nav) nav.hidden = !me.admin;
+    const bk = $('#s-bk'); if (bk) { const c = bk.closest('.card') || bk; c.hidden = !me.admin || DEMO; }
   }
   async function flush() {
     if (isLocal() || syncing || !queue.length || !url) return setSync();
@@ -246,6 +386,7 @@
       if (!tok) { showLogin(); return; }
       const j = await post('all');
       db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) };
+      if (j.data.user) applyMe(j.data.user);
       applyMany(queue);
       online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
@@ -261,6 +402,7 @@
       const el = $(s); if (!el) return;
       el.className = 'sync';
       if (txt) { el.textContent = txt; return; }
+      if (DEMO) { el.textContent = 'Demo · non salvato'; el.classList.add('pending'); return; }
       if (isLocal()) { el.textContent = 'Solo dispositivo'; el.classList.add('offline'); return; }
       if (syncing) { el.textContent = 'Salvo…'; el.classList.add('pending'); return; }
       if (queue.length) { el.textContent = `${queue.length} da inviare`; el.classList.add('pending'); return; }
@@ -280,12 +422,13 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
+    if (view === 'utenti' && !(me && me.admin)) view = 'home';
     if (view === 'attrezzatura') ccAnim = true;
     if (view === 'home') ovAnim = true;
     if (view === 'gls') { glsAnim = true; if (prevView !== 'gls' && !gKeep) gMonth = ALLM; gKeep = false; }
@@ -302,8 +445,8 @@
     document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = view === 'preventivi' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = view === 'preventivi' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -332,13 +475,14 @@
   }
   function render() {
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
 
   /* ================= HOME ================= */
   function socBar() {
+    $('#h-soc').hidden = !isMain();
     const opts = [['', 'Tutte'], ['Soluzione Veicolare', 'Soluzione Veicolare'], ['Attrezzati', 'Attrezzati']];
     $('#h-soc').innerHTML = opts.map(([v, l]) => `<button data-soc="${esc(v)}" class="${soc === v ? 'on' : ''}">${esc(l)}</button>`).join('');
   }
@@ -869,10 +1013,11 @@
   function renderSettings() {
     themeUI();
     sub('');
+    renderMe();
     renderBackup();
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
     const stat = (l, v, s2) => `<div class="st-stat"><span>${l}</span><b>${v}</b>${s2 ? `<small>${s2}</small>` : ''}</div>`;
-    $('#s-conn').innerHTML = stat('Dati salvati in', isLocal() ? 'Questo dispositivo' : 'Foglio Google') + (!isLocal() ? stat('Versione script', esc(db.v || '—')) : '')
+    $('#s-conn').innerHTML = stat('Dati salvati in', DEMO ? 'Nessuno (demo)' : isLocal() ? 'Questo dispositivo' : 'Foglio Google') + (!isLocal() ? stat('Versione script', esc(db.v || '—')) : '')
       + stat('Acquisti attrezzatura', fmtNum(db.movimenti.length, 0), nd ? `${fmtNum(nd, 0)} senza data` : 'tutti con data')
       + stat('Ordini e fatture', fmtNum(amOrd().length + new Set(lyRows().map(r => r.fattura)).size + faRows().length, 0), 'Amazon, Lyreco, fornitori');
     $('#s-pull').closest('.st-row').hidden = isLocal();
@@ -2857,7 +3002,7 @@
 
   /* ---------- v72: barra sotto (dock) personalizzabile sul telefono ---------- */
   const DOCK_DEF = ['home', 'preventivi', 'attrezzatura', 'fatture'];
-  const dockSecs = () => $$('.nav a[data-view]').map(a => ({ v: a.dataset.view, a, t: (a.querySelector('.lbl-d') || a.querySelector('span') || a).textContent.trim(), m: (a.querySelector('.lbl-m') || a.querySelector('.lbl-d') || a.querySelector('span') || a).textContent.trim(), ic: (a.querySelector('svg') || {}).outerHTML || '' }));
+  const dockSecs = () => $$('.nav a[data-view]').filter(a => !a.hidden).map(a => ({ v: a.dataset.view, a, t: (a.querySelector('.lbl-d') || a.querySelector('span') || a).textContent.trim(), m: (a.querySelector('.lbl-m') || a.querySelector('.lbl-d') || a.querySelector('span') || a).textContent.trim(), ic: (a.querySelector('svg') || {}).outerHTML || '' }));
   const dockGet = () => { let d = null; try { d = JSON.parse(localStorage.getItem('cdc_dock') || 'null'); } catch {} const ok = dockSecs().map(x => x.v); d = Array.isArray(d) ? d.filter(v => ok.includes(v)) : []; return d.length === 4 ? d : DOCK_DEF.filter(v => ok.includes(v)); };
   function dockApply() {
     const d = dockGet(), cur = document.body.dataset.view || '';
@@ -3831,7 +3976,7 @@
       const HB = 34; fill(C.navy); doc.rect(0, 0, W, HB, 'F'); fill(C.blue); alpha(.55); doc.triangle(W * .55, 0, W, 0, W, HB, 'F'); alpha(1);
       fill(C.orange); alpha(.95); doc.lines([[60, -11], [0, 5], [-60, 11]], 160, 30, [1, 1], 'F', true); alpha(1);
       if (logo) { fill(C.white); doc.roundedRect(M, 10, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 10.6, 10.8, 10.8); }
-      color(C.white); font('bold', 9.5); doc.text('SOLUZIONE VEICOLARE S.R.L.', M + 16, 15); font('normal', 8); alpha(.8); doc.text('San Cesareo (RM)', M + 16, 19.5); alpha(1);
+      color(C.white); font('bold', 9.5); doc.text(ORG.N, M + 16, 15); font('normal', 8); alpha(.8); doc.text(ORG.sede, M + 16, 19.5); alpha(1);
       font('bold', 13); doc.text('SCHEDA TECNICA', W - M, 16, { align: 'right' }); font('normal', 8.5); alpha(.85); doc.text(`${PV_SUP[sup].n} · ${pvCode(it)}`, W - M, 21.5, { align: 'right' }); alpha(1);
       let y = HB + 10;
       // foto + titolo
@@ -3872,8 +4017,8 @@
         }
       }
       const N = doc.internal.getNumberOfPages(), oggi = new Date().toLocaleDateString('it-IT');
-      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5); doc.text(`Scheda tecnica · ${oggi}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
-      doc.setProperties({ title: `Scheda tecnica ${it.n}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5); doc.text(`Scheda tecnica · ${oggi}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
+      doc.setProperties({ title: `Scheda tecnica ${it.n}`, author: ORG.n, creator: 'Centro di Costo' });
       const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Scheda_tecnica_${slug(PV_SUP[sup].n)}_${slug(pvCode(it))}_${slug(it.n).slice(0, 40)}.pdf`);
       busy(); toast('Scheda tecnica scaricata');
@@ -4269,8 +4414,8 @@
       const L = p.loghi || {}, LGF = L.f ? await pvLogoGet(L.f) : null, LGR = L.r ? await pvLogoGet(L.r) : null;
       pvPersPages(doc, { FF, p, cards: cards.map(c => [c[0], c[1]]), LGF, LGR, same: !!(L.f && L.r && L.f.id === L.r.id), noFirstPage: true });
       const N = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= N; i++) { doc.setPage(i); doc.setDrawColor(227, 231, 238); doc.setLineWidth(.3); doc.line(16, 285, 194, 285); doc.setTextColor(120, 128, 142); doc.setFont(FF, 'normal'); doc.setFontSize(7.5); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', 16, 289.5); doc.text(`Pagina ${i} di ${N}`, 194, 289.5, { align: 'right' }); }
-      doc.setProperties({ title: `Anteprima logo ${p.num}`, author: 'Soluzione Veicolare S.r.l.' });
+      for (let i = 1; i <= N; i++) { doc.setPage(i); doc.setDrawColor(227, 231, 238); doc.setLineWidth(.3); doc.line(16, 285, 194, 285); doc.setTextColor(120, 128, 142); doc.setFont(FF, 'normal'); doc.setFontSize(7.5); doc.text(`${ORG.n} · ${ORG.sede}`, 16, 289.5); doc.text(`Pagina ${i} di ${N}`, 194, 289.5, { align: 'right' }); }
+      doc.setProperties({ title: `Anteprima logo ${p.num}`, author: ORG.n });
       doc.save(`Anteprima_logo_${pvSlug((p.cliente && p.cliente.nome) || p.num)}.pdf`);
       busy(); toast('PDF delle anteprime scaricato');
     } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
@@ -4402,7 +4547,7 @@
       fill(C.navy); doc.rect(0, 0, W, 40, 'F');
       fill(C.orange); doc.rect(0, 40, W, 1.4, 'F');
       if (logo) { fill(C.white); doc.roundedRect(M, 9, 11, 11, 2.4, 2.4, 'F'); doc.addImage(logo, 'PNG', M + .6, 9.6, 9.8, 9.8); }
-      color(C.white); font('bold', 8.5); doc.text(p.righe.every(l => l.tool) ? 'SOLUZIONE VEICOLARE S.R.L.' : p.righe.some(l => l.tool) ? 'SOLUZIONE VEICOLARE S.R.L. · ABBIGLIAMENTO E ATTREZZATURA' : 'SOLUZIONE VEICOLARE S.R.L. · DIVISIONE ABBIGLIAMENTO', M + 15, 14); font('normal', 7.5); doc.text('Documento interno di produzione · non contiene prezzi', M + 15, 18.5);
+      color(C.white); font('bold', 8.5); doc.text(p.righe.every(l => l.tool) ? ORG.N : p.righe.some(l => l.tool) ? ORG.N + ' · ABBIGLIAMENTO E ATTREZZATURA' : ORG.N + ' · DIVISIONE ABBIGLIAMENTO', M + 15, 14); font('normal', 7.5); doc.text('Documento interno di produzione · non contiene prezzi', M + 15, 18.5);
       font('bold', 21); doc.text('Scheda di lavoro', M, 32);
       font('normal', 9); doc.text(`Preventivo ${p.num} del ${dIt} · scheda creata il ${oggi}`, M, 37.2);
       // riquadro consegna
@@ -4529,8 +4674,8 @@
       stroke([230, 233, 239]); doc.setLineWidth(.2); for (let ly = ny + 3; ly < y + 30; ly += 6.5) doc.line(M + 4, ly, W - M - 4, ly);
       // piè di pagina
       const N = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 11, W - M, H - 11); color(C.muted); font('normal', 7.2); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM) · uso interno', M, H - 6.5); doc.text(`Scheda di lavoro ${p.num}`, W / 2, H - 6.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 6.5, { align: 'right' }); }
-      doc.setProperties({ title: `Scheda di lavoro ${p.num}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 11, W - M, H - 11); color(C.muted); font('normal', 7.2); doc.text(`${ORG.n} · ${ORG.sede} · uso interno`, M, H - 6.5); doc.text(`Scheda di lavoro ${p.num}`, W / 2, H - 6.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 6.5, { align: 'right' }); }
+      doc.setProperties({ title: `Scheda di lavoro ${p.num}`, author: ORG.n, creator: 'Centro di Costo' });
       doc.save(`Scheda_lavoro_${p.num}${cl.nome ? '_' + pvSlug(cl.nome) : ''}.pdf`);
       busy(); toast('Scheda di lavoro scaricata');
     } catch (e) { busy(); console.error(e); toast('Scheda non creata: ' + e.message); }
@@ -4695,7 +4840,7 @@
       fill(C.blue); alpha(.55); doc.triangle(W * .5, 0, W, 0, W, HB, 'F'); alpha(1);
       fill(C.orange); alpha(.95); doc.lines([[60, -15], [0, 7], [-60, 15]], 160, 44, [1, 1], 'F', true); alpha(1);
       if (logo) { fill(C.white); doc.roundedRect(M, 12, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 12.6, 10.8, 10.8); }
-      color(C.white); font('bold', 9.5); doc.text('SOLUZIONE VEICOLARE S.R.L.', M + 16, 17); font('normal', 8); alpha(.8); doc.text('San Cesareo (RM)', M + 16, 21.5); alpha(1);
+      color(C.white); font('bold', 9.5); doc.text(ORG.N, M + 16, 17); font('normal', 8); alpha(.8); doc.text(ORG.sede, M + 16, 21.5); alpha(1);
       font('bold', 22); doc.text(`Preventivo ${p.num}`, M, 38);
       font('normal', 9.5); alpha(.85); doc.text(`del ${dIt} · valido fino al ${scad}`, M, 45); alpha(1);
       // cliente
@@ -4778,8 +4923,8 @@
         if (it && it.c.length > lines.length) { if (yy + 16 > H - 22) { doc.addPage(); yy = 22; } color(C.muted); font('bold', 8); doc.text('ALTRI COLORI DISPONIBILI', M, yy + 2); color(C.ink2); font('normal', 8.2); const al = doc.splitTextToSize(it.c.filter(c => !lines.some(x => x.c === c[0])).map(c => c[1].toLowerCase().replace(/(^|\s|\/)\S/g, m => m.toUpperCase())).join(' · '), CW); doc.text(al, M, yy + 7); }
       });
       const N = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5); doc.text(`Preventivo ${p.num} · ${dIt}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
-      doc.setProperties({ title: `Preventivo ${p.num}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5); doc.text(`Preventivo ${p.num} · ${dIt}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
+      doc.setProperties({ title: `Preventivo ${p.num}`, author: ORG.n, creator: 'Centro di Costo' });
       const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Preventivo_${p.num}${cl.nome ? '_' + slug(cl.nome) : ''}.pdf`);
       busy(); toast(noPh ? 'PDF scaricato, ma senza foto: il sito del fornitore non le ha date. Aggiorna lo script Google alla cdc-1.9.' : MOCK && pvAiMsg ? 'PDF scaricato · IA non disponibile, logo in posizione standard (' + pvAiMsg.slice(0, 80) + ')' : 'PDF scaricato');
@@ -5308,7 +5453,7 @@
       fill(C.navy); doc.rect(0, 0, W, 42, 'F'); fill(C.orange); doc.rect(0, 42, W, 1.6, 'F');
       if (logo) { fill(C.white); doc.roundedRect(M, 10, 22, 22, 4, 4, 'F'); doc.addImage(logo, 'PNG', M + 2, 12, 18, 18); }
       color(C.white); font('bold', 18); doc.text(`Ordine ${o.num}`, M + 28, 20); font('normal', 9.5); doc.text(`Kit adesivi Torental · ${shortDate(o.data)} · ${st}`, M + 28, 27);
-      font('normal', 8.5); doc.text('Soluzione Veicolare S.r.l.', W - M, 18, { align: 'right' }); doc.text('San Cesareo (RM)', W - M, 23, { align: 'right' });
+      font('normal', 8.5); doc.text(ORG.n, W - M, 18, { align: 'right' }); doc.text(ORG.sede, W - M, 23, { align: 'right' });
       let y = 54;
       fill(C.soft); doc.roundedRect(M, y, W - 2 * M, 30, 3, 3, 'F');
       color(C.muted); font('semibold', 7.5); doc.text('CLIENTE', M + 5, y + 7); doc.text('INTERVENTO', W / 2 + 4, y + 7);
@@ -5326,8 +5471,8 @@
       const nota = [o.note, trData().nota].filter(Boolean).join('\n');
       if (nota) { color(C.muted); font('semibold', 7.5); doc.text('NOTE', M, y); color(C.ink); font('normal', 9); doc.text(doc.splitTextToSize(nota, W - 2 * M), M, y + 6); }
       const N = doc.internal.getNumberOfPages();
-      for (let p = 1; p <= N; p++) { doc.setPage(p); color(C.muted); font('normal', 7.5); doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 8); doc.text(`Ordine ${o.num} · Pagina ${p} di ${N}`, W - M, H - 8, { align: 'right' }); }
-      doc.setProperties({ title: `Ordine Torental ${o.num}`, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      for (let p = 1; p <= N; p++) { doc.setPage(p); color(C.muted); font('normal', 7.5); doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 8); doc.text(`Ordine ${o.num} · Pagina ${p} di ${N}`, W - M, H - 8, { align: 'right' }); }
+      doc.setProperties({ title: `Ordine Torental ${o.num}`, author: ORG.n, creator: 'Centro di Costo' });
       const sl = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Ordine_Torental_${o.num}${cl.nome ? '_' + sl(cl.nome) : ''}.pdf`);
       busy(); toast('PDF scaricato');
@@ -5576,7 +5721,7 @@
       const stripe = (x, y, w, h, c, a) => { fill(c); alpha(a); doc.lines([[w, -w * .25], [0, h], [-w, w * .25]], x, y + h, [1, 1], 'F', true); alpha(1); };
       stripe(150, 30, 70, 7.5, C.orange, .95); stripe(160, 41, 60, 7.5, [217, 221, 228], .85); stripe(170, 52, 50, 7.5, C.white, .18);
       if (logo) { fill(C.white); doc.roundedRect(M, 12, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 12.6, 10.8, 10.8); }
-      color(C.white); font('bold', 9.5); doc.text('SOLUZIONE VEICOLARE S.R.L.', M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text('San Cesareo (RM)', M + (logo ? 16 : 0), 21.5); alpha(1);
+      color(C.white); font('bold', 9.5); doc.text(ORG.N, M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text(ORG.sede, M + (logo ? 16 : 0), 21.5); alpha(1);
       font('bold', 8); doc.text(INT ? 'LISTINO · USO INTERNO' : 'LISTINO PREZZI', W - M, 17, { align: 'right' });
       font('normal', 8); alpha(.8); doc.text(`Aggiornato al ${dataIt}`, W - M, 21.5, { align: 'right' }); alpha(1);
       font('bold', 25); doc.text('Listino kit adesivi Torental', M, 41);
@@ -5686,11 +5831,11 @@
         if (p > 1) { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.navy); font('bold', 9); doc.text('Listino kit adesivi Torental', M, 13); color(C.muted); font('normal', 8); doc.text(INT ? 'Uso interno · ' + dataIt : dataIt, W - M, 13, { align: 'right' }); stroke(C.line); doc.setLineWidth(.3); doc.line(M, 16, W - M, 16); }
         stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12);
         color(C.muted); font('normal', 7.5);
-        doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5);
+        doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5);
         doc.text(`Listino Torental · ${meseIt}`, W / 2, H - 7.5, { align: 'center' });
         doc.text(`Pagina ${p} di ${N}`, W - M, H - 7.5, { align: 'right' });
       }
-      doc.setProperties({ title: 'Listino kit adesivi Torental', subject: INT ? 'Listino interno' : 'Listino prezzi', author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      doc.setProperties({ title: 'Listino kit adesivi Torental', subject: INT ? 'Listino interno' : 'Listino prezzi', author: ORG.n, creator: 'Centro di Costo' });
       doc.save(`Listino_Torental_${INT ? 'interno' : 'cliente'}_${today()}.pdf`);
       busy(); toast('PDF scaricato');
     } catch (e) { busy(); toast('PDF non creato: ' + e.message); }
@@ -5836,7 +5981,7 @@
       const stripe = (x, y, sw, sh, c, a) => { fill(c); alpha(a); doc.lines([[sw, -sw * .25], [0, sh], [-sw, sw * .25]], x, y + sh, [1, 1], 'F', true); alpha(1); };
       stripe(150, 32, 70, 7.5, C.orange, .95); stripe(160, 43, 60, 7.5, [217, 221, 228], .85); stripe(170, 54, 50, 7.5, C.white, .18);
       if (logo) { fill(C.white); doc.roundedRect(M, 12, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 12.6, 10.8, 10.8); }
-      color(C.white); font('bold', 9.5); doc.text('SOLUZIONE VEICOLARE S.R.L.', M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text('San Cesareo (RM) · Centro di costo', M + (logo ? 16 : 0), 21.5); alpha(1);
+      color(C.white); font('bold', 9.5); doc.text(ORG.N, M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text(ORG.sede + ' · Centro di costo', M + (logo ? 16 : 0), 21.5); alpha(1);
       font('bold', 8); doc.text(R.title.toUpperCase(), W - M, 17, { align: 'right' });
       font('normal', 8); alpha(.8); doc.text(`Creato il ${oggi}`, W - M, 21.5, { align: 'right' }); alpha(1);
       fit(placeName, 'bold', 25, CW - 40, 16); doc.text(placeName, M, 41);
@@ -6002,11 +6147,11 @@
         if (p > 1) { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.navy); font('bold', 9); doc.text(`${R.short} · ${placeName}`, M, 13); color(C.muted); font('normal', 8); doc.text(`${perT} · ${ivaT}`, W - M, 13, { align: 'right' }); stroke(C.line); doc.setLineWidth(.3); doc.line(M, 16, W - M, 16); }
         stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12);
         color(C.muted); font('normal', 7.5);
-        doc.text('Soluzione Veicolare S.r.l. · San Cesareo (RM)', M, H - 7.5);
+        doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5);
         doc.text(`${R.title} · creato il ${oggi}`, W / 2, H - 7.5, { align: 'center' });
         doc.text(`Pagina ${p} di ${N}`, W - M, H - 7.5, { align: 'right' });
       }
-      doc.setProperties({ title: `${R.title} · ${placeName} · ${perT}`, subject: R.title, author: 'Soluzione Veicolare S.r.l.', creator: 'Centro di Costo' });
+      doc.setProperties({ title: `${R.title} · ${placeName} · ${perT}`, subject: R.title, author: ORG.n, creator: 'Centro di Costo' });
       const slug = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`${R.short}_${slug(R.place ? R.place.n : 'Tutti_i_piazzali')}_${o.da}_${o.a}.pdf`);
       busy(); toast('PDF scaricato');
@@ -6136,7 +6281,7 @@
   // aggiunge ai centri salvati quelli nuovi e le località Amazon mancanti, senza toccare le modifiche dell'utente
   function lyCdcMerge(list) {
     const out = list.map(x => ({ ...x }));
-    LY_CDC_DEF.forEach(d => {
+    (isMain() ? LY_CDC_DEF : LY_CDC_DEF.filter(d => d.cod === 'CDC99')).forEach(d => {
       const ex = out.find(x => x.cod === d.cod);
       if (!ex) { const i = out.findIndex(x => x.cod === 'CDC99'); out.splice(i < 0 || d.cod === 'CDC99' ? out.length : i, 0, { ...d }); return; }
       if (ex.loc == null) ex.loc = d.loc;
@@ -7210,8 +7355,154 @@
     } catch (e) { ovChat.pop(); if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); renderOvAI(el._ctx); }
   }
 
+  /* ================= UTENTI E GESTIONALI (solo amministratore) ================= */
+  let AD = null, adTab = LS.get('cdc_adtab', 'utenti'), adQ = '', adF = 'tutti', adBusy = false;
+  const AD_R = { admin: 'Amministratore', utente: 'Utente', lettura: 'Sola lettura', demo: 'Demo' };
+  const AD_S = { attivo: 'Attivo', attesa: 'In attesa', bloccato: 'Bloccato', sospeso: 'Sospeso' };
+  const adDate = v => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'; };
+  const adAgo = v => { const d = v ? new Date(v) : null; if (!d || isNaN(d)) return 'mai'; const m = (Date.now() - d) / 6e4; return m < 2 ? 'adesso' : m < 60 ? `${Math.round(m)} min fa` : m < 1440 ? `${Math.round(m / 60)} ore fa` : m < 2880 ? 'ieri' : m < 43200 ? `${Math.round(m / 1440)} giorni fa` : adDate(v); };
+  const adIni = u => String(u.nome || u.email || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  async function adLoad(force) {
+    if (AD && !force) return AD;
+    AD = await api('adminData'); return AD;
+  }
+  async function adDo(action, extra, okMsg) {
+    if (adBusy) return; adBusy = true; busy('Aggiorno…');
+    try { const r = await api(action, extra); AD = r && r.users ? r : r && r.data ? r.data : AD; busy(); if (okMsg) toast(okMsg); renderAdmin(); return r; }
+    catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
+    finally { adBusy = false; }
+  }
+  async function renderAdmin() {
+    const el = $('#ad-body'); if (!el) return;
+    sub('Gestisci chi entra e in quale gestionale');
+    if (!me || !me.admin) { el.innerHTML = ''; return; }
+    if (isLocal()) { el.innerHTML = `<div class="empty"><b>Non disponibile</b><span>${DEMO ? 'Nella versione demo non c\'è la gestione degli utenti.' : 'Serve il Foglio Google collegato.'}</span></div>`; return; }
+    if (!AD) { el.innerHTML = '<div class="ad-load"><span class="spin"></span> Carico utenti e gestionali…</div>'; try { await adLoad(); } catch (e) { el.innerHTML = `<div class="empty"><b>Non riesco a caricare gli utenti</b><span>${esc(e.message)}</span><button class="btn" data-ad="reload">Riprova</button></div>`; return; } }
+    const U = AD.users || [], W = AD.ws || [], wsName = c => (W.find(w => w.codice === c) || {}).nome || c;
+    const n = { tot: U.length, att: U.filter(u => u.stato === 'attesa').length, on: U.filter(u => u.stato === 'attivo').length, bl: U.filter(u => u.stato === 'bloccato').length };
+    const kpi = (l, v, s2, cls = '', f = '') => `<button type="button" class="ad-kpi ${cls} ${f && adTab === 'utenti' && adF === f ? 'on' : ''}" ${f ? `data-adf="${f}"` : 'data-adtab="gestionali"'}><span>${l}</span><b>${v}</b><small>${s2}</small></button>`;
+    let h = `<div class="ad-kpis">
+      ${kpi('Utenti registrati', n.tot, `${AD.sessioni || 0} sessioni aperte`, '', 'tutti')}
+      ${kpi('Da approvare', n.att, n.att ? 'richieste in attesa' : 'nessuna richiesta', n.att ? 'warn' : '', 'attesa')}
+      ${kpi('Attivi', n.on, 'possono entrare', 'ok', 'attivo')}
+      ${kpi('Bloccati', n.bl, 'accesso negato', n.bl ? 'bad' : '', 'bloccato')}
+      ${kpi('Gestionali', W.length, `${W.filter(w => w.tipo === 'demo').length} demo · ${W.filter(w => w.tipo === 'cliente').length} clienti`)}
+    </div>
+    <div class="ad-bar"><div class="ad-seg" role="tablist"><button type="button" data-adtab="utenti" class="${adTab === 'utenti' ? 'on' : ''}">Utenti</button><button type="button" data-adtab="gestionali" class="${adTab === 'gestionali' ? 'on' : ''}">Gestionali</button></div>
+      ${adTab === 'utenti' ? `<label class="ad-search"><input type="search" id="ad-q" placeholder="Cerca nome, email, azienda…" value="${esc(adQ)}"></label>` : `<button type="button" class="btn primary sm" data-ad="wsnew">+ Nuovo gestionale</button>`}
+      <button type="button" class="btn sm ghost" data-ad="reload" title="Aggiorna">↻ Aggiorna</button></div>`;
+    if (adTab === 'utenti') {
+      const q = nh(adQ), L = U.filter(u => (adF === 'tutti' || u.stato === adF) && (!q || nh([u.nome, u.email, u.azienda, u.ws, wsName(u.ws)].join(' ')).includes(q)))
+        .sort((a, b) => (a.stato === 'attesa' ? 0 : 1) - (b.stato === 'attesa' ? 0 : 1) || (a.ruolo === 'admin' ? -1 : b.ruolo === 'admin' ? 1 : 0) || String(b.creato).localeCompare(String(a.creato)));
+      h += L.length ? `<div class="ad-list">${L.map(u => {
+        const adm = u.ruolo === 'admin', E = esc(u.email);
+        return `<article class="ad-u st-${esc(u.stato)}" data-email="${E}">
+          <span class="st-av">${esc(adIni(u))}</span>
+          <div class="ad-who"><b>${esc(u.nome || '—')}${u.email === me.email ? ' <em>(tu)</em>' : ''}</b><span>${E}</span><small>${esc(u.azienda || '')}${u.telefono ? ` · ${esc(u.telefono)}` : ''}</small></div>
+          <div class="ad-meta"><span class="ad-pill s-${esc(u.stato)}">${AD_S[u.stato] || esc(u.stato)}</span><span class="ad-pill r-${esc(u.ruolo)}">${AD_R[u.ruolo] || esc(u.ruolo)}</span><span class="ad-ws" title="Gestionale">${esc(wsName(u.ws))} <code>${esc(u.ws)}</code></span></div>
+          <div class="ad-when"><span>Registrato ${adDate(u.creato)}</span><span>Ultimo accesso ${adAgo(u.ultimo)}${u.accessi ? ` · ${u.accessi} accessi` : ''}</span>${u.sessioni ? `<span class="ad-live">● ${u.sessioni} ${u.sessioni > 1 ? 'dispositivi collegati' : 'dispositivo collegato'}</span>` : ''}</div>
+          <div class="ad-act">${adm ? '<span class="ad-note">Amministratore principale</span>' : `
+            ${u.stato === 'attesa' ? `<button type="button" class="btn primary sm" data-ad="ok">Approva</button><button type="button" class="btn sm danger" data-ad="no">Rifiuta</button>` : u.stato === 'bloccato' ? `<button type="button" class="btn sm" data-ad="ok">Sblocca</button>` : `<button type="button" class="btn sm" data-ad="block">Blocca</button>`}
+            <button type="button" class="btn sm ghost" data-ad="edit">Modifica</button>
+            <button type="button" class="btn sm ghost" data-ad="more" aria-label="Altre azioni">⋯</button>`}</div>
+        </article>`; }).join('')}</div>` : `<div class="empty"><b>Nessun utente</b><span>${adQ || adF !== 'tutti' ? 'Nessun risultato con questi filtri.' : 'Quando qualcuno si registra con un codice lo trovi qui.'}</span></div>`;
+    } else {
+      h += `<div class="ad-wsl">${W.map(w => {
+        const T = { principale: 'Principale', cliente: 'Cliente', demo: 'Demo' }[w.tipo] || w.tipo, C = esc(w.codice);
+        return `<article class="ad-w t-${esc(w.tipo)} ${w.stato !== 'attivo' ? 'off' : ''}" data-ws="${C}">
+          <header><span class="ad-pill t-${esc(w.tipo)}">${T}</span>${w.stato !== 'attivo' ? '<span class="ad-pill s-bloccato">Sospeso</span>' : ''}${me.ws === w.codice ? '<span class="ad-pill s-attivo">Sei qui</span>' : ''}</header>
+          <h3>${esc(w.nome)}</h3><p>${esc(w.citta || '')}${w.note ? ` · ${esc(w.note)}` : ''}</p>
+          <div class="ad-code"><span>Codice di registrazione</span><code>${C}</code><button type="button" class="btn sm ghost" data-ad="copy">Copia</button></div>
+          <div class="ad-wn"><span><b>${w.utenti}</b> ${w.utenti === 1 ? 'utente' : 'utenti'}</span><span>creato ${adDate(w.creato)}</span><span>${w.tipo === 'demo' ? 'dati di prova, nulla viene salvato' : w.url ? 'Foglio Google proprio' : ''}</span></div>
+          <footer>${w.tipo !== 'demo' && me.ws !== w.codice ? `<button type="button" class="btn primary sm" data-ad="enter">Entra</button>` : ''}${w.url ? `<a class="btn sm ghost" href="${esc(w.url)}" target="_blank" rel="noopener">Apri il Foglio</a>` : ''}<button type="button" class="btn sm ghost" data-ad="wsedit">Modifica</button>${w.tipo !== 'principale' ? `<button type="button" class="btn sm ghost" data-ad="wsstato">${w.stato === 'attivo' ? 'Sospendi' : 'Riattiva'}</button>` : ''}</footer>
+        </article>`; }).join('')}</div>
+        <p class="ad-help">Ogni gestionale ha il suo Foglio Google e le sue cartelle su Drive: i dati non si mescolano. Dai il <b>codice</b> a chi deve registrarsi; tu approvi le richieste dalla scheda Utenti. Il codice <b>demo</b> fa entrare subito, con dati di prova che non vengono salvati.</p>`;
+    }
+    el.innerHTML = h;
+    const qi = $('#ad-q'); if (qi) qi.oninput = () => { adQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderAdmin().then(() => { const x = $('#ad-q'); if (x) { x.focus(); try { x.setSelectionRange(p, p); } catch {} } }); }, 180); };
+  }
+  function adUserForm(u) {
+    const W = AD.ws || [];
+    openSheet(`Modifica ${u.nome || u.email}`, `<p class="pvx-intro">${esc(u.email)}</p>
+      <div class="f-row"><label class="f"><span>Nome e cognome</span><input name="nome" value="${esc(u.nome || '')}" data-focus></label><label class="f"><span>Telefono</span><input name="telefono" value="${esc(u.telefono || '')}"></label></div>
+      <label class="f"><span>Azienda</span><input name="azienda" value="${esc(u.azienda || '')}"></label>
+      <div class="f-row"><label class="f"><span>Gestionale</span><select name="ws">${W.map(w => `<option value="${esc(w.codice)}" ${w.codice === u.ws ? 'selected' : ''}>${esc(w.nome)} (${esc(w.codice)})</option>`).join('')}</select></label>
+      <label class="f"><span>Permessi</span><select name="ruolo">${['utente', 'lettura', 'demo'].map(r => `<option value="${r}" ${r === u.ruolo ? 'selected' : ''}>${AD_R[r]}</option>`).join('')}</select></label></div>
+      <label class="f"><span>Stato</span><select name="stato">${['attivo', 'attesa', 'bloccato'].map(r => `<option value="${r}" ${r === u.stato ? 'selected' : ''}>${AD_S[r]}</option>`).join('')}</select></label>
+      <label class="f"><span>Note (le vedi solo tu)</span><textarea name="note" rows="2">${esc(u.note || '')}</textarea></label>
+      <p class="ad-help">«Sola lettura» vede tutto ma non può modificare. Se cambi gestionale, permessi o stato, l'utente dovrà entrare di nuovo.</p>`, fd => {
+      const set = {}; ['nome', 'telefono', 'azienda', 'ws', 'ruolo', 'stato', 'note'].forEach(k => { set[k] = String(fd.get(k) || ''); });
+      adDo('adminUser', { email: u.email, set }, 'Utente aggiornato'); return true;
+    });
+  }
+  function adMore(u, btn) {
+    const old = $('#ad-menu'); if (old) old.remove();
+    const m = document.createElement('div'); m.id = 'ad-menu'; m.className = 'pv-menu ad-menu';
+    m.innerHTML = `<button type="button" data-adm="pw">Password provvisoria</button>${u.sessioni ? '<button type="button" data-adm="out">Disconnetti dai dispositivi</button>' : ''}<button type="button" data-adm="mail">Scrivi email</button><button type="button" data-adm="del" class="danger">Elimina utente</button>`;
+    document.body.appendChild(m);
+    const r = btn.getBoundingClientRect(); m.style.top = `${Math.min(innerHeight - m.offsetHeight - 8, r.bottom + 4) + scrollY}px`; m.style.left = `${Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth))}px`;
+    m.onclick = async e => {
+      const a = e.target.closest('[data-adm]'); if (!a) return; m.remove();
+      const k = a.dataset.adm;
+      if (k === 'mail') { location.href = `mailto:${u.email}`; return; }
+      if (k === 'out') { adDo('adminLogoutUser', { email: u.email }, 'Disconnesso da tutti i dispositivi'); return; }
+      if (k === 'del') { if (confirm(`Eliminare l'account di ${u.nome || u.email}? Non potrà più entrare (i dati del gestionale restano).`)) adDo('adminDelUser', { email: u.email }, 'Utente eliminato'); return; }
+      if (k === 'pw') {
+        if (!confirm(`Creare una password provvisoria per ${u.nome || u.email}? Quella attuale smette di funzionare.`)) return;
+        const r = await adDo('adminResetPw', { email: u.email }); if (!r || !r.pw) return;
+        openSheet('Password provvisoria', `<p>Nuova password per <b>${esc(u.email)}</b>:</p><div class="ad-pw"><code>${esc(r.pw)}</code><button type="button" class="btn sm" data-copy="${esc(r.pw)}">Copia</button></div><p class="ad-help">${r.inviata ? 'Gliel\'abbiamo anche mandata via email.' : 'Non è stato possibile mandare l\'email: comunicagliela tu.'} Al primo accesso conviene cambiarla da Impostazioni › Account. Questa finestra non la mostrerà più.</p>`, () => true, null, 'Fatto');
+      }
+    };
+    setTimeout(() => document.addEventListener('click', function f(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('click', f, true); } }, true), 0);
+  }
+  function adWsForm(w) {
+    const isNew = !w; w = w || { nome: '', codice: '', citta: '', note: '', tipo: 'cliente' };
+    const sugg = () => 'AZ' + Math.random().toString(36).slice(2, 6).toUpperCase() + new Date().getFullYear().toString().slice(2);
+    openSheet(isNew ? 'Nuovo gestionale' : `Modifica ${w.nome}`, `${isNew ? '<p class="pvx-intro">Crea un gestionale separato per un\'altra azienda: avrà il suo Foglio Google, vuoto, e le sue cartelle su Drive.</p>' : ''}
+      <label class="f"><span>Nome azienda</span><input name="nome" value="${esc(w.nome)}" data-focus required placeholder="Es. Rossi Trasporti S.r.l."></label>
+      <div class="f-row"><label class="f"><span>Codice di registrazione</span><input name="codice" value="${esc(w.codice || (isNew ? sugg() : ''))}" required pattern="[A-Za-z0-9_\\-]{4,20}" style="text-transform:uppercase;font-family:var(--mono,monospace)"></label>
+      <label class="f"><span>Città</span><input name="citta" value="${esc(w.citta || '')}" placeholder="per i PDF"></label></div>
+      ${isNew ? `<label class="f"><span>Tipo</span><select name="tipo"><option value="cliente">Cliente · dati veri in un Foglio nuovo</option><option value="demo">Demo · dati di prova, nulla viene salvato</option></select></label>` : ''}
+      <label class="f"><span>Note</span><input name="note" value="${esc(w.note || '')}"></label>
+      <p class="ad-help">Il codice va da 4 a 20 lettere o numeri. ${isNew ? '' : 'Se lo cambi, il vecchio non funzionerà più per le nuove registrazioni (gli utenti già iscritti restano collegati).'}</p>`, fd => {
+      const o = { nome: String(fd.get('nome') || '').trim(), codice: String(fd.get('codice') || '').trim().toUpperCase(), citta: String(fd.get('citta') || '').trim(), note: String(fd.get('note') || '').trim() };
+      if (isNew) { o.tipo = fd.get('tipo'); toast('Creo il gestionale e il suo Foglio Google…'); adDo('adminWsAdd', o, 'Gestionale creato'); }
+      else adDo('adminWsSet', { codice: w.codice, set: o }, 'Gestionale aggiornato');
+      return true;
+    }, null, isNew ? 'Crea gestionale' : 'Salva');
+  }
+  async function adEnter(w) {
+    if (queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate in questo gestionale: cambiando andranno perse. Continuare?`)) return;
+    try {
+      busy('Apro ' + w.nome + '…');
+      const u = await api('adminSwitch', { codice: w.codice });
+      setSession(u, tok); AD = null; busy();
+      toast(`Ora sei in ${w.nome}`); location.hash = '#home'; await pull(); render();
+    } catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
+  }
+  function adClick(e) {
+    const t = e.target;
+    const tb = t.closest('[data-adtab]'); if (tb) { adTab = tb.dataset.adtab; LS.set('cdc_adtab', adTab); renderAdmin(); return; }
+    const fb = t.closest('[data-adf]'); if (fb) { adTab = 'utenti'; adF = adF === fb.dataset.adf ? 'tutti' : fb.dataset.adf; renderAdmin(); return; }
+    const b = t.closest('[data-ad]'); if (!b) return;
+    const k = b.dataset.ad, card = b.closest('[data-email]'), wc = b.closest('[data-ws]');
+    const u = card && (AD.users || []).find(x => x.email === card.dataset.email), w = wc && (AD.ws || []).find(x => x.codice === wc.dataset.ws);
+    if (k === 'reload') { AD = null; renderAdmin(); return; }
+    if (k === 'ok' && u) { adDo('adminUser', { email: u.email, set: { stato: 'attivo' } }, u.stato === 'attesa' ? `${u.nome || u.email} approvato · gli arriva una email` : 'Utente sbloccato'); return; }
+    if (k === 'block' && u) { if (confirm(`Bloccare ${u.nome || u.email}? Verrà disconnesso subito.`)) adDo('adminUser', { email: u.email, set: { stato: 'bloccato' } }, 'Utente bloccato'); return; }
+    if (k === 'no' && u) { if (confirm(`Rifiutare la richiesta di ${u.nome || u.email}? L'account viene eliminato.`)) adDo('adminDelUser', { email: u.email }, 'Richiesta rifiutata'); return; }
+    if (k === 'edit' && u) return adUserForm(u);
+    if (k === 'more' && u) return adMore(u, b);
+    if (k === 'wsnew') return adWsForm();
+    if (k === 'wsedit' && w) return adWsForm(w);
+    if (k === 'wsstato' && w) { const off = w.stato === 'attivo'; if (!off || confirm(`Sospendere «${w.nome}»? I suoi utenti non potranno entrare finché non lo riattivi.`)) adDo('adminWsSet', { codice: w.codice, set: { stato: off ? 'sospeso' : 'attivo' } }, off ? 'Gestionale sospeso' : 'Gestionale riattivato'); return; }
+    if (k === 'copy' && w) { navigator.clipboard && navigator.clipboard.writeText(w.codice).then(() => toast('Codice copiato'), () => toast(w.codice)); return; }
+    if (k === 'enter' && w) return adEnter(w);
+  }
   /* ================= Eventi ================= */
   function bind() {
+    $('#ad-body').addEventListener('click', adClick);
+    $('#sheet-body').addEventListener('click', e => { const c = e.target.closest('[data-copy]'); if (c) { const v = c.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast('Copiato'), () => toast(v)); } });
     window.addEventListener('hashchange', go);
     $('#sheet-form').addEventListener('submit', e => {
       e.preventDefault();
@@ -7498,19 +7789,23 @@
     $('#s-cc-add').onclick = () => addChip('#s-cc-in', 'centri', centri);
     $('#s-cat-add').onclick = () => addChip('#s-cat-in', 'categorie', categorie);
 
-    $('#login-form').addEventListener('submit', doLogin);
     document.addEventListener('submit', e => { if (e.target.id === 'ov-ask') { e.preventDefault(); const q = $('#ov-q').value; $('#ov-q').value = ''; ovAsk(q); } });
-    $('#s-logout').onclick = async () => { if (!confirm('Uscire da questo dispositivo? I dati salvati qui vengono cancellati (restano nel Foglio Google).')) return; if (queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate: uscendo andranno perse. Continuare?`)) return; try { await api('logout'); } catch {} queue = []; LS.set('cdc_queue', []); lockApp(); toast('Uscito'); };
-    $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere tutti i dispositivi (anche questo)? Servirà di nuovo la password ovunque.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Tutti i dispositivi disconnessi'); };
+    $('#s-logout').onclick = () => logout();
+    $('#s-logout-all').onclick = async () => { if (!confirm('Disconnettere il tuo account da tutti i dispositivi (anche questo)? Serviranno di nuovo email e password.')) return; try { await api('logoutAll'); } catch {} lockApp(); toast('Disconnesso da tutti i dispositivi'); };
+    $('#s-pw').onclick = () => pwForm();
+    $('#s-me-edit').onclick = () => meForm();
+    authBind();
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); pzMap.redraw(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); pzMap.redraw(); } if (view === 'piazzali') pzMap.redraw(); }, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
   }
 
-  function start() {
+  async function start() {
     if (top !== self) { try { top.location = self.location; } catch { document.body.innerHTML = ''; } return; }
-    if (!isLocal() && !tok) { showLogin(); return; }
+    if (url !== 'local' && (!tok || !me)) { showLogin(); return; }
+    if (DEMO) { try { await loadLib('demo.js'); db = window.CDC_DEMO(); } catch { db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [], pdf: [] }; } }
+    if (me) applyMe(me);
     $('#setup').hidden = true; $('#app').hidden = false;
     setSync(); go();
     if (!isLocal()) pull();
