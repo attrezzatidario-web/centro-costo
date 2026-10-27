@@ -43,6 +43,14 @@
   // utente collegato (email, gestionale, ruolo) e versione demo
   let me = LS.get('cdc_me', null);
   let DEMO = !!(me && me.demo);
+  // v110: link «solo Preventivi» (…/preventivi/ oppure ?solo=preventivi): apre solo Preventivi, senza menu; icona a parte sul telefono
+  const SOLO = new URLSearchParams(location.search).get('solo') === 'preventivi';
+  if (SOLO) {
+    document.body.classList.add('solo-pv'); document.title = 'Preventivi · Centro di Costo';
+    const mf = document.querySelector('link[rel="manifest"]'); if (mf) mf.href = 'manifest-pv.json';
+    const at = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (at) at.content = 'Preventivi';
+    const sa = document.getElementById('solo-all'); if (sa) sa.hidden = false;
+  }
   let db = DEMO ? { movimenti: [], config: {}, ai: false } : LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
   if (!db.gls) db.gls = [];
   if (!db.gasolio) db.gasolio = [];
@@ -588,6 +596,7 @@
     prevView = view;
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
+    if (SOLO && view !== 'preventivi') { view = 'preventivi'; history.replaceState(null, '', '#preventivi'); }
     if (view === 'utenti') { view = 'home'; history.replaceState(null, '', '#home'); }
     applySettore();
     if (MOD_K.includes(view) && !modOn(view)) { view = 'home'; if (location.hash && location.hash !== '#home') history.replaceState(null, '', '#home'); }

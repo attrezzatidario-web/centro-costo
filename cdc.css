@@ -3044,3 +3044,12 @@ a.card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -20px rgba(2
 }
 @keyframes mvglow { from { transform: translate(0, 0) scale(1); } to { transform: translate(-120px, 60px) scale(1.15); } }
 @media (prefers-reduced-motion: reduce) { .nav-ind, .app main::before, #mv-prog i { animation: none !important; transition: none !important; } }
+
+/* v110: link «solo Preventivi» — niente menu, solo la sezione Preventivi */
+body.solo-pv .nav, body.solo-pv #fab, body.solo-pv .nav-ind { display: none !important; }
+body.solo-pv main { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+@media (min-width: 900px) { body.solo-pv main { margin-left: 0; } }
+.solo-all { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.solo-all[hidden] { display: none; }
+.solo-all svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+@media (max-width: 640px) { .solo-all span { display: none; } }
