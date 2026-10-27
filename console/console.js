@@ -11,6 +11,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const nh = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const APPWIN = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const eur = (v, d = 0) => '€ ' + Number(v || 0).toLocaleString('it-IT', { minimumFractionDigits: d, maximumFractionDigits: d });
   const eur2 = v => eur(v, Number(v) % 1 ? 2 : 0);
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -497,14 +498,18 @@
     const w = wsOf(code); if (!w) return;
     const q = LS.get('cdc_queue', []);
     if (q && q.length && !(await ask('Modifiche non inviate', `Nel gestionale aperto su questo dispositivo ci sono ${q.length} modifiche non ancora salvate: aprendo ${esc(w.nome)} andranno perse. Continuare?`, 'Apri comunque', true))) return;
-    const win = window.open('about:blank', '_blank');
+    if (stressRun && !stressRun.end && !(await ask('Il test estremo sta caricando', `Aprendo ${esc(w.nome)} adesso il caricamento dei dati si ferma. Potrai riprenderlo da dove era con «Riempi di nuovo». Aprire comunque?`, 'Apri comunque', true))) return;
+    // v117: nella Console installata come app (Dock del Mac, Home del telefono) una nuova scheda non esiste:
+    // window.open apriva una pagina bianca al posto della Console. Lì il gestionale si apre nella stessa finestra.
+    const win = APPWIN ? null : window.open('about:blank', '_blank');
     busy(`Apro ${w.nome}…`);
     try {
       const r = await post('adminOpen', { codice: code });
       LS.set('cdc_tok', r.token); LS.set('cdc_me', r.user); LS.set('cdc_queue', []); LS.del('cdc_data');
       const dest = new URL('../#home', location.href).href;
-      if (win) win.location.href = dest; else location.href = dest;
-      busy(); toast(`${w.nome} aperto in una nuova scheda`, 'ok');
+      if (stressRun && !stressRun.end) stressRun.stop = true;
+      if (win && !win.closed) { win.location.href = dest; busy(); toast(`${w.nome} aperto in una nuova scheda`, 'ok'); }
+      else { busy(`Apro ${w.nome}…`); location.href = dest; }
     } catch (e) { busy(); if (win) win.close(); if (!(e instanceof AuthError)) toast(e.message, 'bad'); }
   }
   function payForm(code) {
