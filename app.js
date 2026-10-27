@@ -3233,6 +3233,10 @@
   const pvQuiet = p => { if (!p) return; p.agg = new Date().toISOString(); const ops = [...pvCliOps(p), { action: 'upsert', sheet: 'Config', row: { chiave: 'pv:' + p.id, valore: JSON.stringify(p) } }]; applyMany(ops); if (!isLocal()) queue.push(...ops); save(); flush(); };
   const pvNextNum = () => { const y = new Date().getFullYear(), n = pvList().filter(p => String(p.num).startsWith(`P${y}-`)).map(p => Number(String(p.num).split('-')[1]) || 0); return `P${y}-${String((n.length ? Math.max(...n) : 0) + 1).padStart(3, '0')}`; };
   const PV_ST = { bozza: ['Bozza', ''], inviato: ['Inviato', 'soon'], accettato: ['Accettato', 'paid'], rifiutato: ['Rifiutato', 'late'] };
+  // v114: DDT e fatture creati dal preventivo, e stato «fatturato» (automatico, oppure scelto a mano: p.fatt = 'si' | 'no')
+  const pvDocs = p => (p.docs || []).map(x => ({ ...x, d: x.k === 'ddt' ? (db.ddt || []).find(y => y.id === x.id) : (db.vendite || []).find(y => y.id === x.id) })).filter(x => x.d);
+  const pvFatt = p => p.fatt === 'si' ? true : p.fatt === 'no' ? false : pvDocs(p).some(x => x.k === 'fv' || (x.k === 'ddt' && x.d.fattura));
+  const pvFChip = p => { const f = pvFatt(p); return `<span class="chip pv-fchip ${f ? 'paid' : 'soon'}" role="button" tabindex="0" data-pvfatt="${esc(p.id)}" title="Tocca per segnarlo ${f ? 'da fatturare' : 'fatturato'}"><i></i>${f ? 'Fatturato' : 'Da fatturare'}</span>`; };
   const pvNew = () => ({ id: uid(), num: pvNextNum(), data: today(), valid: 30, stato: 'bozza', cliente: { nome: '', ref: '', email: '', tel: '', ind: '' }, righe: [], sconto: 0, note: '', iva: 22 });
   const pvLineQ = l => Object.values(l.q || {}).reduce((s, v) => s + num(v), 0);
   const pvLineUnit = l => l.man || l.p == null ? (l.p == null ? null : num(l.p)) : num(l.p);
@@ -3660,6 +3664,27 @@
       return { ok: true, msg: `${it.n}${it.sz.length > 1 ? ' · taglia ' + sz + ' (cambiala nel preventivo)' : ''} · ${fmtNum(pvLineQ(l), 0)} pz` };
     } });
   }
+  // v114: dal preventivo al DDT di vendita o alla fattura (stesse righe, prezzi, sconti e personalizzazioni)
+  function pvToDoc(kind) {
+    const p = pvFromForm(); if (!p) return; pvQuiet(p);
+    if (!p.righe.length && !(p.pers || []).length) return toast('Il preventivo non ha righe');
+    const cl = p.cliente || {}, nome = String(cl.nome || '').trim(); if (!nome) return toast('Scrivi prima il nome del cliente');
+    let c = GX.cli().find(x => pvCliKey(x.nome) === pvCliKey(nome));
+    if (!c) { c = { id: uid(), nome, indirizzo: cl.ind || '', email: cl.email || '', tel: cl.tel || '', nazione: 'IT', pagamento: PAG[2], note: cl.ref ? `Referente: ${cl.ref}` : '', creato: today() }; write([{ action: 'upsert', sheet: 'Clienti', row: c }]); toast(`${nome} aggiunto ai Clienti: completa P.IVA e indirizzo`); }
+    const gsc = num(p.sconto), iva = p.iva !== '' && p.iva != null && IVE.includes(num(p.iva)) ? num(p.iva) : 22;
+    const scTot = s0 => { const v = r2((1 - (1 - num(s0) / 100) * (1 - gsc / 100)) * 100); return v ? v : ''; };
+    const R = [];
+    p.righe.forEach(l => {
+      const cat = pvCats[l.sup], it = cat && cat.items.find(x => x.id === l.it), a = l.sup === 'mag' ? artOf(l.it) : null, s = l.sup === 'srv' ? SRV().find(x => x.id === l.it) : null;
+      const unit = pvLineUnit(l), acq = pvAcq(l.it, l.c);
+      const sizes = (l.sz || Object.keys(l.q || {})).filter(z => num((l.q || {})[z]) > 0);
+      sizes.forEach(z => R.push({ art: a ? a.id : '', sup: l.sup, it: l.it, vc: l.c, c: a ? a.codice || '' : s ? s.cod || '' : l.tool ? String(l.c || (it ? pvCode(it) : l.it)) : String(it ? pvCode(it) : l.it), d: [l.n, l.cn && !/^taglia/i.test(l.cn) ? l.cn : '', z && z !== 'Pz' ? 'tg ' + z : ''].filter(Boolean).join(' · '), um: a ? a.um || 'PZ' : s ? s.um || 'H' : 'PZ', q: num(l.q[z]), p: unit == null ? '' : unit, sc: scTot(l.sc), iva: a ? (a.iva === '' || a.iva == null ? iva : num(a.iva)) : s ? num(s.iva) : iva, acq: acq == null ? '' : acq, man: 1, ...(s ? { srv: 1 } : {}) }));
+    });
+    (p.pers || []).forEach(r => { const q = pvPersQ(p, r); if (q > 0 || num(r.p)) R.push({ art: '', c: '', d: String(r.d || 'Personalizzazione'), um: 'PZ', q: q || 1, p: num(r.p), sc: scTot(0), iva, man: 1 }); });
+    const isD = kind === 'ddt';
+    const base = isD ? { cliente: c.id, causale: 'Vendita', trasporto: 'Mittente', aspetto: 'Scatole', prezzi: '1' } : { tipo: 'TD01', cliente: c.id, pagamento: '' };
+    docForm(kind, { ...base, righe: JSON.stringify(R), note: [`Rif. preventivo ${p.num} del ${dIt(p.data)}`, p.note].filter(Boolean).join('\n'), prev: p.id }, true);
+  }
   function pvSaveAcq(it) {
     const all = { ...pvAcqMap() }, base = String($('#pv-acq').value || '').trim(), per = $('#pv-percol') && $('#pv-percol').checked;
     let o = {};
@@ -3992,7 +4017,7 @@
     const tot = s => L.filter(p => !s || p.stato === s);
     body.innerHTML = `${L.length ? `<div class="pv-kpis">${[['', 'Preventivi', L.length], ['bozza', 'Bozze', tot('bozza').length], ['inviato', 'Inviati', tot('inviato').length], ['accettato', 'Accettati', tot('accettato').length]].map(([k, l, n]) => `<div class="card pv-k"><span>${l}</span><b>${n}</b><small>${eur0(tot(k).reduce((s, p) => s + pvTotals(p).imp, 0))}</small></div>`).join('')}</div>` : ''}
       <div class="card"><div class="card-h"><h3>Preventivi</h3><button type="button" class="btn sm primary" id="pv-new2">+ Nuovo preventivo</button></div>
-      ${L.length ? `<div class="pv-ql">${L.map(p => { const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza; return `<button type="button" class="pv-qr" data-pvopen="${esc(p.id)}"><span class="pv-qn"><b>${esc(p.num)}</b><small>${esc(shortDate(p.data))}</small></span><span class="pv-qc"><b>${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi${p.righe.length ? ' · ' + esc([...new Set(p.righe.map(l => l.n))].slice(0, 3).join(', ')) : ''}</small></span><span class="chip ${st[1]}">${st[0]}</span><b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('')}</div>` : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun preventivo</h3><p>Crea un preventivo e aggiungi i prodotti dal catalogo Payper scegliendo taglie e colori.</p><button type="button" class="btn primary" id="pv-new3">+ Nuovo preventivo</button></div>`}</div>`;
+      ${L.length ? `<div class="pv-ql">${L.map(p => { const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza; return `<button type="button" class="pv-qr" data-pvopen="${esc(p.id)}"><span class="pv-qn"><b>${esc(p.num)}</b><small>${esc(shortDate(p.data))}</small></span><span class="pv-qc"><b>${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi${p.righe.length ? ' · ' + esc([...new Set(p.righe.map(l => l.n))].slice(0, 3).join(', ')) : ''}</small></span><span class="chip ${st[1]}">${st[0]}</span>${pvFChip(p)}<b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('')}</div>` : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun preventivo</h3><p>Crea un preventivo e aggiungi i prodotti dal catalogo Payper scegliendo taglie e colori.</p><button type="button" class="btn primary" id="pv-new3">+ Nuovo preventivo</button></div>`}</div>`;
   }
   function pvEditor(body) {
     const p = pvGet(pvEdit); if (!p) { pvEdit = ''; return pvQuotes(body); }
@@ -4000,7 +4025,8 @@
     const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza;
     const cl = p.cliente || {}, LG = p.loghi || {}, hasLg = !!(LG.f || LG.r);
     body.innerHTML = `
-      <div class="pv-back"><button type="button" class="btn sm" id="pv-qback">‹ Preventivi</button><span class="chip ${st[1]}">${st[0]}</span><span class="pv-sp"></span><button type="button" class="btn sm primary" id="pv-close" title="Salva e chiudi: non aggiungi più prodotti a questo preventivo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Chiudi preventivo</button><button type="button" class="btn sm" id="pv-dup">Duplica</button><button type="button" class="btn sm st-btn-d" id="pv-del">Elimina</button></div>
+      <div class="pv-back"><button type="button" class="btn sm" id="pv-qback">‹ Preventivi</button><span class="chip ${st[1]}">${st[0]}</span>${pvFChip(p)}<span class="pv-sp"></span>${modOn('vendite') ? `<button type="button" class="btn sm" data-pvconv="ddt" title="Crea un DDT di vendita con le righe di questo preventivo">${DOC_IC}Crea DDT</button><button type="button" class="btn sm" data-pvconv="fv" title="Crea la fattura al cliente con le righe di questo preventivo">${DOC_IC}Crea fattura</button>` : ''}<button type="button" class="btn sm primary" id="pv-close" title="Salva e chiudi: non aggiungi più prodotti a questo preventivo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Chiudi preventivo</button><button type="button" class="btn sm" id="pv-dup">Duplica</button><button type="button" class="btn sm st-btn-d" id="pv-del">Elimina</button></div>
+      ${pvDocs(p).length ? `<div class="pv-docs">${pvDocs(p).map(x => `<button type="button" class="pv-doc" data-pvdoc="${esc(x.k + '|' + x.id)}">${DOC_IC}<span><b>${x.k === 'ddt' ? 'DDT' : 'Fattura'} n. ${esc(dnum(x.d))}</b><small>${esc(dIt(x.d.data))}${x.k === 'ddt' ? (x.d.fattura ? ' · fatturato' : ' · da fatturare') : ' · ' + esc(x.d.stato === 'pagata' ? 'incassata' : 'da incassare')}</small></span></button>`).join('')}</div>` : ''}
       <div class="pv-ed" id="pv-ed" data-id="${esc(p.id)}">
         <div class="card pv-eh">
           <div class="pv-eht"><div><span class="pv-code">Preventivo</span><h2>${esc(p.num)}</h2></div>
@@ -8269,7 +8295,10 @@
           const c = cliOf(cli) || {}; o.pagamento = String(fd.get('pagamento') || '') || c.pagamento || PAG[0];
           const T = docTot(rows); Object.assign(o, { tipo: 'TD01', righe: JSON.stringify([...hdr, ...rows]), ddt: o.ddt || '[]', imponibile: T.imp, imposta: T.iva, totale: T.tot, scadenza: scadDi(o.data, o.pagamento), stato: o.stato || 'emessa' });
         }
+        const prevId = o.prev; delete o.prev;
         const ops = [{ action: 'upsert', sheet: isD ? 'DDT' : 'Vendite', row: o }, ...GX.mov().filter(m => m.doc === o.id).map(m => ({ action: 'delete', sheet: 'MagMov', id: m.id }))];
+        const pp = prevId && pvGet(prevId);
+        if (pp) { pp.docs = [...(pp.docs || []).filter(x => x.id !== o.id), { k: isD ? 'ddt' : 'fv', id: o.id }]; if (pp.stato === 'bozza' || pp.stato === 'inviato') pp.stato = 'accettato'; if (!isD && pp.fatt === 'no') delete pp.fatt; pp.agg = new Date().toISOString(); ops.push({ action: 'upsert', sheet: 'Config', row: { chiave: 'pv:' + pp.id, valore: JSON.stringify(pp) } }); }
         if (modOn('magazzino') && (isD ? o.causale !== 'Conto visione' : true)) rows.filter(l => l.art && artOf(l.art) && num(l.q)).forEach(l => ops.push({ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: o.data, articolo: l.art, tipo: o.causale === 'Reso' ? 'carico' : 'scarico', quantita: o.causale === 'Reso' ? Math.abs(num(l.q)) : -Math.abs(num(l.q)), costo: num(artOf(l.art).costo), causale: `${isD ? 'DDT' : 'Fattura'} ${o.numero}/${o.anno}`, doc: o.id, note: '', creato: new Date().toISOString() } }));
         write(ops); toast(`${isD ? 'DDT' : 'Fattura'} n. ${o.numero}/${o.anno} salvat${isD ? 'o' : 'a'}`); return true;
       }, n ? null : () => {
@@ -8962,6 +8991,9 @@
       const pvi = t.closest('[data-pvitem]'); if (pvi) { pvItem = pvi.dataset.pvitem; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-back')) { pvItem = ''; if (pvFromAll) { pvAll = true; pvFromAll = false; } renderPv(); return; }
       if (t.closest('#pv-add')) { pvAddToQuote(); return; }
+      const pf = t.closest('[data-pvfatt]'); if (pf) { e.preventDefault(); e.stopPropagation(); const p = pf.closest('#pv-ed, .pv-back') && pvEdit ? pvFromForm() : pvGet(pf.dataset.pvfatt); if (!p) return; p.fatt = pvFatt(p) ? 'no' : 'si'; pvSave(p); toast(p.fatt === 'si' ? `Preventivo ${p.num} segnato fatturato` : `Preventivo ${p.num} da fatturare`); return; }
+      const pcv = t.closest('[data-pvconv]'); if (pcv) { pvToDoc(pcv.dataset.pvconv); return; }
+      const pdo = t.closest('[data-pvdoc]'); if (pdo) { const [k0, id0] = pdo.dataset.pvdoc.split('|'); const d0 = k0 === 'ddt' ? GX.ddt().find(x => x.id === id0) : GX.fv().find(x => x.id === id0); if (d0) docForm(k0, d0); return; }
       const pvop = t.closest('[data-pvopen]'); if (pvop) { pvTab = 'prev'; pvEdit = pvop.dataset.pvopen; pvItem = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-new') || t.closest('#pv-new2') || t.closest('#pv-new3')) { const p = pvNew(); pvTab = 'prev'; pvEdit = p.id; pvItem = ''; pvSave(p); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-qback')) { pvQuiet(pvFromForm()); pvEdit = ''; renderPv(); return; }
