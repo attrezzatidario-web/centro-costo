@@ -51,14 +51,27 @@
     const at = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (at) at.content = 'Preventivi';
     const sa = document.getElementById('solo-all'); if (sa) sa.hidden = false;
   }
+  /* v118: copia dei dati sul dispositivo in IndexedDB (memoria del browser sul disco, centinaia di MB, nessun consenso richiesto).
+     Prima i dati andavano in localStorage (max ~5 MB): con tanti dati il salvataggio falliva e ogni modifica rifaceva JSON di tutto. */
+  const IDB = (() => {
+    let p;
+    const open = () => p || (p = new Promise((res, rej) => { try { const r = indexedDB.open('cdc', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }));
+    const tx = (mode, fn) => open().then(d => new Promise((res, rej) => { const t = d.transaction('kv', mode), q = fn(t.objectStore('kv')); t.oncomplete = () => res(q && q.result); t.onerror = t.onabort = () => rej(t.error); }));
+    return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)), clear: () => tx('readwrite', s => s.clear()) };
+  })();
+  const dbKey = () => 'data|' + ((me && me.email) || '') + '|' + ((me && me.ws) || '');
   let db = DEMO ? { movimenti: [], config: {}, ai: false } : LS.get('cdc_data', { movimenti: [], config: {}, ai: false });
+  let pulledAt = 0, idbT = null;
+  const idbSave = () => { clearTimeout(idbT); idbT = null; if (DEMO || !me || isLocal()) return; IDB.set(dbKey(), db).catch(() => {}); };
   if (!db.gls) db.gls = [];
   if (!db.gasolio) db.gasolio = [];
   if (!db.fatture) db.fatture = [];
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
   const isLocal = () => url === 'local' || DEMO;
-  const save = () => { prodIdx = null; if (DEMO) return; LS.set('cdc_data', db); LS.set('cdc_queue', queue); };
+  const save = () => { prodIdx = null; if (DEMO) return; LS.set('cdc_queue', queue); clearTimeout(idbT); idbT = setTimeout(idbSave, 1200); };
+  addEventListener('pagehide', () => { if (idbT) idbSave(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && idbT) idbSave(); });
 
   /* ================= Utils ================= */
   const $ = (s, el = document) => el.querySelector(s);
@@ -385,6 +398,7 @@
     me = null; DEMO = false; try { localStorage.removeItem('cdc_me'); } catch {}
     db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] };
     try { localStorage.removeItem('cdc_data'); } catch {}
+    clearTimeout(idbT); idbT = null; IDB.clear().catch(() => {}); // uscendo, la copia dei dati sparisce dal dispositivo
     document.body.classList.remove('is-admin', 'is-demo', 'is-ro'); const bar = $('#demo-bar'); if (bar) bar.remove();
     showLogin(msg);
   }
@@ -557,7 +571,7 @@
       db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [], incassi: j.data.incassi || [], fornitori: j.data.fornitori || [] };
       if (j.data.user) applyMe(j.data.user);
       applyMany(queue);
-      online = true; save(); render();
+      pulledAt = Date.now(); online = true; save(); render();
       if (showToast) toast('Dati aggiornati');
     } catch (e) {
       if (e instanceof AuthError) return;
@@ -9218,7 +9232,7 @@
     window.addEventListener('online', () => { online = true; flush(); setSync(); });
     window.addEventListener('offline', () => { online = false; setSync(); });
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view === 'movimenti' || view === 'articoli') render(); if (view === 'lyreco' && $('#ly-list')) { renderLyList(); renderLyDocs(); pzMap.redraw(); } if (view === 'amazon' && $('#am-list')) { renderAmList(); renderAmOrds(); pzMap.redraw(); } if (view === 'piazzali') pzMap.redraw(); }, 200); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal()) pull(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && url && !isLocal() && Date.now() - pulledAt > 60000) pull(); }); // v118: al massimo una volta al minuto
   }
 
   async function start() {
@@ -9227,6 +9241,13 @@
     if (DEMO) { try { await loadLib('demo.js'); db = window.CDC_DEMO(settoreId()); } catch { db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [], pdf: [] }; } }
     if (me) applyMe(me);
     $('#setup').hidden = true; $('#app').hidden = false;
+    if (!DEMO && !isLocal()) {
+      // apre subito con la copia salvata sul dispositivo; intanto chiede gli aggiornamenti al Foglio Google
+      const legacy = localStorage.getItem('cdc_data') != null;
+      const cached = await Promise.race([IDB.get(dbKey()).catch(() => null), new Promise(r => setTimeout(() => r(null), 4000))]);
+      if (cached && cached.movimenti && !pulledAt) { db = cached; applyMany(queue); }
+      if (legacy) { if (!cached) idbSave(); try { localStorage.removeItem('cdc_data'); } catch {} }
+    }
     setSync(); go();
     if (!isLocal()) pull();
     if (DEMO && !LS.get('cdc_demo_set', '')) setTimeout(() => setForm(true), 400);
