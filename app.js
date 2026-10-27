@@ -228,7 +228,9 @@
     if (!MOD_K.includes(k)) return true;
     if (!modAvail(k)) return false;
     const c = cfg('moduli');
-    if (c && typeof c === 'object' && k in c) return !!c[k];
+    if (c && typeof c === 'object' && k in c && !c[k]) return false;
+    if (me && !me.admin && me.sezioni && me.sezioni[k] === false) return false; // v102: sezione nascosta a questo utente dalla Console
+    if (c && typeof c === 'object' && k in c) return true;
     const d = settore().mod || {};
     return k in d ? !!d[k] : true;
   }
@@ -344,15 +346,24 @@
   const contactReq = id => { const s = SET.get(id || settoreId()) || {}; location.href = `mailto:${CONTATTI.email}?subject=${encodeURIComponent('Richiesta gestionale · ' + (s.n || ''))}&body=${encodeURIComponent(`Ciao ${CONTATTI.nome},\nvorrei attivare il gestionale per la mia attività (${s.n || ''}).\n\nAzienda:\nCittà:\nTelefono:\nCosa mi servirebbe:\n`)}`; };
   function renderDemoBar() {
     let bar = $('#demo-bar');
-    if (me && (DEMO || me.ruolo === 'lettura')) {
+    const vis = me && me.admin && !DEMO && !me.principale; // v102: l'amministratore è entrato dalla Console nel gestionale di un cliente
+    if (me && (DEMO || me.ruolo === 'lettura' || vis)) {
       if (!bar) { bar = document.createElement('div'); bar.id = 'demo-bar'; bar.className = 'demo-bar'; $('#app main .top').after(bar); }
       const s = settore();
       bar.innerHTML = DEMO ? `<span><b>Versione demo</b> · <button type="button" class="demo-set" id="demo-set" title="Cambia attività"><svg viewBox="0 0 24 24">${s.ic || ''}</svg>${esc(s.s || s.n)}<em>Cambia</em></button> · dati di prova: le modifiche non vengono salvate.</span><span class="demo-acts"><button type="button" class="btn sm demo-info" id="demo-info">Maggiori informazioni</button><button type="button" class="btn sm" id="demo-out">Esci dalla demo</button></span>`
+        : vis ? `<span><b>Sei nel gestionale di ${esc(me.wsNome || me.ws)}</b> · le modifiche che fai qui finiscono nei suoi dati.</span><span class="demo-acts"><a class="btn sm" href="console/#clienti/${esc(encodeURIComponent(me.ws))}" target="_blank" rel="noopener">Console</a><button type="button" class="btn sm demo-info" id="vis-back">Torna al mio gestionale</button></span>`
         : `<span><b>Sola lettura</b> · puoi consultare i dati ma non modificarli. Per i permessi chiedi all'amministratore.</span>`;
+      bar.classList.toggle('vis-bar', !!vis);
+      const vb = $('#vis-back'); if (vb) vb.onclick = visBack;
       const o = $('#demo-out'); if (o) o.onclick = () => logout(true);
       const c = $('#demo-set'); if (c) c.onclick = () => setForm(true);
       const inf = $('#demo-info'); if (inf) inf.onclick = () => openTour();
     } else if (bar) bar.remove();
+  }
+  async function visBack() {
+    if (queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate: tornando al tuo gestionale andranno perse. Continuare?`)) return;
+    try { busy('Torno al tuo gestionale…'); const u = await api('adminSwitch', { principale: true }); setSession(u, tok); busy(); toast(`Sei di nuovo in ${u.wsNome}`); location.hash = '#home'; await pull(); render(); }
+    catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
   }
   function setSession(u, t) {
     const same = me && me.email === u.email && me.ws === u.ws && !me.demo && !u.demo;
@@ -579,7 +590,7 @@
     prevView = view;
     const h = location.hash.slice(1) || 'home';
     view = TITLES[h] ? h : 'home';
-    if (view === 'utenti' && !(me && me.admin)) view = 'home';
+    if (view === 'utenti') { view = 'home'; history.replaceState(null, '', '#home'); }
     applySettore();
     if (MOD_K.includes(view) && !modOn(view)) { view = 'home'; if (location.hash && location.hash !== '#home') history.replaceState(null, '', '#home'); }
     if (view === 'attrezzatura') ccAnim = true;
@@ -629,7 +640,7 @@
   function render() {
     applySettore();
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, utenti: renderAdmin, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
@@ -1192,17 +1203,17 @@
   }
   function renderSetMod() {
     const el = $('#s-set'); if (!el) return;
-    const s = settore(), ro = !DEMO && !(me && me.admin), P = SET.piani || {}; // v100: attività e sezioni le decide l'amministratore
+    const s = settore(), ro = !DEMO, P = SET.piani || {}; // v102: attività e sezioni si decidono dalla Console
     el.innerHTML = `<div class="st-set"><span class="set-ci lg"><svg viewBox="0 0 24 24">${s.ic || ''}</svg></span><div class="st-l"><b>${esc(s.n)}</b><small>${esc(s.d || '')}</small></div>${ro ? '' : '<button type="button" class="btn sm" id="s-set-ch">Cambia</button>'}</div>
       <div class="st-row"><div class="st-l"><b>Come si adatta il gestionale</b><small>Sedi chiamate «${esc(s.sede[1])}» · sezione «${esc(s.acq)}» · ${CAT_DEF.length - 1} categorie di spesa con riconoscimento automatico delle voci</small></div></div>
-      ${!DEMO && me && me.wsPiano ? `<div class="st-row"><div class="st-l"><b>Piano</b><small>${me.wsScadenza ? `Abbonamento fino al ${esc(dIt(me.wsScadenza))}. ` : ''}Per cambiarlo contatta l'amministratore.</small></div><span class="st-pill on">${esc(P[me.wsPiano] || me.wsPiano)}</span></div>` : ''}${ro ? '<div class="st-row"><div class="st-l"><small>Attività e sezioni sono impostate in base al tuo piano: per aggiungere una sezione o cambiare attività contatta l\'amministratore.</small></div></div>' : ''}`;
+      ${!DEMO && me && me.wsPiano ? `<div class="st-row"><div class="st-l"><b>Piano</b><small>${me.wsScadenza ? `Abbonamento fino al ${esc(dIt(me.wsScadenza))}. ` : ''}Per cambiarlo contatta l'amministratore.</small></div><span class="st-pill on">${esc(P[me.wsPiano] || me.wsPiano)}</span></div>` : ''}${ro ? (me && me.admin ? '<div class="st-row"><div class="st-l"><b>Si cambiano dalla Console</b><small>Attività, piano e sezioni di ogni gestionale (anche il tuo) li imposti nella Console, scheda del cliente › Sezioni.</small></div><a class="btn sm" href="console/" target="_blank" rel="noopener">Apri la Console</a></div>' : '<div class="st-row"><div class="st-l"><small>Attività e sezioni sono impostate in base al tuo piano: per aggiungere una sezione o cambiare attività contatta l\'amministratore.</small></div></div>') : ''}`;
     const M = SET.moduli.filter(m => modAvail(m.k)), on = M.filter(m => modOn(m.k)).length;
     $('#s-mod-n').textContent = `${on} di ${M.length} accese`;
     $('#s-mod').innerHTML = `<div class="st-row"><div class="st-l"><b>Sempre attive</b><small>${['Dashboard', s.acq, 'Fatture fornitori', 'Preventivi e catalogo di tutti i fornitori'].map(esc).join(' · ')}</small></div><span class="st-pill on">Incluse</span></div>`
       + M.map(m => { const o = modOn(m.k); return `<div class="st-row"><div class="st-l"><b>${esc(m.t(s))}</b><small>${esc(m.d(s))}</small></div><button type="button" class="tg${o ? ' on' : ''}" data-mod="${m.k}" role="switch" aria-checked="${o}" aria-label="${esc(m.t(s))}"${ro ? ' disabled' : ''}><i></i></button></div>`; }).join('');
   }
   function modToggle(k) {
-    if (!DEMO && !(me && me.admin)) return toast('Le sezioni le imposta l\'amministratore');
+    if (!DEMO) return toast(me && me.admin ? 'Le sezioni si cambiano dalla Console' : 'Le sezioni le imposta l\'amministratore');
     const c = { ...(cfg('moduli') || {}) }; c[k] = !modOn(k);
     if (k === 'vendite' && c[k]) c.clienti = true; // i documenti ai clienti hanno bisogno dell'anagrafica
     setConfig('moduli', c);
@@ -7581,224 +7592,7 @@
     } catch (e) { ovChat.pop(); if (!(e instanceof AuthError)) toast(e.message); } finally { busy(); renderOvAI(el._ctx); }
   }
 
-  /* ================= UTENTI E GESTIONALI (solo amministratore) ================= */
-  let AD = null, adTab = LS.get('cdc_adtab', 'utenti'), adQ = '', adF = 'tutti', adBusy = false;
-  const AD_R = { admin: 'Amministratore', utente: 'Utente', lettura: 'Sola lettura', demo: 'Demo' };
-  const AD_S = { attivo: 'Attivo', attesa: 'In attesa', bloccato: 'Bloccato', sospeso: 'Sospeso' };
-  const adDate = v => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'; };
-  const adAgo = v => { const d = v ? new Date(v) : null; if (!d || isNaN(d)) return 'mai'; const m = (Date.now() - d) / 6e4; return m < 2 ? 'adesso' : m < 60 ? `${Math.round(m)} min fa` : m < 1440 ? `${Math.round(m / 60)} ore fa` : m < 2880 ? 'ieri' : m < 43200 ? `${Math.round(m / 1440)} giorni fa` : adDate(v); };
-  const adIni = u => String(u.nome || u.email || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  async function adLoad(force) {
-    if (AD && !force) return AD;
-    AD = await api('adminData'); return AD;
-  }
-  async function adDo(action, extra, okMsg) {
-    if (adBusy) return; adBusy = true; busy('Aggiorno…');
-    try { const r = await api(action, extra); AD = r && r.users ? r : r && r.data ? r.data : AD; busy(); if (okMsg) toast(okMsg); renderAdmin(); return r; }
-    catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
-    finally { adBusy = false; }
-  }
-  async function renderAdmin() {
-    const el = $('#ad-body'); if (!el) return;
-    sub('Gestisci chi entra e in quale gestionale');
-    if (!me || !me.admin) { el.innerHTML = ''; return; }
-    if (isLocal()) { el.innerHTML = `<div class="empty"><b>Non disponibile</b><span>${DEMO ? 'Nella versione demo non c\'è la gestione degli utenti.' : 'Serve il Foglio Google collegato.'}</span></div>`; return; }
-    if (!AD) { el.innerHTML = '<div class="ad-load"><span class="spin"></span> Carico utenti e gestionali…</div>'; try { await adLoad(); } catch (e) { el.innerHTML = `<div class="empty"><b>Non riesco a caricare gli utenti</b><span>${esc(e.message)}</span><button class="btn" data-ad="reload">Riprova</button></div>`; return; } }
-    const U = AD.users || [], W = AD.ws || [], wsName = c => (W.find(w => w.codice === c) || {}).nome || c;
-    const n = { tot: U.length, att: U.filter(u => u.stato === 'attesa').length, on: U.filter(u => u.stato === 'attivo').length, bl: U.filter(u => u.stato === 'bloccato').length };
-    const kpi = (l, v, s2, cls = '', f = '') => `<button type="button" class="ad-kpi ${cls} ${f && adTab === 'utenti' && adF === f ? 'on' : ''}" ${f ? `data-adf="${f}"` : 'data-adtab="gestionali"'}><span>${l}</span><b>${v}</b><small>${s2}</small></button>`;
-    let h = `<div class="ad-kpis">
-      ${kpi('Utenti', n.tot, `${AD.sessioni || 0} sessioni aperte`, '', 'tutti')}
-      ${n.att ? kpi('Da approvare', n.att, 'richieste in attesa', 'warn', 'attesa') : `<button type="button" class="ad-kpi ${adScad(W).length ? 'warn' : ''}" data-adtab="gestionali"><span>Abbonamenti</span><b>${adScad(W).length}</b><small>${adScad(W).length ? 'scaduti o in scadenza (30 giorni)' : 'tutti in regola'}</small></button>`}
-      ${kpi('Attivi', n.on, 'possono entrare', 'ok', 'attivo')}
-      ${kpi('Bloccati', n.bl, 'accesso negato', n.bl ? 'bad' : '', 'bloccato')}
-      ${kpi('Gestionali', W.length, `${W.filter(w => w.tipo === 'demo').length} demo · ${W.filter(w => w.tipo === 'cliente').length} clienti`)}
-    </div>
-    <div class="ad-bar"><div class="ad-seg" role="tablist"><button type="button" data-adtab="utenti" class="${adTab === 'utenti' ? 'on' : ''}">Utenti</button><button type="button" data-adtab="gestionali" class="${adTab === 'gestionali' ? 'on' : ''}">Gestionali</button></div>
-      ${adTab === 'utenti' ? `<label class="ad-search"><input type="search" id="ad-q" placeholder="Cerca nome, email, azienda…" value="${esc(adQ)}"></label><button type="button" class="btn sm" data-ad="usernew">+ Utente</button>` : `<button type="button" class="btn sm" data-ad="wsnew">+ Gestionale vuoto</button>`}<button type="button" class="btn primary sm" data-ad="client">+ Nuovo cliente</button>
-      <button type="button" class="btn sm ghost" data-ad="reload" title="Aggiorna">↻ Aggiorna</button></div>`;
-    if (adTab === 'utenti') {
-      const q = nh(adQ), L = U.filter(u => (adF === 'tutti' || u.stato === adF) && (!q || nh([u.nome, u.email, u.azienda, u.ws, wsName(u.ws)].join(' ')).includes(q)))
-        .sort((a, b) => (a.stato === 'attesa' ? 0 : 1) - (b.stato === 'attesa' ? 0 : 1) || (a.ruolo === 'admin' ? -1 : b.ruolo === 'admin' ? 1 : 0) || String(b.creato).localeCompare(String(a.creato)));
-      h += L.length ? `<div class="ad-list">${L.map(u => {
-        const adm = u.ruolo === 'admin', E = esc(u.email), rq = adReq(u);
-        return `<article class="ad-u st-${esc(u.stato)}" data-email="${E}">
-          <span class="st-av">${esc(adIni(u))}</span>
-          <div class="ad-who"><b>${esc(u.nome || '—')}${u.email === me.email ? ' <em>(tu)</em>' : ''}</b><span>${E}</span><small>${esc(u.azienda || '')}${u.telefono ? ` · ${esc(u.telefono)}` : ''}</small>${rq ? `<span class="ad-req"><svg viewBox="0 0 24 24">${SET.get(rq.settore).ic}</svg>Nuova azienda · ${esc(SET.get(rq.settore).s || SET.get(rq.settore).n)}${rq.citta ? ` · ${esc(rq.citta)}` : ''}</span>` : ''}</div>
-          <div class="ad-meta"><span class="ad-pill s-${esc(u.stato)}">${AD_S[u.stato] || esc(u.stato)}</span><span class="ad-pill r-${esc(u.ruolo)}">${AD_R[u.ruolo] || esc(u.ruolo)}</span>${u.ws ? `<span class="ad-ws" title="Gestionale">${esc(wsName(u.ws))} <code>${esc(u.ws)}</code></span>` : `<span class="ad-ws">${rq ? 'Gestionale da creare' : 'Nessun gestionale'}</span>`}</div>
-          <div class="ad-when"><span>Registrato ${adDate(u.creato)}</span><span>Ultimo accesso ${adAgo(u.ultimo)}${u.accessi ? ` · ${u.accessi} accessi` : ''}</span>${u.sessioni ? `<span class="ad-live">● ${u.sessioni} ${u.sessioni > 1 ? 'dispositivi collegati' : 'dispositivo collegato'}</span>` : ''}</div>
-          <div class="ad-act">${adm ? '<span class="ad-note">Amministratore principale</span>' : `
-            ${u.stato === 'attesa' ? `<button type="button" class="btn primary sm" data-ad="ok">${rq && !u.ws ? 'Approva e crea il gestionale' : 'Approva'}</button><button type="button" class="btn sm danger" data-ad="no">Rifiuta</button>` : u.stato === 'bloccato' ? `<button type="button" class="btn sm" data-ad="ok">Sblocca</button>` : `<button type="button" class="btn sm" data-ad="block">Blocca</button>`}
-            <button type="button" class="btn sm ghost" data-ad="edit">Modifica</button>
-            <button type="button" class="btn sm ghost" data-ad="more" aria-label="Altre azioni">⋯</button>`}</div>
-        </article>`; }).join('')}</div>` : `<div class="empty"><b>Nessun utente</b><span>${adQ || adF !== 'tutti' ? 'Nessun risultato con questi filtri.' : 'Quando qualcuno si registra con un codice lo trovi qui.'}</span></div>`;
-    } else {
-      h += `<div class="ad-wsl">${W.map(w => {
-        const T = { principale: 'Principale', cliente: 'Cliente', demo: 'Demo' }[w.tipo] || w.tipo, C = esc(w.codice);
-        return `<article class="ad-w t-${esc(w.tipo)} ${w.stato !== 'attivo' ? 'off' : ''}" data-ws="${C}">
-          <header><span class="ad-pill t-${esc(w.tipo)}">${T}</span>${w.stato !== 'attivo' ? '<span class="ad-pill s-bloccato">Sospeso</span>' : ''}${me.ws === w.codice ? '<span class="ad-pill s-attivo">Sei qui</span>' : ''}</header>
-          <h3>${esc(w.nome)}</h3><p>${esc(w.citta || '')}${w.note ? ` · ${esc(w.note)}` : ''}</p>
-          <div class="ad-wset"><span class="ad-sp"><svg viewBox="0 0 24 24">${SET.get(adWsSet(w)).ic}</svg>${esc(SET.get(adWsSet(w)).s || SET.get(adWsSet(w)).n)}</span>${w.tipo === 'cliente' ? `<span class="ad-pill p-${esc(w.piano || 'prova')}">${esc(SET.piani[w.piano || 'prova'] || w.piano)}</span>` : ''}</div>
-          ${w.tipo === 'cliente' ? `<div class="ad-sub ${adScadOf(w)}"><span>Abbonamento</span><b>${w.scadenza ? 'fino al ' + esc(dIt(w.scadenza)) : 'senza scadenza'}</b>${adScadOf(w) === 'late' ? '<em>scaduto</em>' : adScadOf(w) === 'soon' ? '<em>in scadenza</em>' : ''}</div>` : ''}
-          <div class="ad-wu">${U.filter(u => u.ws === w.codice).slice(0, 4).map(u => `<span title="${esc(u.email)}"><i>${esc(adIni(u))}</i>${esc(u.nome || u.email)}${u.cambia ? ' <small>· primo accesso</small>' : ''}</span>`).join('') || '<span class="muted small">Nessun utente</span>'}${U.filter(u => u.ws === w.codice).length > 4 ? `<span class="muted small">+${U.filter(u => u.ws === w.codice).length - 4}</span>` : ''}</div>
-          <div class="ad-code"><span>Codice</span><code>${C}</code></div>
-          <div class="ad-wn"><span><b>${w.utenti}</b> ${w.utenti === 1 ? 'utente' : 'utenti'}</span><span>creato ${adDate(w.creato)}</span><span>${w.tipo === 'demo' ? 'dati di prova, nulla viene salvato' : w.url ? 'Foglio Google proprio' : ''}</span></div>
-          <footer>${w.tipo !== 'demo' && me.ws !== w.codice ? `<button type="button" class="btn primary sm" data-ad="enter">Entra</button>` : ''}${w.tipo !== 'demo' ? '<button type="button" class="btn sm" data-ad="wsuser">+ Utente</button>' : ''}${w.url ? `<a class="btn sm ghost" href="${esc(w.url)}" target="_blank" rel="noopener">Apri il Foglio</a>` : ''}<button type="button" class="btn sm ghost" data-ad="wsedit">Modifica</button>${w.tipo !== 'principale' ? `<button type="button" class="btn sm ghost" data-ad="wsstato">${w.stato === 'attivo' ? 'Sospendi' : 'Riattiva'}</button>` : ''}</footer>
-        </article>`; }).join('')}</div>
-        <p class="ad-help">Ogni gestionale ha il suo Foglio Google e le sue cartelle su Drive: i dati non si mescolano. Nessuno può registrarsi da solo: con <b>«+ Nuovo cliente»</b> crei gestionale e utente e mandi le credenziali; al primo accesso il cliente sceglie la sua password. La demo si apre dalla pagina di accesso, senza account.</p>`;
-    }
-    el.innerHTML = h;
-    const qi = $('#ad-q'); if (qi) qi.oninput = () => { adQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderAdmin().then(() => { const x = $('#ad-q'); if (x) { x.focus(); try { x.setSelectionRange(p, p); } catch {} } }); }, 180); };
-  }
-  const adReq = u => { if (!u || !u.richiesta) return null; try { const r = typeof u.richiesta === 'string' ? JSON.parse(u.richiesta) : u.richiesta; return r && r.settore ? r : null; } catch { return null; } };
-  const adWsSet = w => w.settore || (w.tipo === 'principale' ? 'veicoli' : w.tipo === 'demo' ? 'veicoli' : 'altro');
-  function adUserForm(u) {
-    const W = AD.ws || [];
-    openSheet(`Modifica ${u.nome || u.email}`, `<p class="pvx-intro">${esc(u.email)}</p>
-      <div class="f-row"><label class="f"><span>Nome e cognome</span><input name="nome" value="${esc(u.nome || '')}" data-focus></label><label class="f"><span>Telefono</span><input name="telefono" value="${esc(u.telefono || '')}"></label></div>
-      <label class="f"><span>Azienda</span><input name="azienda" value="${esc(u.azienda || '')}"></label>
-      <div class="f-row"><label class="f"><span>Gestionale</span><select name="ws">${u.ws ? '' : `<option value="" selected>${adReq(u) ? 'Da creare all\'approvazione' : '— Nessuno'}</option>`}${W.map(w => `<option value="${esc(w.codice)}" ${w.codice === u.ws ? 'selected' : ''}>${esc(w.nome)} (${esc(w.codice)})</option>`).join('')}</select></label>
-      <label class="f"><span>Permessi</span><select name="ruolo">${['utente', 'lettura', 'demo'].map(r => `<option value="${r}" ${r === u.ruolo ? 'selected' : ''}>${AD_R[r]}</option>`).join('')}</select></label></div>
-      <label class="f"><span>Stato</span><select name="stato">${['attivo', 'attesa', 'bloccato'].map(r => `<option value="${r}" ${r === u.stato ? 'selected' : ''}>${AD_S[r]}</option>`).join('')}</select></label>
-      <label class="f"><span>Note (le vedi solo tu)</span><textarea name="note" rows="2">${esc(u.note || '')}</textarea></label>
-      <p class="ad-help">«Sola lettura» vede tutto ma non può modificare. Se cambi gestionale, permessi o stato, l'utente dovrà entrare di nuovo.</p>`, fd => {
-      const set = {}; ['nome', 'telefono', 'azienda', 'ws', 'ruolo', 'stato', 'note'].forEach(k => { set[k] = String(fd.get(k) || ''); });
-      adDo('adminUser', { email: u.email, set }, 'Utente aggiornato'); return true;
-    });
-  }
-  function adMore(u, btn) {
-    const old = $('#ad-menu'); if (old) old.remove();
-    const m = document.createElement('div'); m.id = 'ad-menu'; m.className = 'pv-menu ad-menu';
-    m.innerHTML = `<button type="button" data-adm="pw">Password provvisoria</button>${u.sessioni ? '<button type="button" data-adm="out">Disconnetti dai dispositivi</button>' : ''}<button type="button" data-adm="mail">Scrivi email</button><button type="button" data-adm="del" class="danger">Elimina utente</button>`;
-    document.body.appendChild(m);
-    const r = btn.getBoundingClientRect(); m.style.top = `${Math.min(innerHeight - m.offsetHeight - 8, r.bottom + 4) + scrollY}px`; m.style.left = `${Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth))}px`;
-    m.onclick = async e => {
-      const a = e.target.closest('[data-adm]'); if (!a) return; m.remove();
-      const k = a.dataset.adm;
-      if (k === 'mail') { location.href = `mailto:${u.email}`; return; }
-      if (k === 'out') { adDo('adminLogoutUser', { email: u.email }, 'Disconnesso da tutti i dispositivi'); return; }
-      if (k === 'del') { if (confirm(`Eliminare l'account di ${u.nome || u.email}? Non potrà più entrare (i dati del gestionale restano).`)) adDo('adminDelUser', { email: u.email }, 'Utente eliminato'); return; }
-      if (k === 'pw') {
-        if (!confirm(`Creare una password provvisoria per ${u.nome || u.email}? Quella attuale smette di funzionare.`)) return;
-        const r = await adDo('adminResetPw', { email: u.email }); if (!r || !r.pw) return;
-        openSheet('Password provvisoria', `<p>Nuova password per <b>${esc(u.email)}</b>:</p><div class="ad-pw"><code>${esc(r.pw)}</code><button type="button" class="btn sm" data-copy="${esc(r.pw)}">Copia</button></div><p class="ad-help">${r.inviata ? 'Gliel\'abbiamo anche mandata via email.' : 'Non è stato possibile mandare l\'email: comunicagliela tu.'} Al primo accesso conviene cambiarla da Impostazioni › Account. Questa finestra non la mostrerà più.</p>`, () => true, null, 'Fatto');
-      }
-    };
-    setTimeout(() => document.addEventListener('click', function f(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('click', f, true); } }, true), 0);
-  }
-  /* v100: niente registrazione — l'amministratore crea clienti, gestionali e utenti e manda le credenziali */
-  const adScadOf = w => { if (w.tipo !== 'cliente' || !validD(w.scadenza)) return ''; if (w.scadenza < today()) return 'late'; const d = parseD(w.scadenza) - parseD(today()); return d <= 30 * 864e5 ? 'soon' : ''; };
-  const adScad = W => W.filter(w => adScadOf(w));
-  const adModDef = id => { const s = SET.get(id) || {}; const o = {}; SET.moduli.forEach(m => { if (m.only && m.only !== id) return; o[m.k] = m.k in (s.mod || {}) ? !!s.mod[m.k] : true; }); return o; };
-  const adModBox = (id, cur) => { const s = SET.get(id) || SET_DEF; return `<div class="ad-mods">${SET.moduli.filter(m => !m.only || m.only === id).map(m => `<label class="ad-mod"><input type="checkbox" name="mod_${m.k}"${cur[m.k] ? ' checked' : ''}><span><b>${esc(m.t(s))}</b><small>${esc(m.d(s))}</small></span></label>`).join('')}</div>`; };
-  const adModRead = () => { const o = {}; $$('#sheet-body .ad-mods input[name^="mod_"]').forEach(i => { o[i.name.slice(4)] = i.checked; }); return o; };
-  function adCreds(r, titolo) {
-    const link = location.origin + location.pathname;
-    const msg = `Ciao, il tuo gestionale «${r.wsNome || ''}» è pronto.\nApri: ${link}\nEmail: ${r.email}\nPassword provvisoria: ${r.pw}\nAl primo accesso sceglierai una password tua.`;
-    openSheet(titolo || 'Credenziali create', `<p class="pvx-intro">${r.inviata ? '<b>Le abbiamo già mandate via email.</b> ' : ''}Copiale e mandale al cliente (per esempio su WhatsApp): la password è provvisoria e al primo accesso ne sceglierà una sua.</p>
-      <div class="ad-cred"><div><span>Indirizzo</span><b>${esc(link)}</b></div><div><span>Email</span><b>${esc(r.email)}</b></div><div><span>Password provvisoria</span><b class="mono">${esc(r.pw)}</b></div>${r.codice ? `<div><span>Gestionale</span><b>${esc(r.wsNome || '')} · ${esc(r.codice)}</b></div>` : ''}</div>
-      <div class="gx-docact"><button type="button" class="btn sm primary" data-copy="${esc(msg)}">Copia il messaggio</button><a class="btn sm" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">WhatsApp</a><a class="btn sm" href="mailto:${esc(r.email)}?subject=${encodeURIComponent('Il tuo gestionale è pronto')}&body=${encodeURIComponent(msg)}">Email</a></div>
-      <p class="ad-help">Dopo aver chiuso, questa password non sarà più visibile: se si perde, dalla scheda dell'utente usa «Password provvisoria».</p>`, () => true, null, 'Fatto');
-  }
-  function adClient() {
-    let sel = 'altro';
-    const P = Object.entries(SET.piani || {}), y1 = (() => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return ymd(d); })();
-    openSheet('Nuovo cliente', `<p class="pvx-intro">Crea il gestionale come concordato con il cliente: attività, piano, sezioni e primo utente. Il cliente riceve le credenziali e non deve registrarsi.</p>
-      <h4 class="ad-st">1 · Azienda</h4>
-      <div class="f-row"><label class="f"><span>Nome dell'azienda</span><input name="azienda" required data-focus placeholder="Es. Pizzeria Bella Napoli S.r.l."></label><label class="f"><span>Città</span><input name="citta" placeholder="Es. Napoli (NA)"></label></div>
-      <div class="f"><span>Tipo di attività</span><div id="ad-set">${setGrid(sel, true)}</div></div>
-      <div class="f-row"><label class="f"><span>Piano</span><select name="piano">${P.map(([k, v]) => `<option value="${k}"${k === 'base' ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label><label class="f"><span>Abbonamento fino al</span><input name="scadenza" type="date" value="${y1}"></label></div>
-      <h4 class="ad-st">2 · Sezioni del gestionale</h4><div id="ad-modbox">${adModBox(sel, adModDef(sel))}</div>
-      <h4 class="ad-st">3 · Primo utente (titolare)</h4>
-      <div class="f-row"><label class="f"><span>Nome e cognome</span><input name="nome" required></label><label class="f"><span>Telefono</span><input name="telefono" inputmode="tel"></label></div>
-      <label class="f"><span>Email (sarà il suo accesso)</span><input name="email" type="email" required inputmode="email"></label>
-      <label class="gx-chk"><input type="checkbox" name="invia" checked> Manda subito le credenziali via email</label>
-      <label class="f"><span>Note (le vedi solo tu)</span><input name="note" placeholder="es. pagamento ricevuto il …"></label>`, async fd => {
-      const o = { azienda: String(fd.get('azienda') || '').trim(), citta: String(fd.get('citta') || '').trim(), settore: sel, piano: String(fd.get('piano')), scadenza: String(fd.get('scadenza') || ''), moduli: adModRead(), nome: String(fd.get('nome') || '').trim(), telefono: String(fd.get('telefono') || '').trim(), email: String(fd.get('email') || '').trim(), invia: fd.get('invia') === 'on', note: String(fd.get('note') || '').trim() };
-      if (o.azienda.length < 2) return toast('Scrivi il nome dell\'azienda');
-      if (o.nome.length < 2) return toast('Scrivi nome e cognome del titolare');
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(o.email)) return toast('Email non valida');
-      busy('Creo il gestionale e il suo Foglio Google…');
-      try { const r = await api('adminNewClient', o); busy(); AD = r.data || AD; renderAdmin(); adCreds(r, `${o.azienda} è pronto`); toast('Cliente creato'); return false; }
-      catch (e) { busy(); if (!(e instanceof AuthError)) toast(/sconosciuta/i.test(e.message) ? 'Aggiorna lo script Google alla versione cdc-4.4' : e.message); }
-    }, null, 'Crea il cliente');
-    $('#sheet-form').classList.add('wide');
-    setPickBind($('#ad-set'), id => { sel = id; $('#ad-modbox').innerHTML = adModBox(sel, adModDef(sel)); });
-  }
-  function adUserAdd(wsCode) {
-    const W = (AD.ws || []).filter(w => w.tipo !== 'demo');
-    openSheet('Nuovo utente', `<p class="pvx-intro">Un collaboratore o un altro accesso per un gestionale esistente. Riceve una password provvisoria e al primo accesso ne sceglie una sua.</p>
-      <div class="f-row"><label class="f"><span>Nome e cognome</span><input name="nome" required data-focus></label><label class="f"><span>Telefono</span><input name="telefono" inputmode="tel"></label></div>
-      <label class="f"><span>Email (sarà il suo accesso)</span><input name="email" type="email" required inputmode="email"></label>
-      <div class="f-row"><label class="f"><span>Gestionale</span><select name="ws">${W.map(w => `<option value="${esc(w.codice)}"${w.codice === wsCode ? ' selected' : ''}>${esc(w.nome)}</option>`).join('')}</select></label><label class="f"><span>Permessi</span><select name="ruolo"><option value="utente">Utente · può modificare</option><option value="lettura">Sola lettura</option></select></label></div>
-      <label class="gx-chk"><input type="checkbox" name="invia" checked> Manda subito le credenziali via email</label>`, async fd => {
-      const o = { nome: String(fd.get('nome') || '').trim(), telefono: String(fd.get('telefono') || '').trim(), email: String(fd.get('email') || '').trim(), ws: String(fd.get('ws')), ruolo: String(fd.get('ruolo')), invia: fd.get('invia') === 'on' };
-      if (o.nome.length < 2) return toast('Scrivi nome e cognome');
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(o.email)) return toast('Email non valida');
-      busy('Creo l\'utente…');
-      try { const r = await api('adminUserAdd', o); busy(); AD = r.data || AD; renderAdmin(); adCreds(r, 'Utente creato'); return false; }
-      catch (e) { busy(); if (!(e instanceof AuthError)) toast(/sconosciuta/i.test(e.message) ? 'Aggiorna lo script Google alla versione cdc-4.4' : e.message); }
-    }, null, 'Crea utente');
-  }
-  async function adWsEdit(w) {
-    let info = null;
-    if (w.tipo !== 'demo') { busy('Leggo le sezioni del gestionale…'); try { info = await api('adminWsInfo', { codice: w.codice }); } catch (e) { if (e instanceof AuthError) { busy(); return; } } busy(); }
-    adWsForm(w, info);
-  }
-  function adWsForm(w, info) {
-    const isNew = !w; w = w || { nome: '', codice: '', citta: '', note: '', tipo: 'cliente' };
-    const sugg = () => 'AZ' + Math.random().toString(36).slice(2, 6).toUpperCase() + new Date().getFullYear().toString().slice(2);
-    openSheet(isNew ? 'Nuovo gestionale' : `Modifica ${w.nome}`, `${isNew ? '<p class="pvx-intro">Crea un gestionale separato per un\'altra azienda: avrà il suo Foglio Google, vuoto, e le sue cartelle su Drive.</p>' : ''}
-      <label class="f"><span>Nome azienda</span><input name="nome" value="${esc(w.nome)}" data-focus required placeholder="Es. Rossi Trasporti S.r.l."></label>
-      <div class="f-row"><label class="f"><span>Tipo di attività</span><select name="settore">${SET.list.map(x => `<option value="${x.id}"${x.id === adWsSet(w) ? ' selected' : ''}>${esc(x.n)}</option>`).join('')}</select></label>
-      ${w.tipo === 'cliente' || isNew ? `<label class="f"><span>Piano</span><select name="piano">${Object.entries(SET.piani).map(([k, v]) => `<option value="${k}"${k === (w.piano || 'prova') ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label>` : ''}</div>
-      ${w.tipo === 'cliente' || isNew ? `<label class="f"><span>Abbonamento fino al</span><input name="scadenza" type="date" value="${esc(w.scadenza || '')}"></label>` : ''}
-      ${!isNew && w.tipo !== 'demo' ? `<div class="f"><span>Sezioni del gestionale</span>${adModBox(adWsSet(w), info && info.moduli ? { ...adModDef(adWsSet(w)), ...info.moduli } : adModDef(adWsSet(w)))}</div>` : ''}
-      <div class="f-row"><label class="f"><span>Codice gestionale</span><input name="codice" value="${esc(w.codice || (isNew ? sugg() : ''))}" required pattern="[A-Za-z0-9_\\-]{4,20}" style="text-transform:uppercase;font-family:var(--mono,monospace)"></label>
-      <label class="f"><span>Città</span><input name="citta" value="${esc(w.citta || '')}" placeholder="per i PDF"></label></div>
-      ${isNew ? `<label class="f"><span>Tipo</span><select name="tipo"><option value="cliente">Cliente · dati veri in un Foglio nuovo</option><option value="demo">Demo · dati di prova, nulla viene salvato</option></select></label>` : ''}
-      <label class="f"><span>Note</span><input name="note" value="${esc(w.note || '')}"></label>
-      <p class="ad-help">Il codice va da 4 a 20 lettere o numeri. ${isNew ? '' : 'Gli utenti già collegati restano collegati anche se lo cambi.'}</p>`, fd => {
-      const o = { nome: String(fd.get('nome') || '').trim(), codice: String(fd.get('codice') || '').trim().toUpperCase(), citta: String(fd.get('citta') || '').trim(), note: String(fd.get('note') || '').trim(), settore: String(fd.get('settore') || '') };
-      if (fd.has('piano')) o.piano = String(fd.get('piano'));
-      if (fd.has('scadenza')) o.scadenza = String(fd.get('scadenza') || '');
-      if (!isNew && w.tipo !== 'demo' && $('#sheet-body .ad-mods')) o.moduli = adModRead();
-      if (isNew) { o.tipo = fd.get('tipo'); toast('Creo il gestionale e il suo Foglio Google…'); adDo('adminWsAdd', o, 'Gestionale creato'); }
-      else adDo('adminWsSet', { codice: w.codice, set: o }, 'Gestionale aggiornato');
-      return true;
-    }, null, isNew ? 'Crea gestionale' : 'Salva');
-  }
-  async function adEnter(w) {
-    if (queue.length && !confirm(`Ci sono ${queue.length} modifiche non ancora inviate in questo gestionale: cambiando andranno perse. Continuare?`)) return;
-    try {
-      busy('Apro ' + w.nome + '…');
-      const u = await api('adminSwitch', { codice: w.codice });
-      setSession(u, tok); AD = null; busy();
-      toast(`Ora sei in ${w.nome}`); location.hash = '#home'; await pull(); render();
-    } catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); }
-  }
-  function adClick(e) {
-    const t = e.target;
-    const tb = t.closest('[data-adtab]'); if (tb) { adTab = tb.dataset.adtab; LS.set('cdc_adtab', adTab); renderAdmin(); return; }
-    const fb = t.closest('[data-adf]'); if (fb) { adTab = 'utenti'; adF = adF === fb.dataset.adf ? 'tutti' : fb.dataset.adf; renderAdmin(); return; }
-    const b = t.closest('[data-ad]'); if (!b) return;
-    const k = b.dataset.ad, card = b.closest('[data-email]'), wc = b.closest('[data-ws]');
-    const u = card && (AD.users || []).find(x => x.email === card.dataset.email), w = wc && (AD.ws || []).find(x => x.codice === wc.dataset.ws);
-    if (k === 'reload') { AD = null; renderAdmin(); return; }
-    if (k === 'ok' && u) { const nw = adReq(u) && !u.ws; if (nw) toast('Creo il gestionale e il suo Foglio Google…'); adDo('adminUser', { email: u.email, set: { stato: 'attivo' } }, u.stato === 'attesa' ? (nw ? `Gestionale di ${adReq(u).azienda || u.azienda || u.nome} creato · ${u.nome || u.email} approvato` : `${u.nome || u.email} approvato · gli arriva una email`) : 'Utente sbloccato'); return; }
-    if (k === 'block' && u) { if (confirm(`Bloccare ${u.nome || u.email}? Verrà disconnesso subito.`)) adDo('adminUser', { email: u.email, set: { stato: 'bloccato' } }, 'Utente bloccato'); return; }
-    if (k === 'no' && u) { if (confirm(`Rifiutare la richiesta di ${u.nome || u.email}? L'account viene eliminato.`)) adDo('adminDelUser', { email: u.email }, 'Richiesta rifiutata'); return; }
-    if (k === 'edit' && u) return adUserForm(u);
-    if (k === 'more' && u) return adMore(u, b);
-    if (k === 'wsnew') return adWsForm();
-    if (k === 'wsedit' && w) return adWsEdit(w);
-    if (k === 'client') return adClient();
-    if (k === 'usernew') return adUserAdd();
-    if (k === 'wsuser' && w) return adUserAdd(w.codice);
-    if (k === 'wsstato' && w) { const off = w.stato === 'attivo'; if (!off || confirm(`Sospendere «${w.nome}»? I suoi utenti non potranno entrare finché non lo riattivi.`)) adDo('adminWsSet', { codice: w.codice, set: { stato: off ? 'sospeso' : 'attivo' } }, off ? 'Gestionale sospeso' : 'Gestionale riattivato'); return; }
-    if (k === 'copy' && w) { navigator.clipboard && navigator.clipboard.writeText(w.codice).then(() => toast('Codice copiato'), () => toast(w.codice)); return; }
-    if (k === 'enter' && w) return adEnter(w);
-  }
+  /* v102: utenti, gestionali, permessi e abbonamenti sono nella Console (console/), separata dal gestionale */
   /* =========================================================
      v98 · CLIENTI, MAGAZZINO, DDT E FATTURE DI FINE MESE
      Fogli Google: Clienti, Articoli, MagMov, DDT, Vendite (Code.gs cdc-4.2).
@@ -8588,7 +8382,6 @@
 
   /* ================= Eventi ================= */
   function bind() {
-    $('#ad-body').addEventListener('click', adClick);
     document.addEventListener('click', gxClick);
     $('#sheet-body').addEventListener('click', e => { const c = e.target.closest('[data-copy]'); if (c) { const v = c.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast('Copiato'), () => toast(v)); } });
     window.addEventListener('hashchange', go);

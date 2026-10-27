@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Console · Centro di Costo</title>
+  <meta name="theme-color" content="#0b1020">
+  <script src="theme.js?v=1"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Console">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="console.css?v=1">
+</head>
+<body>
+  <!-- ACCESSO -->
+  <main id="gate" class="gate" hidden>
+    <section class="gate-art" aria-hidden="true">
+      <svg id="orbit" viewBox="0 0 600 600"></svg>
+      <div class="gate-claim"><b>Tutti i tuoi gestionali.</b><span>Clienti, accessi, permessi e abbonamenti in un unico posto.</span></div>
+    </section>
+    <section class="gate-box">
+      <form id="gate-form" class="gate-card" autocomplete="on" novalidate>
+        <img src="logo.svg" alt="" class="gate-logo" width="52" height="52">
+        <h1>Console</h1>
+        <p class="gate-sub">Area riservata all'amministratore del Centro di Costo</p>
+        <label class="fl"><span>Email</span><input id="g-email" type="email" autocomplete="username" inputmode="email" required></label>
+        <label class="fl"><span>Password</span><input id="g-pw" type="password" autocomplete="current-password" required></label>
+        <p id="gate-err" class="gate-err" role="alert" hidden></p>
+        <button class="btn primary lg" id="g-go" type="submit"><span>Entra</span></button>
+        <a class="gate-alt" href="../">Vai al gestionale</a>
+      </form>
+    </section>
+  </main>
+
+  <!-- CONSOLE -->
+  <div id="app" class="app" hidden>
+    <aside id="side" class="side">
+      <div class="side-brand"><img src="logo.svg" alt="" width="34" height="34"><div><b>Console</b><span>Centro di Costo</span></div></div>
+      <nav class="side-nav" id="nav">
+        <a href="#panoramica" data-v="panoramica"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Panoramica</span></a>
+        <a href="#clienti" data-v="clienti"><svg viewBox="0 0 24 24"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg><span>Clienti</span><em id="nb-cli"></em></a>
+        <a href="#utenti" data-v="utenti"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6.5 6.5 0 0 0-2.8-5.3"/></svg><span>Utenti e permessi</span></a>
+        <a href="#incassi" data-v="incassi"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg><span>Abbonamenti</span><em id="nb-inc" class="warn"></em></a>
+        <a href="#accessi" data-v="accessi"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>Accessi</span><em id="nb-live" class="live"></em></a>
+        <a href="#registro" data-v="registro"><svg viewBox="0 0 24 24"><path d="M12 8v4l2.5 2.5"/><circle cx="12" cy="12" r="9"/></svg><span>Registro attività</span></a>
+        <a href="#impostazioni" data-v="impostazioni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Impostazioni</span></a>
+      </nav>
+      <a class="side-ext" href="../" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Apri il mio gestionale</span></a>
+      <div class="side-me" id="side-me"></div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+    <div class="main">
+      <header class="top">
+        <button class="ib menu" id="menu-btn" type="button" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
+        <div class="top-t"><h2 id="title">Panoramica</h2><span id="subtitle"></span></div>
+        <label class="search" id="search-w"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="search" type="search" placeholder="Cerca clienti e utenti…" autocomplete="off"><kbd>/</kbd><div class="search-res" id="search-res" hidden></div></label>
+        <span class="sync" id="sync" title="Dati aggiornati"><i></i></span>
+        <button class="btn primary" id="new-client" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Nuovo cliente</span></button>
+      </header>
+      <section id="view" class="view" aria-live="polite"></section>
+    </div>
+  </div>
+
+  <!-- pannello laterale (dettaglio cliente / utente) -->
+  <aside id="drawer" class="drawer" hidden aria-modal="true" role="dialog"><div class="drawer-in" id="drawer-in"></div></aside>
+  <!-- finestre -->
+  <div id="modal" class="modal" hidden role="dialog" aria-modal="true"><div class="modal-card" id="modal-card"></div></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="splash" class="splash" aria-hidden="true"><img src="logo.svg" alt="" width="64" height="64"><i></i></div>
+
+  <script src="../settori.js?v=101"></script>
+  <script src="console.js?v=1"></script>
+</body>
+</html>

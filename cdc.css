@@ -2888,3 +2888,9 @@ body[data-view="utenti"] .iva-tg { visibility: hidden; }
 .ad-cred .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px; letter-spacing: .04em; }
 @media (max-width: 560px) { .ad-cred div { grid-template-columns: 1fr; gap: 0; } }
 .fo-k { grid-template-columns: 1fr 1fr; margin-bottom: 8px; }
+/* v102: l'amministratore è dentro il gestionale di un cliente (aperto dalla Console) */
+.demo-bar.vis-bar { background: #e8effb; color: #1d3a6b; border-color: #c9d8f2; }
+.demo-bar.vis-bar .btn.sm.demo-info { background: #3362ab; color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .demo-bar.vis-bar { background: #15233d; color: #c8d8f4; border-color: #22365c; } :root:not([data-theme="light"]) .demo-bar.vis-bar .btn.sm.demo-info { background: #5b8fe0; color: #fff; } }
+:root[data-theme="dark"] .demo-bar.vis-bar { background: #15233d; color: #c8d8f4; border-color: #22365c; }
+:root[data-theme="dark"] .demo-bar.vis-bar .btn.sm.demo-info { background: #5b8fe0; color: #fff; }
