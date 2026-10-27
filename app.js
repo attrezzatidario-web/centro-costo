@@ -1231,7 +1231,7 @@
     sub('');
     renderMe();
     renderSetMod();
-    renderDocSet();
+    renderDocSet(); renderSrvSet();
     renderBackup();
     const nd = db.movimenti.filter(r => !validD(r.data)).length;
     const stat = (l, v, s2) => `<div class="st-stat"><span>${l}</span><b>${v}</b>${s2 ? `<small>${s2}</small>` : ''}</div>`;
@@ -3157,7 +3157,7 @@
   /* =========================================================
      PREVENTIVI PAYPER, JRC, DEWALT, STANLEY E USAG — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' }, portwest: { n: 'Portwest', file: 'cat-portwest.json' }, ffg: { n: 'FFG', file: 'cat-ffg.json' }, benman: { n: 'Benman', file: 'cat-benman.json' }, hugo: { n: 'Hugo', file: 'cat-hugo.json' }, sola: { n: 'Sola', file: 'cat-sola.json' }, activegear: { n: 'Active Gear', file: 'cat-activegear.json' }, maxilia: { n: 'Maxilia', file: 'cat-maxilia.json' }, promit: { n: 'Promit', file: 'cat-promit.json' }, lavor: { n: 'Lavor', file: 'cat-lavor.json' }, propac: { n: 'Propac', file: 'cat-propac.json' }, kerakoll: { n: 'Kerakoll', file: 'cat-kerakoll.json' }, mag: { n: 'Magazzino', file: 'mag' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' }, portwest: { n: 'Portwest', file: 'cat-portwest.json' }, ffg: { n: 'FFG', file: 'cat-ffg.json' }, benman: { n: 'Benman', file: 'cat-benman.json' }, hugo: { n: 'Hugo', file: 'cat-hugo.json' }, sola: { n: 'Sola', file: 'cat-sola.json' }, activegear: { n: 'Active Gear', file: 'cat-activegear.json' }, maxilia: { n: 'Maxilia', file: 'cat-maxilia.json' }, promit: { n: 'Promit', file: 'cat-promit.json' }, lavor: { n: 'Lavor', file: 'cat-lavor.json' }, propac: { n: 'Propac', file: 'cat-propac.json' }, kerakoll: { n: 'Kerakoll', file: 'cat-kerakoll.json' }, mag: { n: 'Magazzino', file: 'mag' }, srv: { n: 'Servizi', file: 'srv' } };
   const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt, Stanley: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
@@ -3180,6 +3180,7 @@
   }
   async function pvLoad(sup) {
     if (sup === 'mag') return (pvCats.mag = pvMagCat());
+    if (sup === 'srv') return (pvCats.srv = pvSrvCat());
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
     if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.tool) j.items.forEach(it => { const f0 = it.c.find(c => c[4]); if (f0) it.c.forEach(c => { if (!c[4]) c[4] = f0[4]; }); }); j.items.forEach(it => { pvListSup[it.id] = sup; it.c.forEach((c, i) => { const lp = c[5] != null ? c[5] : c[2]; if (lp != null) { if (!i) pvListRaw[it.id] = lp; pvListRaw[it.id + '|' + c[0]] = lp; } }); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); if (j.hex) Object.entries(j.hex).forEach(([k, v]) => { pvHexX[amNorm(k)] = v; }); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
@@ -3207,7 +3208,7 @@
   const pvAcqExp = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
   const pvAcq = (it, col) => { const e = pvAcqExp(it, col); return e != null ? e : pvAcqSc(it, col); };
   const pvPub = (it, col) => { const pm = pvPubModGet(it, col); if (pm != null) return pm; if (col != null && pvListPub[it + '|' + col] != null) return pvListPub[it + '|' + col]; if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
-  const pvCode = it => it.mag ? (it.code || it.id) : it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
+  const pvCode = it => it.mag || it.srv ? (it.code || it.id) : it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
   const pvImg = (cat, c) => c && c[4] ? (/^(cimg:|data:)/.test(c[4]) ? c[4] : cat.img && (!cat.imgPre || (cat.img.t && cat.img.t[c[4]] != null)) ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4] + (cat.imgSuf || '')) : '';
   // foto contenute nei file del catalogo (DeWalt): caricate a blocchi solo quando servono
@@ -3282,6 +3283,8 @@
   const pvLineThumb = l => { const cat = pvCats[l.sup || 'payper'], it = cat && cat.items.find(x => x.id === l.it), c = it && it.c.find(x => x[0] === l.c); return it && c ? pvThumb(cat, it, c, 'sm') : pvSw(l.cn); };
   async function renderPv() {
     if (pvCats.mag) pvCats.mag = pvMagCat();
+    if (pvCats.srv) pvCats.srv = pvSrvCat();
+    { const sb = $('.pv-brand [data-pvsup="srv"]'); if (sb) sb.hidden = !SRV().length; if (pvSup === 'srv' && !SRV().length) pvSup = 'payper'; }
     { const mb = $('.pv-brand [data-pvsup="mag"]'); if (mb) mb.hidden = !pvMagOk(); if (pvSup === 'mag' && !pvMagOk()) pvSup = 'payper'; }
     const gAll = pvAll && pvTab === 'cat' && !pvItem; document.body.classList.toggle('pv-all', gAll);
     sub(gAll ? 'Tutti i fornitori · ricerca e confronto' : `${PV_SUP[pvSup].n} · catalogo e preventivi`);
@@ -3342,7 +3345,7 @@
   const pvGK = it => it._kg || (it._kg = pvGDeacc(it.k + ' ' + amNorm(it.mod || '')));
   const pvGStem = w => { w = pvGDeacc(amNorm(w)); if (w.length > 4 && /^[A-Z]+$/.test(w)) { const t = w.replace(/[AEIOU]+$/, ''); return t.length >= 4 ? t : w.slice(0, -1); } return w; };
   const pvGAlts = w => { const s = pvGStem(w), g = PV_GSYN.find(l => l.some(x => s.startsWith(x) || x.startsWith(s) && s.length >= 4)); return g ? [s, ...g] : [s]; };
-  const pvGSups = () => Object.keys(PV_SUP).filter(s => PV_SUP[s].file && (s !== 'mag' || pvMagOk()));
+  const pvGSups = () => Object.keys(PV_SUP).filter(s => PV_SUP[s].file && (s !== 'mag' || pvMagOk()) && (s !== 'srv' || SRV().length > 0));
   const pvGReady = () => pvGSups().filter(s => pvCats[s]);
   const pvGKey = (sup, id) => sup + '|' + id;
   const pvGRecent = () => { try { const v = JSON.parse(localStorage.getItem('cdc_pvgq') || '[]'); return Array.isArray(v) ? v.slice(0, 6) : []; } catch { return []; } };
@@ -3516,9 +3519,9 @@
         <div class="pv-hero-l">
           <img class="pv-hero-logo" src="logo-${pvSup}.svg" alt="${esc(cat.nome)}">
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
-          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'dati dal sito ufficiale · prezzi del volantino dove ci sono' : ['ffg', 'benman', 'hugo'].includes(cat.f) ? 'dati e prezzi di listino dal sito ufficiale FF Group' : cat.f === 'sola' ? 'dati dal sito ufficiale · listino senza IVA (sul sito è IVA inclusa)' : cat.f === 'maxilia' ? 'prezzi Maxilia a pezzo per quantità (stampa del logo inclusa, IVA esclusa) = prezzo d\'acquisto' : cat.f === 'propac' ? 'prezzi Propac IVA esclusa (prima fascia) = prezzo d\'acquisto · sconti quantità nelle versioni' : cat.mag ? 'i tuoi articoli di magazzino · prezzo di vendita e costo dall\'anagrafica' : cat.noList ? 'dati e foto dal sito ufficiale · il sito non ha prezzi: scrivi o importa i prezzi d\'acquisto' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori' + (cat.acqList ? ' · prezzi ' + cat.nome + ' = prezzo d\'acquisto' : '')} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
+          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'dati dal sito ufficiale · prezzi del volantino dove ci sono' : ['ffg', 'benman', 'hugo'].includes(cat.f) ? 'dati e prezzi di listino dal sito ufficiale FF Group' : cat.f === 'sola' ? 'dati dal sito ufficiale · listino senza IVA (sul sito è IVA inclusa)' : cat.f === 'maxilia' ? 'prezzi Maxilia a pezzo per quantità (stampa del logo inclusa, IVA esclusa) = prezzo d\'acquisto' : cat.f === 'propac' ? 'prezzi Propac IVA esclusa (prima fascia) = prezzo d\'acquisto · sconti quantità nelle versioni' : cat.mag ? 'i tuoi articoli di magazzino · prezzo di vendita e costo dall\'anagrafica' : cat.srvc ? 'le tue righe preimpostate · si gestiscono in Impostazioni › Servizi' : cat.noList ? 'dati e foto dal sito ufficiale · il sito non ha prezzi: scrivi o importa i prezzi d\'acquisto' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori' + (cat.acqList ? ' · prezzi ' + cat.nome + ' = prezzo d\'acquisto' : '')} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
-        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'ffg' ? 'Cerca: nome, codice o modello (es. CDD 12V, livella, smerigliatrice…)' : cat.f === 'benman' ? 'Cerca: nome o codice (es. punta SDS, rullo, chiave combinata…)' : cat.f === 'hugo' ? 'Cerca: nome o codice (es. lucchetto, cilindro, GTS…)' : cat.f === 'sola' ? 'Cerca: nome o modello (es. RED 3, livella, flessometro…)' : cat.f === 'maxilia' ? 'Cerca: nome o codice (es. borraccia, penna, shopper…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'lavor' ? 'Cerca: nome o codice (es. idropulitrice, Predator, aspiratore, 36051-00067…)' : cat.f === 'propac' ? 'Cerca: nome o codice (es. scatola, nastro adesivo, pluriball, BOY202020…)' : cat.f === 'kerakoll' ? 'Cerca: nome o tipo (es. H40, Fugabella, Aquastop, Keralevel, rasante…)' : cat.mag ? 'Cerca: descrizione, codice interno, codice fornitore o codice a barre' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : cat.f === 'portwest' ? 'Cerca: nome o codice (es. S775, softshell, gilet HV…)' : cat.f === 'activegear' ? 'Cerca: nome o codice (es. FLEX F3140, A-One, cuffie…)' : cat.f === 'promit' ? 'Cerca: nome o codice (es. shopper, borraccia, penna, PM322…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'ffg' ? 'Cerca: nome, codice o modello (es. CDD 12V, livella, smerigliatrice…)' : cat.f === 'benman' ? 'Cerca: nome o codice (es. punta SDS, rullo, chiave combinata…)' : cat.f === 'hugo' ? 'Cerca: nome o codice (es. lucchetto, cilindro, GTS…)' : cat.f === 'sola' ? 'Cerca: nome o modello (es. RED 3, livella, flessometro…)' : cat.f === 'maxilia' ? 'Cerca: nome o codice (es. borraccia, penna, shopper…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'lavor' ? 'Cerca: nome o codice (es. idropulitrice, Predator, aspiratore, 36051-00067…)' : cat.f === 'propac' ? 'Cerca: nome o codice (es. scatola, nastro adesivo, pluriball, BOY202020…)' : cat.f === 'kerakoll' ? 'Cerca: nome o tipo (es. H40, Fugabella, Aquastop, Keralevel, rasante…)' : cat.mag ? 'Cerca: descrizione, codice interno, codice fornitore o codice a barre' : cat.srvc ? 'Cerca un servizio' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : cat.f === 'portwest' ? 'Cerca: nome o codice (es. S775, softshell, gilet HV…)' : cat.f === 'activegear' ? 'Cerca: nome o codice (es. FLEX F3140, A-One, cuffie…)' : cat.f === 'promit' ? 'Cerca: nome o codice (es. shopper, borraccia, penna, PM322…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
       <div class="pv-sh"><h3>Categorie</h3></div>
       <div class="pv-cats">${G.map(card).join('')}</div>`;
@@ -4014,7 +4017,7 @@
           </div>
           ${pvCli ? '' : (() => { const C = pvCliOf(p); return `<div class="pv-cliric">${C ? `<label class="pv-rf"><span>Ricarico per ${esc(C.nome)}</span><span class="pv-ri"><input data-pvric="${esc(C.id)}" inputmode="decimal" value="${pvRicOk(C.ric) ? esc(fmtIn(C.ric)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label><small>${pvRicOk(C.ric) ? `Prezzo al pubblico = prezzo d'acquisto + ${esc(fmtNum(num(C.ric), 1).replace(/,0$/, ''))}%. Vale per le righe con prezzo d'acquisto; le altre usano il listino. I prezzi scritti a mano restano.` : `Vuoto = ricarico standard (+${esc(fmtNum((pvRic() - 1) * 100, 0))}%). Scrivi una percentuale per usare un ricarico solo per questo cliente.`}</small>` : `<small>Scrivi il nome del cliente: si salva da solo nella sezione <b>Clienti</b>, dove puoi dargli un ricarico personale.</small>`}</div>`; })()}
         </div>
-        <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><div class="pv-addb"><button type="button" class="btn sm" id="pv-scan" title="Aggiungi prodotti leggendo il codice a barre">${SCAN_IC}<span>Scansiona</span></button><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div></div>
+        <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><div class="pv-addb"><button type="button" class="btn sm" id="pv-srv" title="Aggiungi un servizio (manodopera, trasporto…)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>+ Servizio</span></button><button type="button" class="btn sm" id="pv-scan" title="Aggiungi prodotti leggendo il codice a barre">${SCAN_IC}<span>Scansiona</span></button><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th class="dr-th"></th><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
             ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td class="dr-c">${DRAG_H}</td><td class="pv-c-n"><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc((l.cn ? l.cn + ' · ' : '') + (l.c || l.it)) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td class="pv-c-sz"><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num pv-c-q" data-l="Pezzi">${fmtNum(pvLineQ(l), 0)}</td><td class="num pv-c-p" data-l="Prezzo cad. €"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}">${pvCli ? '' : `<small class="pv-lacq" data-pvla="${i}"></small>`}</td><td class="num pv-c-sc" data-l="Sconto %"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt pv-c-t" data-l="Totale riga" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td class="pv-c-lg"><span class="muted small">—</span></td>' : `<td class="pv-c-lg" data-l="Logo"><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvlrepl="${i}" title="Sostituisci con un altro prodotto"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></button><button type="button" class="pv-lb" data-pvsch="${esc(l.sup || 'payper')}|${esc(l.it)}" title="Scheda tecnica PDF"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></button><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
@@ -7749,6 +7752,186 @@
     if (!inp) return;
     scanOpen({ title: 'Scansiona il codice a barre', onCode: c => { inp.value = c; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); return { ok: true, msg: c }; } });
   }
+  /* =========================================================
+     v113 · SERVIZI (righe preimpostate) e SCELTA PRODOTTI per tutti i documenti
+     ========================================================= */
+  const SRV = () => { const c = cfg('servizi'); return Array.isArray(c) ? c : []; };
+  const SRV_UM = ['H', 'PZ', 'FORF', 'KM', 'GG', 'MQ', 'ML', 'MC', 'KG', 'LT'];
+  const srvNext = () => 'SRV-' + String(SRV().reduce((m, s) => { const x = /^SRV-(\d+)$/i.exec(s.cod || ''); return Math.max(m, x ? +x[1] : 0); }, 0) + 1).padStart(3, '0');
+  // finestra sopra tutto (anche sopra un modulo aperto): risolve con i dati del form, o null se annullata
+  function modal(title, html, okLabel = 'Salva', extra) {
+    return new Promise(res => {
+      const ov = document.createElement('div'); ov.className = 'md';
+      ov.innerHTML = `<form class="md-box" novalidate><div class="md-h"><b>${esc(title)}</b><button type="button" class="md-x" data-md="x" aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="md-b">${html}</div><div class="md-f">${extra || ''}<span></span><button type="button" class="btn" data-md="x">Annulla</button><button type="submit" class="btn primary">${esc(okLabel)}</button></div></form>`;
+      document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add('in'));
+      const f = $('form', ov), done = v => { ov.classList.remove('in'); document.removeEventListener('keydown', key, true); setTimeout(() => ov.remove(), 220); res(v); };
+      const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } };
+      document.addEventListener('keydown', key, true);
+      ov.addEventListener('click', e => { const b = e.target.closest('[data-md]'); if (b) { e.preventDefault(); if (b.dataset.md === 'x') done(null); else done({ action: b.dataset.md, fd: new FormData(f) }); } else if (e.target === ov) done(null); });
+      f.addEventListener('submit', e => { e.preventDefault(); done({ action: 'ok', fd: new FormData(f) }); });
+      const fi = $('[data-focus]', ov); if (fi) setTimeout(() => fi.focus(), 60);
+    });
+  }
+  async function srvForm(s0) {
+    const n = !s0, s = s0 ? { ...s0 } : { id: uid(), cod: srvNext(), d: '', um: 'H', p: '', costo: '', iva: 22, note: '' };
+    const r = await modal(n ? 'Nuovo servizio' : 'Modifica servizio', `<p class="muted small" style="margin:0 0 12px">Una riga pronta da mettere in DDT, fatture e preventivi: manodopera, trasporto, montaggio, sopralluogo…</p>
+      <label class="f"><span>Descrizione</span><input name="d" required data-focus value="${esc(s.d)}" placeholder="Es. Manodopera tecnico specializzato"></label>
+      <div class="f-row f3"><label class="f"><span>Codice</span><input name="cod" value="${esc(s.cod || '')}"></label><label class="f"><span>Unità</span><select name="um">${[...new Set([...SRV_UM, s.um || 'H'])].map(u => `<option${u === s.um ? ' selected' : ''}>${u}</option>`).join('')}</select></label><label class="f"><span>IVA</span><select name="iva">${IVE.map(v => `<option value="${v}"${num(s.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select></label></div>
+      <div class="f-row"><label class="f"><span>Prezzo al cliente € (IVA esclusa)</span><input name="p" inputmode="decimal" value="${esc(s.p === '' || s.p == null ? '' : fmtIn(s.p))}"></label><label class="f"><span>Costo per te € (facoltativo)</span><input name="costo" inputmode="decimal" value="${esc(s.costo === '' || s.costo == null ? '' : fmtIn(s.costo))}" placeholder="per vedere il margine"></label></div>
+      <label class="f"><span>Note (compaiono nella descrizione)</span><input name="note" value="${esc(s.note || '')}" placeholder="facoltativo"></label>`, n ? 'Aggiungi servizio' : 'Salva', n ? '' : '<button type="button" class="btn ghost st-btn-d" data-md="del">Elimina</button>');
+    if (!r) return null;
+    const L = SRV().map(x => ({ ...x }));
+    if (r.action === 'del') { if (!confirm(`Eliminare «${s.d}»? I documenti già fatti restano.`)) return null; setConfig('servizi', L.filter(x => x.id !== s.id)); toast('Servizio eliminato'); return null; }
+    const fd = r.fd, o = { ...s, d: String(fd.get('d') || '').trim(), cod: String(fd.get('cod') || '').trim() || srvNext(), um: String(fd.get('um') || 'H'), iva: num(fd.get('iva')), note: String(fd.get('note') || '').trim() };
+    const pv = String(fd.get('p') || '').trim(), cv = String(fd.get('costo') || '').trim(); o.p = pv === '' ? '' : num(pv); o.costo = cv === '' ? '' : num(cv);
+    if (o.d.length < 2) { toast('Scrivi la descrizione del servizio'); return srvForm(o.id && !n ? o : null); }
+    const i = L.findIndex(x => x.id === o.id); if (i >= 0) L[i] = o; else L.push(o);
+    L.sort((a, b) => String(a.d).localeCompare(String(b.d), 'it'));
+    setConfig('servizi', L); toast(n ? 'Servizio aggiunto' : 'Servizio aggiornato'); return o;
+  }
+  function renderSrvSet() {
+    const el = $('#s-srv'); if (!el) return;
+    const L = SRV();
+    el.innerHTML = `<div class="st-ch"><h3>Servizi e lavorazioni</h3><button type="button" class="btn sm primary" data-gx="srv-new">+ Servizio</button></div>
+      ${L.length ? L.map(s => `<button type="button" class="st-row srv-row" data-gx="srv-edit" data-id="${esc(s.id)}"><div class="st-l"><b>${esc(s.d)}</b><small>${esc([s.cod, s.um, s.note].filter(Boolean).join(' · '))}</small></div><span class="srv-p">${s.p === '' || s.p == null ? 'prezzo da scrivere' : eur(num(s.p)) + ' / ' + esc(String(s.um || '').toLowerCase())}</span></button>`).join('')
+      : '<div class="st-row"><div class="st-l"><b>Nessun servizio</b><small>Aggiungi le righe che usi spesso (manodopera, trasporto, montaggio…): le ritrovi con «+ Servizio» in DDT, fatture e preventivi.</small></div></div>'}`;
+  }
+  function pvSrvCat() {
+    const items = SRV().map(s => {
+      const it = { id: s.id, n: s.d, cl: 'Servizi', g: 'srv', sc: s.note || '', sz: ['Pz'], c: [[s.cod || s.id, '', num(s.p) || null, [0], '']], uv: 1, peso: null, dim: [null, null, null], mod: '', sp: [['Codice', s.cod], ['Unità', s.um]].filter(x => x[1]), url: '', um: s.um || 'H', d: s.note || '', code: s.cod || '', srv: 1, iva: s.iva };
+      it.k = amNorm(`${it.n} ${s.cod || ''} ${s.note || ''} servizio`);
+      pvListSup[it.id] = 'srv'; delete pvListPub[it.id];
+      if (num(s.costo)) pvListRaw[it.id] = num(s.costo); else delete pvListRaw[it.id];
+      if (s.p !== '' && s.p != null) pvListPub[it.id] = num(s.p);
+      return it;
+    });
+    return { f: 'srv', nome: 'Servizi', v: '', file: '', tool: true, srvc: true, acqList: true, groups: [{ k: 'srv', t: 'Servizi', s: 'righe preimpostate' }], n: items.length, items };
+  }
+  // ricarico personale del cliente (lo stesso dei Preventivi, Config «pvClienti»)
+  const cliRic = nome => { const C = nome && pvCliFind(pvCliList(), nome); return C && pvRicOk(C.ric) ? num(C.ric) : null; };
+  function cliRicSet(nome, v) {
+    nome = String(nome || '').trim(); if (!nome) return;
+    const L = pvCliList(); let c = pvCliFind(L, nome);
+    if (!c) { c = { id: uid(), nome, ref: '', email: '', tel: '', ind: '', ric: null, note: '', dal: today() }; L.push(c); L.sort((a, b) => a.nome.localeCompare(b.nome, 'it')); }
+    c.ric = v === '' || v == null ? null : num(v);
+    setConfig('pvClienti', L);
+  }
+  const docPrice = (cliName, itId, col) => pvPubFor({ cliente: { nome: cliName || '' } }, itId, col);
+  const docItemOf = l => { const cat = l && l.sup && pvCats[l.sup]; return cat ? cat.items.find(x => x.id === l.it) || null : null; };
+  const docAcq = l => { if (l.sup && pvCats[l.sup]) { const a = pvAcq(l.it, l.vc); if (a != null) return a; } return l.acq === '' || l.acq == null ? null : num(l.acq); };
+  // carica i cataloghi usati dalle righe (per foto, prezzi d'acquisto e schede)
+  const docLoadCats = R => Promise.all([...new Set(R.map(l => l.sup).filter(s => s && PV_SUP[s]))].map(s => pvLoad(s).catch(() => null)));
+  // dalla scelta (catalogo, versione, taglia, quantità) alla riga del documento
+  function docLineFrom(sel, cliName) {
+    const { sup, it, c, size, q } = sel, a = sup === 'mag' ? artOf(it.id) : null, s = sup === 'srv' ? SRV().find(x => x.id === it.id) : null;
+    const d = [it.n, c[1] && !/^taglia/i.test(c[1]) ? c[1] : '', size && size !== 'Pz' ? 'tg ' + size : '', s && s.note ? s.note : ''].filter(Boolean).join(' · ');
+    const acq = pvAcq(it.id, c[0]);
+    return { art: a ? a.id : '', sup, it: it.id, vc: c[0], c: a ? a.codice || '' : s ? s.cod || '' : String(c[0] || pvCode(it)), d, um: a ? a.um || 'PZ' : s ? s.um || 'H' : it.um && it.um !== 'PZ' ? it.um : 'PZ', q: q || 1, p: docPrice(cliName, it.id, c[0]) ?? '', sc: '', iva: a ? (a.iva === '' || a.iva == null ? 22 : num(a.iva)) : s ? num(s.iva) : 22, acq: acq == null ? '' : acq, ...(s ? { srv: 1 } : {}) };
+  }
+  /* ---------- finestra «Aggiungi prodotti»: servizi, magazzino e tutti i cataloghi, con foto, versioni e taglie ---------- */
+  let pkSrc = 'all';
+  function pickOpen(o = {}) {
+    const cli = o.cli || '';
+    let src = o.src || pkSrc, q = '', sel = null, added = 0, loading = false;
+    const ov = document.createElement('div'); ov.className = 'pk';
+    ov.innerHTML = `<div class="pk-box" role="dialog" aria-modal="true" aria-label="${esc(o.title || 'Aggiungi prodotti')}">
+      <div class="pk-h"><b>${esc(o.title || 'Aggiungi prodotti')}</b>${cli ? `<span class="pk-cli">prezzi per ${esc(cli)}${cliRic(cli) != null ? ' · ricarico +' + esc(fmtNum(cliRic(cli), 1).replace(/,0$/, '')) + '%' : ''}</span>` : ''}<span class="pk-sp"></span><button type="button" class="md-x" data-pk="x" aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="pk-s"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Cerca nome, codice o tipo…" autocomplete="off"><button type="button" class="scan-ib" data-pk="scan" title="Scansiona" aria-label="Scansiona">${SCAN_IC}</button></label></div>
+      <div class="pk-src"></div>
+      <div class="pk-list"></div>
+      <div class="pk-f"><span class="pk-msg" aria-live="polite"></span><button type="button" class="btn sm" data-pk="newsrv">+ Nuovo servizio</button><button type="button" class="btn primary" data-pk="x">Fatto <em class="pk-n">0</em></button></div></div>`;
+    document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add('in'));
+    const inp = $('.pk-s input', ov), list = $('.pk-list', ov), srcEl = $('.pk-src', ov), msg = $('.pk-msg', ov);
+    const close = () => { ov.classList.remove('in'); document.removeEventListener('keydown', key, true); setTimeout(() => ov.remove(), 220); if (o.onClose) o.onClose(added); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); if (sel) { sel = null; draw(); } else close(); } };
+    document.addEventListener('keydown', key, true);
+    const sups = () => pvGSups();
+    const say = t => { msg.textContent = t; msg.classList.remove('pop'); void msg.offsetWidth; msg.classList.add('pop'); };
+    const priceTxt = (it, c) => { const p = docPrice(cli, it.id, c[0]), a = pvAcq(it.id, c[0]); return `${p != null ? `<b>${eur(p)}</b>` : '<b class="muted">prezzo da scrivere</b>'}${!pvCli && a != null ? `<small>acquisto ${eur(a)}</small>` : ''}`; };
+    const drawSrc = () => {
+      const S = [['all', 'Tutto'], ...(SRV().length ? [['srv', 'Servizi']] : [['srv', 'Servizi']]), ...(pvMagOk() ? [['mag', 'Magazzino']] : []), ...sups().filter(s => s !== 'mag' && s !== 'srv').map(s => [s, PV_SUP[s].n])];
+      srcEl.innerHTML = S.map(([k, t]) => `<button type="button" class="pk-c${k === src ? ' on' : ''}" data-pksrc="${k}">${['all', 'srv', 'mag'].includes(k) ? esc(t) : `<img src="logo-${k}.svg" alt="${esc(t)}" title="${esc(t)}">`}</button>`).join('');
+    };
+    const match = (it, toks) => toks.every(t => it.k.includes(t));
+    async function results() {
+      const toks = amNorm(q).split(/\s+/).filter(Boolean);
+      const S = src === 'all' ? sups() : [src];
+      const need = S.filter(s => !pvCats[s] || s === 'mag' || s === 'srv');
+      if (src === 'all' && !toks.length) {
+        // senza ricerca: servizi e magazzino; i cataloghi si cercano scrivendo
+        const L = [];
+        for (const s of ['srv', 'mag']) { if (!sups().includes(s) && s !== 'srv') continue; const cat = s === 'srv' ? (pvCats.srv = pvSrvCat()) : await pvLoad(s); if (cat) cat.items.slice(0, 40).forEach(it => L.push([s, it])); }
+        return { L, hint: 'Scrivi per cercare anche nei cataloghi di tutti i fornitori' };
+      }
+      if (need.some(s => !pvCats[s] && s !== 'srv')) { loading = true; drawList({ L: [], hint: 'Carico i cataloghi…' }); }
+      await Promise.all(need.map(s => s === 'srv' ? (pvCats.srv = pvSrvCat()) : pvLoad(s).catch(() => null)));
+      loading = false;
+      const L = [];
+      for (const s of S) { const cat = pvCats[s]; if (!cat) continue; for (const it of cat.items) { if (!it.c || !it.c.length) continue; if (!toks.length || match(it, toks)) { L.push([s, it]); if (L.length >= 80) break; } } if (L.length >= 80) break; }
+      return { L, hint: L.length ? '' : toks.length ? 'Nessun prodotto trovato' : src === 'srv' ? 'Nessun servizio: crealo con «+ Nuovo servizio»' : 'Catalogo vuoto' };
+    }
+    function drawList(r) {
+      list.innerHTML = (r.L.map(([s, it]) => { const cat = pvCats[s], one = it.c.length === 1 && it.sz.length <= 1; return `<div class="pk-r" data-pkit="${esc(s + '|' + it.id)}">${s === 'srv' ? `<span class="pv-img sm pk-si">${DOC_IC}</span>` : pvThumb(cat, it, pvCover(it), 'sm')}<span class="pk-t"><b>${esc(it.n)}</b><small>${esc([s === 'mag' ? 'Magazzino' : s === 'srv' ? 'Servizio' : PV_SUP[s].n, pvCode(it), it.c.length > 1 ? it.c.length + ' versioni' : '', it.sz.length > 1 ? it.sz.length + ' taglie' : ''].filter(Boolean).join(' · '))}</small></span><span class="pk-p">${priceTxt(it, pvCover(it))}</span><button type="button" class="pk-add" data-pkadd="${esc(s + '|' + it.id)}" aria-label="${one ? 'Aggiungi' : 'Scegli versione e quantità'}">${one ? '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>'}</button></div>`; }).join('') || '') + (r.hint ? `<div class="pk-hint">${esc(r.hint)}</div>` : '');
+      pvFillImgs();
+    }
+    function drawSel() {
+      const { s, it } = sel, cat = pvCats[s], tq = sel.q;
+      const cols = it.sz, multi = cols.length > 1;
+      list.innerHTML = `<div class="pk-d"><button type="button" class="btn sm" data-pk="back">‹ Risultati</button>
+        <div class="pk-dh">${pvThumb(cat, it, pvCover(it), 'big')}<div><small>${esc([s === 'mag' ? 'Magazzino' : s === 'srv' ? 'Servizio' : PV_SUP[s].n, pvCode(it), it.cl].filter(Boolean).join(' · '))}</small><h3>${esc(it.n)}</h3>${it.sc ? `<p class="muted small">${esc(it.sc)}</p>` : ''}</div></div>
+        <div class="pk-tw"><table class="pk-g"><thead><tr><th>Versione</th>${multi ? cols.map(z => `<th>${esc(z)}</th>`).join('') : '<th>Quantità</th>'}<th class="r">Prezzo</th></tr></thead><tbody>
+        ${it.c.map(c => `<tr><td><b>${esc(c[1] || c[0])}</b><small>cod. ${esc(c[0])}</small></td>${(multi ? cols : [cols[0] || 'Pz']).map(z => `<td><input class="pk-q" inputmode="decimal" data-pkq="${esc(c[0] + '|' + z)}" value="${tq[c[0] + '|' + z] || ''}" placeholder="0" aria-label="Quantità ${esc((c[1] || c[0]) + ' ' + z)}"></td>`).join('')}<td class="r">${priceTxt(it, c)}</td></tr>`).join('')}
+        </tbody></table></div>
+        <div class="pk-da"><button type="button" class="btn primary" data-pk="addsel">Aggiungi</button></div></div>`;
+      pvFillImgs();
+      const f = $('.pk-q', list); if (f && matchMedia('(min-width: 640px)').matches) f.focus();
+    }
+    let seq = 0;
+    async function draw() { drawSrc(); if (sel) return drawSel(); const my = ++seq; const r = await results(); if (my === seq && !sel) drawList(r); }
+    const give = arr => { if (!arr.length) return; o.onAdd(arr); added += arr.length; const n = $('.pk-n', ov); n.textContent = added; n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); say(`✓ ${arr.length === 1 ? arr[0].it.n : arr.length + ' righe aggiunte'}`); };
+    const itOf = v => { const k = v.indexOf('|'), s = v.slice(0, k), cat = pvCats[s]; return cat ? { s, it: cat.items.find(x => x.id === v.slice(k + 1)) } : null; };
+    ov.addEventListener('click', async e => {
+      const t = e.target;
+      const b = t.closest('[data-pk]');
+      if (b) {
+        const k = b.dataset.pk;
+        if (k === 'x') return close();
+        if (k === 'back') { sel = null; return draw(); }
+        if (k === 'scan') return scanOpen({ title: o.title || 'Aggiungi', multi: true, onCode: async code => { const r = await pvScanFind(code); if (!r) return { ok: false, msg: `Codice ${code} non trovato` }; give([{ sup: r.sup, it: r.it, c: r.c, size: r.it.sz[0], q: 1 }]); return { ok: true, msg: r.it.n }; } });
+        if (k === 'newsrv') { const s = await srvForm(null); if (s) { src = 'srv'; sel = null; setTimeout(draw, 60); } return; }
+        if (k === 'addsel') {
+          const arr = []; $$('[data-pkq]', list).forEach(i => { const v = num(i.value); if (v > 0) { const [cc, z] = i.dataset.pkq.split('|'); arr.push({ sup: sel.s, it: sel.it, c: sel.it.c.find(x => x[0] === cc), size: z, q: v }); } });
+          if (!arr.length) return say('Scrivi almeno una quantità');
+          give(arr); sel = null; return draw();
+        }
+      }
+      const sc = t.closest('[data-pksrc]'); if (sc) { src = pkSrc = sc.dataset.pksrc; sel = null; return draw(); }
+      const ad = t.closest('[data-pkadd]') || t.closest('[data-pkit]');
+      if (ad) {
+        const x = itOf(ad.dataset.pkadd || ad.dataset.pkit); if (!x || !x.it) return;
+        if (ad.dataset.pkadd && x.it.c.length === 1 && x.it.sz.length <= 1) return give([{ sup: x.s, it: x.it, c: x.it.c[0], size: x.it.sz[0], q: 1 }]);
+        sel = { s: x.s, it: x.it, q: {} }; drawSel();
+      }
+    });
+    list.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.pk-q')) { e.preventDefault(); $('[data-pk="addsel"]', list).click(); } });
+    inp.addEventListener('input', () => { q = inp.value; sel = null; clearTimeout(inp._t); inp._t = setTimeout(draw, 180); });
+    if (matchMedia('(min-width: 640px)').matches) setTimeout(() => inp.focus(), 80);
+    draw();
+  }
+  // PDF di DDT e fatture: chiede foto e schede tecniche come per i preventivi
+  async function docPdfAsk(kind, d) {
+    const R = jp(d.righe, []).filter(l => !l.h);
+    const hasCat = R.some(l => l.sup && l.sup !== 'srv');
+    if (!hasCat) return docPdf(kind, d, {});
+    let o = { foto: true, scheda: false }; try { o = { ...o, ...JSON.parse(localStorage.getItem('cdc_docpdf') || '{}') }; } catch {}
+    const n = new Set(R.filter(l => l.sup && l.sup !== 'srv').map(l => l.sup + '|' + l.it)).size;
+    const r = await modal(`PDF ${kind === 'ddt' ? 'del DDT' : 'della fattura'} n. ${dnum(d)}`, `<p class="muted small" style="margin:0 0 14px">Scegli cosa mettere nel PDF. Costi d'acquisto e margine non compaiono mai.</p>
+      <div class="pv-opts"><label class="rp-o"><input type="checkbox" name="foto"${o.foto ? ' checked' : ''}><span><b>Foto dei prodotti</b><small>accanto a ogni riga la foto del prodotto</small></span></label>
+      <label class="rp-o"><input type="checkbox" name="scheda"${o.scheda ? ' checked' : ''}><span><b>Scheda tecnica di ogni prodotto</b><small>in fondo, una pagina per ognuno dei ${n} prodotti: foto, descrizione e caratteristiche</small></span></label></div>`, 'Scarica PDF');
+    if (!r) return;
+    const opt = { foto: !!r.fd.get('foto'), scheda: !!r.fd.get('scheda') }; try { localStorage.setItem('cdc_docpdf', JSON.stringify(opt)); } catch {}
+    docPdf(kind, d, opt);
+  }
   // dalla lista del magazzino: apre l'articolo letto, o ne crea uno nuovo con quel codice a barre
   function magScan() {
     let found = null, code = '';
@@ -8063,8 +8246,9 @@
         <label class="f"><span>Luogo di destinazione</span><input name="destinazione" value="${esc(d.destinazione || '')}" placeholder="Se diverso dalla sede del cliente"></label>
         <label class="gx-chk"><input type="checkbox" name="prezzi"${d.prezzi ? ' checked' : ''}> Mostra i prezzi nel PDF del DDT</label>`
         : `<div class="f-row"><label class="f"><span>Pagamento</span><select name="pagamento"><option value="">Come da cliente</option>${PAG.map(p => `<option${p === d.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label><div class="f"><span>Tipo</span><div class="gx-ro">${d.tipo === 'TD24' ? 'Fattura differita (TD24) dai DDT' : 'Fattura immediata (TD01)'}</div></div></div>`}
+      <div class="dx-ric" id="dx-ric"></div>
       <div class="dx"><div class="dx-h"><span>Articolo / descrizione</span><span>UM</span><span>Q.tà</span><span>Prezzo €</span><span>Sc.%</span><span>IVA</span><span>Totale</span><span></span></div><div id="dx-rows"></div>
-        ${lock || lockF ? '' : `<div class="dx-adds"><button type="button" class="btn sm" data-dx="add">+ Riga</button><button type="button" class="btn sm" data-dx="scan">${SCAN_IC}Scansiona</button></div>`}<div class="dx-tot" id="dx-tot"></div></div>
+        ${lock || lockF ? '' : `<div class="dx-adds"><button type="button" class="btn sm primary" data-dx="pick"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Prodotto</button><button type="button" class="btn sm" data-dx="srv"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>Servizio</button><button type="button" class="btn sm" data-dx="add">+ Riga libera</button><button type="button" class="btn sm" data-dx="scan">${SCAN_IC}Scansiona</button></div>`}<div class="dx-tot" id="dx-tot"></div></div>
       <datalist id="dx-arts">${A.map(a => `<option value="${esc((a.codice ? a.codice + ' — ' : '') + a.descrizione)}">`).join('')}</datalist>
       <label class="f"><span>Note</span><textarea name="note" rows="2">${esc(d.note || '')}</textarea></label>
       ${n ? '' : `<div class="gx-docact"><button type="button" class="btn sm" data-gx="${isD ? 'ddt' : 'fv'}-pdf" data-id="${esc(d.id)}">Scarica PDF</button>${isD ? '' : `<button type="button" class="btn sm" data-gx="fv-xml" data-id="${esc(d.id)}">File XML</button><button type="button" class="btn sm" data-gx="fv-paid" data-id="${esc(d.id)}">${d.stato === 'pagata' ? 'Segna da incassare' : 'Segna pagata'}</button>`}${isD ? `<button type="button" class="btn sm ghost" data-gx="ddt-copy" data-id="${esc(d.id)}">Duplica</button>` : ''}</div>`}`,
@@ -8096,27 +8280,44 @@
     $('#sheet-form').classList.add('xwide');
     const box = $('#dx-rows'), ro = lock || lockF;
     const draw = () => {
-      box.innerHTML = R.map((l, i) => `<div class="dx-r" data-i="${i}"><input data-k="d" list="dx-arts" value="${esc(l.c && l.art ? l.c + ' — ' + l.d : l.d || '')}" placeholder="Cerca un articolo o scrivi la descrizione"${ro ? ' disabled' : ''}>
+      box.innerHTML = R.map((l, i) => `<div class="dx-r${l.sup ? ' has-src' : ''}" data-i="${i}"><span class="dx-dw">${l.sup && l.sup !== 'srv' && docItemOf(l) ? pvLineThumb({ sup: l.sup, it: l.it, c: l.vc, cn: '' }) : l.srv ? `<span class="pv-img sm pk-si">${DOC_IC}</span>` : ''}<input data-k="d" list="dx-arts" value="${esc(l.c && (l.art || l.sup) ? l.c + ' — ' + l.d : l.d || '')}" placeholder="Cerca un articolo o scrivi la descrizione"${ro ? ' disabled' : ''}></span>
         <select data-k="um"${ro ? ' disabled' : ''}>${[...new Set([...UM, l.um || 'PZ'])].map(u => `<option${u === (l.um || 'PZ') ? ' selected' : ''}>${u}</option>`).join('')}</select>
         <input data-k="q" type="number" step="any" inputmode="decimal" value="${esc(l.q ?? '')}"${ro ? ' disabled' : ''}><input data-k="p" type="number" step="any" inputmode="decimal" value="${esc(l.p ?? '')}" placeholder="0,00"${ro ? ' disabled' : ''}><input data-k="sc" type="number" step="any" min="0" max="100" inputmode="decimal" value="${esc(l.sc || '')}" placeholder="0"${ro ? ' disabled' : ''}>
-        <select data-k="iva"${ro ? ' disabled' : ''}>${IVE.map(v => `<option value="${v}"${num(l.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select><b class="dx-t">${eur(lnTot(l))}</b>${ro ? '<span></span>' : `<button type="button" class="dx-x" data-dx="del" aria-label="Togli riga">✕</button>`}${l.art && artOf(l.art) && modOn('magazzino') ? `<small class="dx-g">in magazzino: ${fmtNum(giacMap().get(l.art) || 0, 0)} ${esc(artOf(l.art).um || '')}</small>` : ''}</div>`).join('');
+        <select data-k="iva"${ro ? ' disabled' : ''}>${IVE.map(v => `<option value="${v}"${num(l.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select><b class="dx-t">${eur(lnTot(l))}</b>${ro ? '<span></span>' : `<button type="button" class="dx-x" data-dx="del" aria-label="Togli riga">✕</button>`}${dxInfo(l)}</div>`).join('');
       tot();
     };
-    const tot = () => { const T = docTot(R); $('#dx-tot').innerHTML = `${Object.entries(T.by).map(([a, x]) => `<span>Imponibile ${a}% <b>${eur(x.imp)}</b></span><span>IVA ${a}% <b>${eur(x.iva)}</b></span>`).join('')}<span class="dx-big">Totale <b>${eur(T.tot)}</b></span>`; $$('.dx-r', box).forEach(r => { const l = R[+r.dataset.i]; if (l) r.querySelector('.dx-t').textContent = eur(lnTot(l)); }); };
-    box.addEventListener('input', e => { const r = e.target.closest('.dx-r'), k = e.target.dataset.k; if (!r || !k) return; const l = R[+r.dataset.i]; l[k] = e.target.value; if (k === 'd') { l.art = ''; l.c = ''; } tot(); });
+    // sotto la riga: giacenza, prezzo d'acquisto e margine (solo per te: nascosti nella vista cliente)
+    const dxInfo = l => { const g = l.art && artOf(l.art) && modOn('magazzino') ? `in magazzino: ${fmtNum(giacMap().get(l.art) || 0, 0)} ${esc(artOf(l.art).um || '')}` : '', a = docAcq(l), net = num(l.p) * (1 - num(l.sc) / 100);
+      const m = !pvCli && a != null && a > 0 ? `acquisto ${eur(a)} · <span class="${net > a ? 'dx-mok' : 'dx-mko'}">margine ${net ? fmtNum((net - a) / net * 100, 0) : '—'}%</span>` : '';
+      const src = l.sup && PV_SUP[l.sup] && l.sup !== 'mag' ? (l.sup === 'srv' ? 'servizio' : PV_SUP[l.sup].n) : '';
+      return g || m || src ? `<small class="dx-g">${[src, g, m].filter(Boolean).join(' · ')}</small>` : ''; };
+    const cliName = () => { const c = cliOf(String($('#sheet-form [name=cliente]').value || '')); return c ? c.nome : ''; };
+    const tot = () => { const T = docTot(R); const acqT = R.reduce((s2, l) => { const a = docAcq(l); return a != null && a > 0 ? s2 + a * num(l.q) : s2; }, 0), impA = R.reduce((s2, l) => docAcq(l) != null && docAcq(l) > 0 ? s2 + lnTot(l) : s2, 0);
+      $('#dx-tot').innerHTML = `${!pvCli && acqT > 0 ? `<span class="dx-mg">Margine <b class="${impA > acqT ? 'dx-mok' : 'dx-mko'}">${eur(impA - acqT)} · ${impA ? fmtNum((impA - acqT) / impA * 100, 0) : 0}%</b></span>` : ''}${Object.entries(T.by).map(([a, x]) => `<span>Imponibile ${a}% <b>${eur(x.imp)}</b></span><span>IVA ${a}% <b>${eur(x.iva)}</b></span>`).join('')}<span class="dx-big">Totale <b>${eur(T.tot)}</b></span>`;
+      $$('.dx-r', box).forEach(r => { const l = R[+r.dataset.i]; if (!l) return; r.querySelector('.dx-t').textContent = eur(lnTot(l)); const g = r.querySelector('.dx-g'), h = dxInfo(l); if (g) g.outerHTML = h || ''; else if (h) r.insertAdjacentHTML('beforeend', h); }); };
+    // ricarico del cliente e vista cliente, come nei preventivi
+    const ricDraw = () => { const el = $('#dx-ric'); if (!el) return; const nm = cliName(), rc = cliRic(nm);
+      el.innerHTML = `${nm && !ro ? `<label class="pv-rf"><span>Ricarico per ${esc(nm)}</span><span class="pv-ri"><input data-dxric inputmode="decimal" value="${rc != null ? esc(fmtIn(rc)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label>` : '<span class="muted small">Scegli il cliente: i prezzi dei prodotti usano il suo ricarico personale (lo stesso dei preventivi).</span>'}<button type="button" class="pv-eye dx-eye${pvCli ? ' on' : ''}" data-dx="eye" aria-pressed="${pvCli}"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>${pvCli ? 'Vista cliente' : 'Prezzi d\'acquisto visibili'}</span></button>`; };
+    const reprice = () => { const nm = cliName(); let n2 = 0; R.forEach(l => { if (l.sup && !l.man && pvCats[l.sup]) { const v = docPrice(nm, l.it, l.vc); if (v != null && v !== num(l.p)) { l.p = v; n2++; } } }); return n2; };
+    const addSel = arr => { const nm = cliName(); arr.forEach(x => { const nl = docLineFrom(x, nm), ex = R.find(l => l.sup === nl.sup && l.it === nl.it && l.vc === nl.vc && l.d === nl.d); if (ex) ex.q = num(ex.q) + num(nl.q); else { const b0 = R.findIndex(l => !l.art && !l.sup && !String(l.d || '').trim()); if (b0 >= 0) R[b0] = nl; else R.push(nl); } }); draw(); };
+    box.addEventListener('input', e => { const r = e.target.closest('.dx-r'), k = e.target.dataset.k; if (!r || !k) return; const l = R[+r.dataset.i]; l[k] = e.target.value; if (k === 'd') { l.art = ''; l.c = ''; delete l.sup; delete l.it; delete l.vc; delete l.srv; l.acq = ''; } if (k === 'p') l.man = 1; tot(); });
+    $('#sheet-form [name=cliente]').addEventListener('change', () => { ricDraw(); const n2 = reprice(); if (n2) { draw(); toast(`Prezzi aggiornati per il cliente (${n2} righe)`); } });
+    $('#dx-ric').addEventListener('change', e => { if (!e.target.matches('[data-dxric]')) return; const v = String(e.target.value || '').trim(); if (v !== '' && (isNaN(num(v)) || num(v) < 0)) return toast('Scrivi un ricarico valido'); cliRicSet(cliName(), v); const n2 = reprice(); draw(); toast(n2 ? `Ricarico salvato · ${n2} prezzi aggiornati` : 'Ricarico salvato'); });
     box.addEventListener('change', e => {
       const r = e.target.closest('.dx-r'); if (!r || e.target.dataset.k !== 'd') return;
       const l = R[+r.dataset.i], v = e.target.value.trim(), a = A.find(x => (x.codice ? x.codice + ' — ' : '') + x.descrizione === v) || (/^\S+$/.test(v) ? artByCode(v) : null);
-      if (a) { Object.assign(l, { art: a.id, c: a.codice || '', d: a.descrizione, um: a.um || 'PZ', p: num(a.prezzo) || l.p, iva: a.iva === '' || a.iva == null ? 22 : num(a.iva) }); const ri = r.dataset.i; setTimeout(() => { draw(); const nx = $(`.dx-r[data-i="${ri}"] [data-k="q"]`); if (nx) nx.select(); }, 0); }
+      if (a) { Object.assign(l, { art: a.id, sup: 'mag', it: a.id, vc: a.codice || a.id, acq: num(a.costo) || '', c: a.codice || '', d: a.descrizione, um: a.um || 'PZ', p: (pvCats.mag || (pvCats.mag = pvMagCat())) && docPrice(cliName(), a.id, a.codice || a.id) || num(a.prezzo) || l.p, iva: a.iva === '' || a.iva == null ? 22 : num(a.iva) }); delete l.man; const ri = r.dataset.i; setTimeout(() => { draw(); const nx = $(`.dx-r[data-i="${ri}"] [data-k="q"]`); if (nx) nx.select(); }, 0); }
       else l.d = v;
     });
     $('#sheet-body').addEventListener('click', function dx(e) {
       const b = e.target.closest('[data-dx]'); if (!b || !$('#dx-rows')) return;
       if (b.dataset.dx === 'add') { R.push({ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: R.length ? R[R.length - 1].iva : 22 }); draw(); const ls = $$('.dx-r [data-k="d"]'); ls[ls.length - 1].focus(); }
+      if (b.dataset.dx === 'eye') { pvCli = !pvCli; try { localStorage.setItem('cdc_pvcli', pvCli ? '1' : '0'); } catch {} ricDraw(); draw(); return; }
+      if (b.dataset.dx === 'pick' || b.dataset.dx === 'srv') { pickOpen({ title: isD ? 'Aggiungi al DDT' : 'Aggiungi alla fattura', src: b.dataset.dx === 'srv' ? 'srv' : undefined, cli: cliName(), onAdd: addSel }); return; }
       if (b.dataset.dx === 'scan') {
         // a ogni lettura: se l'articolo è già nel documento aumenta la quantità, altrimenti aggiunge la riga
         scanOpen({ title: isD ? 'Aggiungi al DDT' : 'Aggiungi alla fattura', hint: 'Inquadra i codici uno dopo l\'altro', multi: true, onCode: c => {
-          const a = artByCode(c); if (!a) return { ok: false, msg: `Codice ${c} non trovato in magazzino` };
+          const a = artByCode(c); if (!a) { return pvScanFind(c).then(r => { if (!r) return { ok: false, msg: `Codice ${c} non trovato` }; addSel([{ sup: r.sup, it: r.it, c: r.c, size: r.it.sz[0], q: 1 }]); return { ok: true, msg: r.it.n }; }); }
           const ex = R.find(l => l.art === a.id);
           if (ex) ex.q = num(ex.q) + 1;
           else { const blank = R.findIndex(l => !l.art && !String(l.d || '').trim()); const row = { art: a.id, c: a.codice || '', d: a.descrizione, um: a.um || 'PZ', q: 1, p: num(a.prezzo) || '', sc: '', iva: a.iva === '' || a.iva == null ? 22 : num(a.iva) }; if (blank >= 0) R[blank] = row; else R.push(row); }
@@ -8125,7 +8326,9 @@
       }
       if (b.dataset.dx === 'del') { R.splice(+b.closest('.dx-r').dataset.i, 1); if (!R.length) R.push({ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: 22 }); draw(); }
     });
-    draw();
+    ricDraw(); draw();
+    // foto e prezzi d'acquisto delle righe che vengono dai cataloghi
+    if (R.some(l => l.sup)) docLoadCats(R).then(() => { if ($('#dx-rows') === box) draw(); });
   }
   function fvDelete(f) {
     const last = GX.fv().filter(x => String(x.anno) === String(f.anno)).every(x => (parseInt(x.numero, 10) || 0) <= (parseInt(f.numero, 10) || 0));
@@ -8165,10 +8368,20 @@
   }
 
   /* ---------- PDF di DDT e fatture ---------- */
-  async function docPdf(kind, d) {
+  async function docPdf(kind, d, opt = {}) {
     const isD = kind === 'ddt';
     try {
       busy('Preparo il PDF…');
+      // v113: foto dei prodotti e schede tecniche (come nei preventivi)
+      const PR = jp(d.righe, []).filter(l => !l.h && l.sup && l.sup !== 'srv' && PV_SUP[l.sup]);
+      const ph = new Map(); let urlOf = () => '';
+      if ((opt.foto || opt.scheda) && PR.length) {
+        for (const s of new Set(PR.map(l => l.sup))) { try { opt.scheda ? await pvLoadFull(s) : await pvLoad(s); } catch {} }
+        urlOf = l => { const cat = pvCats[l.sup], it = docItemOf(l); if (!cat || !it) return ''; const c = it.c.find(x => x[0] === l.vc) || it.c[0]; return pvImg(cat, c); };
+        const U = [...new Set(PR.map(urlOf).filter(Boolean))];
+        if (U.length) { busy('Scarico le foto dei prodotti…'); const R0 = await pvPhotos(U, 900); U.forEach((u, i) => ph.set(u, R0[i])); busy('Preparo il PDF…'); }
+      }
+      const photoOf = l => l && l.sup ? ph.get(urlOf(l)) || null : null;
       const cl = cliOf(d.cliente) || { nome: '' }, az = { nome: ORG.n, ...(cfg('azienda') || {}) }, ALL = jp(d.righe, []), T = docTot(ALL), showP = !isD || !!d.prezzi;
       const [jsPDF, logo, fonts] = await Promise.all([loadPdf(), logoPng(), loadFonts()]);
       const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
@@ -8203,13 +8416,18 @@
       }
       // righe
       const head = showP ? [['Codice', 'Descrizione', 'UM', 'Q.tà', 'Prezzo', 'Sc.%', 'Importo', 'IVA']] : [['Codice', 'Descrizione', 'UM', 'Q.tà']];
+      const FOTO = !!opt.foto && PR.length > 0; if (FOTO) head[0].unshift('');
       const body = ALL.map(l => l.h ? [{ content: l.d, colSpan: head[0].length, styles: { fontStyle: 'bold', fillColor: [234, 240, 250], textColor: C.navy } }]
-        : showP ? [l.c || '', l.d || '', l.um || '', fmtNum(num(l.q), num(l.q) % 1 ? 2 : 0), money(num(l.p)), num(l.sc) ? fmtNum(num(l.sc), 1) : '', money(lnTot(l)), num(l.iva) + '%'] : [l.c || '', l.d || '', l.um || '', fmtNum(num(l.q), num(l.q) % 1 ? 2 : 0)]);
+        : (FOTO ? [''] : []).concat(showP ? [l.c || '', l.d || '', l.um || '', fmtNum(num(l.q), num(l.q) % 1 ? 2 : 0), money(num(l.p)), num(l.sc) ? fmtNum(num(l.sc), 1) : '', money(lnTot(l)), num(l.iva) + '%'] : [l.c || '', l.d || '', l.um || '', fmtNum(num(l.q), num(l.q) % 1 ? 2 : 0)]));
+      const cs0 = showP ? { 0: { cellWidth: 22 }, 2: { cellWidth: 11 }, 3: { cellWidth: 14, halign: 'right' }, 4: { cellWidth: 20, halign: 'right' }, 5: { cellWidth: 12, halign: 'right' }, 6: { cellWidth: 23, halign: 'right' }, 7: { cellWidth: 12, halign: 'right' } } : { 0: { cellWidth: 30 }, 2: { cellWidth: 16 }, 3: { cellWidth: 22, halign: 'right' } };
+      const o0 = FOTO ? 1 : 0, cs = {}; Object.entries(cs0).forEach(([k, v]) => { cs[+k + o0] = v; }); if (FOTO) cs[0] = { cellWidth: 18, minCellHeight: 17 };
+      const fitImg = (im, x, yy, w, h) => { const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k; doc.addImage(im.d, 'JPEG', x + (w - iw) / 2, yy + (h - ih) / 2, iw, ih, undefined, 'FAST'); };
       doc.autoTable({ startY: y + 2, margin: { left: M, right: M, bottom: 22 }, head, body, theme: 'plain',
         styles: { font: FF, fontSize: 8.4, cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 }, textColor: C.ink, lineColor: C.line, lineWidth: { bottom: .2 } },
         headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.6 },
-        columnStyles: showP ? { 0: { cellWidth: 22 }, 2: { cellWidth: 11 }, 3: { cellWidth: 14, halign: 'right' }, 4: { cellWidth: 20, halign: 'right' }, 5: { cellWidth: 12, halign: 'right' }, 6: { cellWidth: 23, halign: 'right' }, 7: { cellWidth: 12, halign: 'right' } } : { 0: { cellWidth: 30 }, 2: { cellWidth: 16 }, 3: { cellWidth: 22, halign: 'right' } },
-        didParseCell: h => { if (h.section === 'head' && h.column.index >= 3) h.cell.styles.halign = 'right'; } });
+        columnStyles: cs,
+        didParseCell: h => { if (h.section === 'head' && h.column.index >= 3 + o0) h.cell.styles.halign = 'right'; if (FOTO && h.section === 'body') h.cell.styles.valign = 'middle'; },
+        didDrawCell: h => { if (!FOTO || h.section !== 'body' || h.column.index !== 0) return; const l = ALL[h.row.index]; if (!l || l.h) return; const im = photoOf(l); if (!im) return; fitImg(im, h.cell.x + 1, h.cell.y + 1, h.cell.width - 2, h.cell.height - 2); } });
       y = doc.lastAutoTable.finalY + 6;
       const need = isD ? 42 : 50; if (y + need > H - 22) { doc.addPage(); y = 20; }
       if (showP) {
@@ -8231,6 +8449,28 @@
         y += 22;
       }
       if (d.note) { color(C.muted); font('bold', 7); doc.text('NOTE', M, y + 3); color(C.ink2); font('normal', 8.2); doc.text(doc.splitTextToSize(String(d.note), CW), M, y + 8); }
+      // schede tecniche: una pagina per prodotto
+      if (opt.scheda) [...new Map(PR.map(l => [l.sup + '|' + l.it, l])).values()].forEach(l0 => {
+        const it = docItemOf(l0); if (!it) return;
+        doc.addPage(); let yy = 22;
+        fill(C.navy); doc.rect(0, 0, W, 3, 'F');
+        color(C.blue); font('bold', 8); doc.text('SCHEDA TECNICA', M, 13); color(C.muted); font('normal', 8); doc.text(`${isD ? 'DDT' : 'Fattura'} n. ${dnum(d)}`, W - M, 13, { align: 'right' });
+        const im = photoOf(l0), bw = 66, bh = 80;
+        fill(C.soft); doc.roundedRect(M, yy, bw, bh, 3, 3, 'F');
+        if (im) { fill(C.white); doc.roundedRect(M, yy, bw, bh, 3, 3, 'F'); stroke(C.line); doc.setLineWidth(.25); doc.roundedRect(M, yy, bw, bh, 3, 3, 'S'); fitImg(im, M + 3, yy + 3, bw - 6, bh - 6); }
+        else { color([170, 180, 196]); font('bold', 30); doc.text(String(it.n).split(/\s+/).map(w0 => w0[0]).join('').slice(0, 2), M + bw / 2, yy + bh / 2 + 4, { align: 'center' }); }
+        const rx = M + bw + 8, rw = W - M - rx;
+        color(C.muted); font('bold', 8); doc.text(`${l0.sup === 'mag' ? '' : PV_SUP[l0.sup].n + ' · '}${pvCode(it)}${it.cl ? ' · ' + it.cl : ''}`.slice(0, 80), rx, yy + 5);
+        font('bold', 18); let tl = doc.splitTextToSize(it.n, rw); if (tl.length > 1) { font('bold', 14); tl = doc.splitTextToSize(it.n, rw).slice(0, 2); }
+        color(C.navy); doc.text(tl, rx, yy + 14); const ty0 = yy + 21 + (tl.length - 1) * 6;
+        color(C.ink2); font('normal', 9); const dl = doc.splitTextToSize(String(it.d || it.sc || ''), rw); doc.text(dl.slice(0, 12), rx, ty0);
+        let sy = ty0 + Math.min(dl.length, 12) * 4.1 + 4;
+        const spec = (it.uv != null ? pvSpecTool(it) : [['Composizione', it.comp], ['Grammatura', it.gsm], ['Taglie', (it.sz || []).join(' ')]]).filter(r => r[1] !== '' && r[1] != null && String(r[1]).trim());
+        if (spec.length) { doc.autoTable({ startY: Math.max(sy, yy), margin: { left: rx, right: M }, body: spec.map(r => [String(r[0]), String(r[1])]), theme: 'plain', styles: { font: FF, fontSize: 8.6, textColor: C.ink, cellPadding: { top: 1.8, bottom: 1.8, left: 0, right: 2 }, lineColor: C.line, lineWidth: { bottom: .2 } }, columnStyles: { 0: { textColor: C.muted, cellWidth: 34 } } }); sy = doc.lastAutoTable.finalY; }
+        yy = Math.max(yy + bh, sy) + 10;
+        const q0 = jp(d.righe, []).filter(l => l.sup === l0.sup && l.it === l0.it).reduce((s2, l) => s2 + num(l.q), 0);
+        color(C.navy); font('bold', 11); doc.text(`Quantità in questo documento: ${fmtNum(q0, q0 % 1 ? 2 : 0)} ${l0.um || 'PZ'}`, M, yy);
+      });
       const pages = doc.getNumberOfPages();
       for (let i = 1; i <= pages; i++) { doc.setPage(i); color(C.muted); font('normal', 7); doc.text(isD ? `${az.nome || ''} · DDT n. ${dnum(d)}` : 'Copia di cortesia: il documento fiscale è il file XML trasmesso al Sistema di Interscambio.', M, H - 10); doc.text(`Pagina ${i} di ${pages}`, W - M, H - 10, { align: 'right' }); }
       doc.save(`${isD ? 'DDT' : 'Fattura'}-${d.numero}-${d.anno}-${slug(cl.nome) || 'cliente'}.pdf`);
@@ -8306,6 +8546,8 @@
       if (k === 'art-new') return artForm();
       if (k === 'mov-new') return movForm();
       if (k === 'mag-scan') return magScan();
+      if (k === 'srv-new') return srvForm(null);
+      if (k === 'srv-edit') { const s = SRV().find(x => x.id === id); if (s) srvForm(s); return; }
       if (k === 'fo-tab') { foTab = id; return renderForn(); }
       if (k === 'ar-t') { arT = id; return renderForn(); }
       if (k === 'doc-new') { const pre = id ? { fornitore: id } : {}; if (!$('#sheet').hidden) { closeSheet(); setTimeout(() => docFornForm(null, pre), 280); return; } return docFornForm(null, pre); }
@@ -8319,8 +8561,8 @@
       if (k === 'fv-new') return docForm('fv');
       if (k === 'fm') return fmForm();
       if (k === 'ddt-copy') { const d = GX.ddt().find(x => x.id === id); if (d) docForm('ddt', d, true); return; }
-      if (k === 'ddt-pdf') { const d = GX.ddt().find(x => x.id === id); if (d) docPdf('ddt', d); return; }
-      if (k === 'fv-pdf') { const f = GX.fv().find(x => x.id === id); if (f) docPdf('fv', f); return; }
+      if (k === 'ddt-pdf') { const d = GX.ddt().find(x => x.id === id); if (d) docPdfAsk('ddt', d); return; }
+      if (k === 'fv-pdf') { const f = GX.fv().find(x => x.id === id); if (f) docPdfAsk('fv', f); return; }
       if (k === 'fv-xml') { const f = GX.fv().find(x => x.id === id); if (f) fvXml(f); return; }
       if (k === 'fv-paid') { const f = GX.fv().find(x => x.id === id); if (!f) return; const paid = f.stato !== 'pagata'; write([{ action: 'upsert', sheet: 'Vendite', row: { ...f, stato: paid ? 'pagata' : 'emessa', pagata: paid ? today() : '' } }]); closeSheet(); toast(paid ? 'Fattura segnata come pagata' : 'Fattura di nuovo da incassare'); return; }
       if (k === 'doc-cli') {
@@ -8726,6 +8968,7 @@
       if (t.closest('#pv-save')) { pvQuiet(pvFromForm()); toast('Preventivo salvato'); return; }
       if (pvCliClick(t)) return;
       if (t.closest('#pv-scan')) { pvScan(); return; }
+      if (t.closest('#pv-srv')) { const p0 = pvFromForm(); if (!p0) return; pvQuiet(p0); const id = p0.id; pickOpen({ title: 'Aggiungi al preventivo', src: 'srv', cli: (p0.cliente || {}).nome || '', onAdd: arr => { const p = pvGet(id); if (!p) return; arr.forEach(x => { const cat = pvCats[x.sup], z = x.size || x.it.sz[0], ex = p.righe.find(l => l.sup === x.sup && l.it === x.it.id && l.c === x.c[0]); if (ex) ex.q[z] = num(ex.q[z]) + x.q; else p.righe.push({ sup: x.sup, it: x.it.id, n: x.it.n, cl: x.it.cl, c: x.c[0], cn: x.c[1], sz: x.it.sz, q: { [z]: x.q }, p: pvPubFor(p, x.it.id, x.c[0]), man: false, sc: 0, ...(cat && cat.tool ? { tool: 1 } : {}) }); }); pvSave(p); } }); return; }
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-work')) { pvWorkPdf(); return; }
