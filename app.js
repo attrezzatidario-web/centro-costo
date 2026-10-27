@@ -392,8 +392,6 @@
   function authMsg(err, ok) { const e = $('#login-err'), o = $('#login-ok'); e.hidden = !err; e.textContent = err || ''; o.hidden = !ok; o.textContent = ok || ''; }
   function authPane(p) {
     $$('#setup [data-pane]').forEach(f => { f.hidden = f.dataset.pane !== p; });
-    $$('#setup .auth-tabs [data-auth]').forEach(b => { const on = b.dataset.auth === p; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-    $('#setup .auth-tabs').hidden = p === 'forgot';
     $('#auth-title').textContent = AUTH_TXT[p][0]; $('#auth-sub').textContent = AUTH_TXT[p][1];
     if (p === 'forgot') { $$('#forgot-form [data-step]').forEach(d => { d.hidden = d.dataset.step !== '1'; }); const em = $('#login-email').value; if (em) $('#forgot-form [name=email]').value = em; }
     authMsg();

@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=102">
-  <link rel="stylesheet" href="cdc.css?v=102">
+  <link rel="stylesheet" href="style.css?v=103">
+  <link rel="stylesheet" href="cdc.css?v=103">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -55,23 +55,34 @@
   <!-- Accesso -->
   <section id="setup" class="auth" hidden>
     <aside class="auth-side" aria-hidden="true">
+      <div class="ax-bg"><i class="ax-b1"></i><i class="ax-b2"></i><i class="ax-b3"></i><i class="ax-grid"></i><i class="ax-noise"></i></div>
       <div class="auth-brand"><img src="logo.svg" alt="" width="44" height="44"><div><b>Centro di Costo</b><span>Gestionale aziendale</span></div></div>
       <div class="auth-hero">
-        <h2>Costi, acquisti e preventivi della tua azienda in un unico posto.</h2>
-        <ul>
-          <li><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/></svg>Dashboard dei costi per sede e centro di costo</li>
-          <li><svg viewBox="0 0 24 24"><path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6"/></svg>Preventivi con cataloghi di 17 fornitori</li>
-          <li><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Fatture, spedizioni, carburante e ordini</li>
-          <li><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/></svg>Su misura per bar, ristoranti, pizzerie, lavanderie, edilizia e altro</li>
-          <li><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Accesso privato: le credenziali le ricevi da noi</li>
-        </ul>
+        <h2>Costi, incassi e utile<br>della tua <span class="ax-rot"><b>azienda</b></span></h2>
+        <p>Sempre sotto controllo, in un unico posto.</p>
+      </div>
+      <div class="ax-stage" id="ax-stage">
+        <div class="ax-card ax-main" style="--d:1">
+          <div class="ax-ch"><span>Utile del mese</span><em class="ax-up" id="ax-delta">+18%</em></div>
+          <b class="ax-val" id="ax-val">€ 12.480</b>
+          <svg class="ax-line" viewBox="0 0 300 96" preserveAspectRatio="none"><defs><linearGradient id="ax-ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8fb6f5" stop-opacity=".55"/><stop offset="1" stop-color="#8fb6f5" stop-opacity="0"/></linearGradient></defs><path id="ax-area" fill="url(#ax-ga)" d=""/><path id="ax-path" d="" pathLength="1"/><circle id="ax-dot" r="4.5"/></svg>
+          <div class="ax-mo"><span>mag</span><span>giu</span><span>lug</span><span>ago</span><span>set</span><span>ott</span></div>
+        </div>
+        <div class="ax-card ax-bars" style="--d:2">
+          <div class="ax-ch"><span>Costi per sede</span></div>
+          <div class="ax-bw" id="ax-bars"><i style="--h:62%"></i><i style="--h:84%"></i><i style="--h:45%"></i><i style="--h:70%"></i><i style="--h:38%"></i></div>
+        </div>
+        <div class="ax-card ax-donut" style="--d:3">
+          <svg viewBox="0 0 42 42" id="ax-donut"><circle class="t" r="15.9" cx="21" cy="21"/><circle r="15.9" cx="21" cy="21" pathLength="100" style="--c:#8fb6f5" stroke-dasharray="42 58" stroke-dashoffset="0"/><circle r="15.9" cx="21" cy="21" pathLength="100" style="--c:#f2b25c" stroke-dasharray="28 72" stroke-dashoffset="-42"/><circle r="15.9" cx="21" cy="21" pathLength="100" style="--c:#5fd3a5" stroke-dasharray="18 82" stroke-dashoffset="-70"/><circle r="15.9" cx="21" cy="21" pathLength="100" style="--c:#f07f93" stroke-dasharray="12 88" stroke-dashoffset="-88"/></svg>
+          <div><span>Spese per categoria</span><b id="ax-cat">Materie prime</b></div>
+        </div>
+        <div class="ax-toast" id="ax-toast"><span class="ax-ti" id="ax-ti"></span><div><b id="ax-tt">Fattura registrata</b><small id="ax-ts">Lyreco · € 284,60</small></div></div>
       </div>
       <p class="auth-foot"><button type="button" class="auth-tour" data-tour>Scopri cosa può fare <span>→</span></button><span>Vuoi provarlo? <button type="button" class="auth-demo2" data-demo>Apri la demo</button>, senza registrazione.</span></p>
     </aside>
     <div class="auth-main">
       <div class="auth-card">
         <div class="auth-top"><img src="logo.svg" alt="Centro di Costo" width="52" height="52"><h1 id="auth-title">Accedi</h1><p class="muted" id="auth-sub">Entra con la tua email e la tua password.</p></div>
-        <div class="auth-tabs" role="tablist" hidden></div>
         <form id="login-form" class="auth-form" data-pane="login" autocomplete="on" novalidate>
           <label class="f"><span>Email</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" required placeholder="nome@azienda.it"></label>
           <label class="f"><span>Password</span><span class="pw-w"><input id="login-pw" name="password" type="password" autocomplete="current-password" required placeholder="La tua password"><button type="button" class="pw-eye" data-pweye aria-label="Mostra password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
@@ -491,7 +502,8 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="settori.js?v=102"></script>
-  <script src="app.js?v=102"></script>
+  <script src="settori.js?v=103"></script>
+  <script src="auth-fx.js?v=1"></script>
+  <script src="app.js?v=103"></script>
 </body>
 </html>
