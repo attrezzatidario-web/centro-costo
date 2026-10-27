@@ -154,8 +154,21 @@
     ['Fa la fattura elettronica?', 'Prepara il PDF e il file XML nel formato FatturaPA, pronti da caricare sul portale dell\'Agenzia delle Entrate o dal tuo intermediario.'],
     ['Posso importare i dati che ho già?', 'Sì: fatture, file Excel e storico. Te li importo io all\'avvio, così parti subito senza ricopiare nulla.'],
     ['Possono usarlo i miei collaboratori?', 'Sì, ognuno con il suo accesso. Puoi decidere chi può modificare, chi può solo consultare e quali sezioni vede.'],
-    ['Quanto costa?', 'Dipende da attività, sezioni e personalizzazioni che ti servono. Dopo una breve chiacchierata ti preparo una proposta chiara, con un canone annuale.'],
+    ['Quanto costa?', 'Avvio una tantum di 1.000 € (preparazione su misura, import dei tuoi dati e formazione) e poi 79 € al mese, prezzi IVA esclusa. Nel canone ci sono aggiornamenti, assistenza, backup e utenti illimitati.'],
     ['E se mi serve una funzione che non c\'è?', 'Me lo dici e la aggiungo: il gestionale cresce insieme alla tua attività.']];
+  /* v115: prezzi */
+  function priceSec() {
+    const chk = '<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17l9-10"/></svg>';
+    const A = ['Gestionale preparato su misura per la tua attività', 'Import di fatture, articoli, clienti e listini che hai già', 'Cataloghi dei tuoi fornitori con foto e codici', 'Logo e dati della tua azienda su preventivi, DDT e fatture', 'Formazione per te e i tuoi collaboratori'];
+    const B = ['Tutte le sezioni che ti servono, su PC, tablet e telefono', 'Utenti e collaboratori illimitati, con i loro permessi', 'Aggiornamenti e funzioni nuove sempre inclusi', 'Assistenza diretta via email, telefono e WhatsApp', 'Backup automatico: i dati restano solo tuoi'];
+    return `<section class="tr-sec tr-price" id="tr-price"><div class="tr-h rv"><h2>Prezzi chiari, senza sorprese</h2><p class="tr-sub">Un avvio su misura e un canone mensile. Niente costi nascosti, niente vincoli di anni.</p></div>
+      <div class="pr-grid">
+        <article class="pr-c rv"><span class="pr-k">Avvio</span><div class="pr-v"><b>1.000 €</b><span>una tantum</span></div><p class="pr-d">Preparo il gestionale insieme a te e lo consegno pronto da usare.</p><ul>${A.map(x => `<li>${chk}${esc(x)}</li>`).join('')}</ul></article>
+        <article class="pr-c pr-main rv" style="--d:120ms"><span class="pr-badge">Tutto incluso</span><span class="pr-k">Canone</span><div class="pr-v"><b>79 €</b><span>al mese</span></div><p class="pr-d">Usi il gestionale ogni giorno, con tutto quello che serve per farlo crescere.</p><ul>${B.map(x => `<li>${chk}${esc(x)}</li>`).join('')}</ul>
+          <button type="button" class="tr-btn glow pr-cta" data-tr="req">Richiedi il tuo gestionale</button></article>
+      </div>
+      <p class="pr-note rv">Prezzi IVA esclusa. Il primo anno: 1.000 € di avvio + 79 € al mese. Funzioni su misura in più? Ti preparo un preventivo a parte.</p></section>`;
+  }
   function faq() { return `<section class="tr-sec tr-faq" id="tr-faq"><div class="tr-h rv"><h2>Domande frequenti</h2></div><div class="fq rv">${FAQ.map(([q, a], i) => `<details${i ? '' : ' open'}><summary>${esc(q)}<i></i></summary><p>${esc(a)}</p></details>`).join('')}</div></section>`; }
 
 
@@ -288,7 +301,7 @@
     sxCtx = [s, cats, ex];
     root.innerHTML = `<div class="tr-scroll">
       <header class="tr-bar"><i class="tr-prog" id="tr-prog"></i><div class="tr-brand"><img src="logo.svg" alt="" width="30" height="30"><b>Centro di Costo</b></div>
-        <nav class="tr-nav"><a href="#tr-show" data-go>Come funziona</a><a href="#tr-phone" data-go>Telefono</a><a href="#tr-funz" data-go>Funzioni</a><a href="#tr-how" data-go>Su misura</a><a href="#tr-faq" data-go>Domande</a></nav><div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
+        <nav class="tr-nav"><a href="#tr-show" data-go>Come funziona</a><a href="#tr-phone" data-go>Telefono</a><a href="#tr-funz" data-go>Funzioni</a><a href="#tr-how" data-go>Su misura</a><a href="#tr-price" data-go>Prezzi</a><a href="#tr-faq" data-go>Domande</a></nav><div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
 
       <section class="tr-hero">
         <div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="grid"></i></div>
@@ -328,6 +341,7 @@ ${flowSec()}
         <ol class="tr-steps">${STEPS.map(([t, d], i) => `<li class="rv" style="--d:${i * 120}ms"><span class="n">${i + 1}</span><b>${t}</b><p>${d}</p></li>`).join('')}</ol>
         <div class="tr-wish rv"><h3>Pensi a qualcosa che non c'è? Lo aggiungo.</h3><div class="tr-wl">${WISH.map((w, i) => `<span style="--i:${i}">${esc(w)}</span>`).join('')}</div><p class="tr-wish-p">…e tutto quello che ti serve: scrivimelo.</p></div></section>
 
+${priceSec()}
 ${faq()}
       <section class="tr-sec tr-end rv"><div class="tr-card"><div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b3"></i><i class="grid"></i></div><div><h2>Parliamone</h2><p>Raccontami di cosa hai bisogno: ti rispondo personalmente e ti preparo una proposta per la tua attività.</p>
           <div class="tr-who"><span class="tr-av">${esc(String(C.nome || 'D')[0])}</span><span><b>${esc(C.nome || '')}</b><small>${esc(C.email || '')}${C.tel ? ' · ' + esc(C.tel) : ''}</small></span></div></div>
