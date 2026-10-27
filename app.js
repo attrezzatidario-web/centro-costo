@@ -161,7 +161,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi', Fornitori: 'fornitori' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi', Fornitori: 'fornitori', DocForn: 'docforn' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -1577,7 +1577,7 @@
         <label class="f"><span>Data</span><input name="data" type="date" value="${esc(validD(r.data) ? r.data : '')}"></label>
       </div>
       <div class="f-row">
-        <label class="f"><span>Codice articolo</span><input name="codice" value="${esc(r.codice)}"></label>
+        <label class="f"><span>Codice articolo</span><span class="scan-fld"><input name="codice" value="${esc(r.codice)}"><button type="button" class="scan-ib" data-mvcod title="Scansiona il codice a barre" aria-label="Scansiona il codice a barre">${SCAN_IC}</button></span></label>
         <label class="f"><span>Unità</span><select name="um">${opt(UM, r.um || 'PZ')}</select></label>
       </div>
       <div class="f-row">
@@ -1604,6 +1604,7 @@
     form.descrizione.addEventListener('input', () => { if (!catTouched) form.categoria.value = autoCat(form.descrizione.value); });
     form.centro.addEventListener('change', () => { if (form.centro.value === 'ATTREZZATI') form.societa.value = 'Attrezzati'; });
     const sb = $('#scan-btn'); if (sb) sb.onclick = scanDoc;
+    $('[data-mvcod]').onclick = e => { e.preventDefault(); scanOpen({ title: 'Codice dell\'articolo', onCode: c => { const a = artByCode(c); form.codice.value = a ? (a.codForn || a.codice || c) : c; if (a) { if (!form.descrizione.value.trim()) form.descrizione.value = a.descrizione; if (!form.prezzo.value.trim() && num(a.costo)) form.prezzo.value = fmtIn(num(a.costo)); if (!form.fornitore.value.trim() && a.fornitore) form.fornitore.value = a.fornitore; if (a.um) form.um.value = a.um; upd(); } return { ok: true, msg: a ? a.descrizione : c }; } }); };
   }
 
   /* ---------- Scansione documento con IA ---------- */
@@ -3156,11 +3157,29 @@
   /* =========================================================
      PREVENTIVI PAYPER, JRC, DEWALT, STANLEY E USAG — catalogo e preventivi
      ========================================================= */
-  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' }, portwest: { n: 'Portwest', file: 'cat-portwest.json' }, ffg: { n: 'FFG', file: 'cat-ffg.json' }, benman: { n: 'Benman', file: 'cat-benman.json' }, hugo: { n: 'Hugo', file: 'cat-hugo.json' }, sola: { n: 'Sola', file: 'cat-sola.json' }, activegear: { n: 'Active Gear', file: 'cat-activegear.json' }, maxilia: { n: 'Maxilia', file: 'cat-maxilia.json' }, promit: { n: 'Promit', file: 'cat-promit.json' }, lavor: { n: 'Lavor', file: 'cat-lavor.json' }, propac: { n: 'Propac', file: 'cat-propac.json' }, kerakoll: { n: 'Kerakoll', file: 'cat-kerakoll.json' } };
+  const PV_SUP = { payper: { n: 'Payper', file: 'cat-payper.json' }, jrc: { n: 'JRC', file: 'cat-jrc.json' }, dewalt: { n: 'DeWalt', file: 'cat-dewalt.json' }, stanley: { n: 'Stanley', file: 'cat-stanley.json' }, usag: { n: 'USAG', file: 'cat-usag.json' }, milwaukee: { n: 'Milwaukee', file: 'cat-milwaukee.json' }, cofra: { n: 'Cofra', file: 'cat-cofra.json' }, portwest: { n: 'Portwest', file: 'cat-portwest.json' }, ffg: { n: 'FFG', file: 'cat-ffg.json' }, benman: { n: 'Benman', file: 'cat-benman.json' }, hugo: { n: 'Hugo', file: 'cat-hugo.json' }, sola: { n: 'Sola', file: 'cat-sola.json' }, activegear: { n: 'Active Gear', file: 'cat-activegear.json' }, maxilia: { n: 'Maxilia', file: 'cat-maxilia.json' }, promit: { n: 'Promit', file: 'cat-promit.json' }, lavor: { n: 'Lavor', file: 'cat-lavor.json' }, propac: { n: 'Propac', file: 'cat-propac.json' }, kerakoll: { n: 'Kerakoll', file: 'cat-kerakoll.json' }, mag: { n: 'Magazzino', file: 'mag' } };
   const pvListPub = {}; // fornitori con prezzo al pubblico dal listino (DeWalt, Stanley: prezzo utilizzatore)
   let pvTab = 'cat', pvSup = 'payper', pvQ = '', pvCl = '', pvOnly = '', pvLimit = 48, pvItem = '', pvEdit = '', pvTarget = '', pvAnim = true;
   const pvCats = {}, pvLoading = {};
+  // v111: gli articoli del magazzino come catalogo dei Preventivi (codice interno, codice fornitore, prezzo di vendita, costo = acquisto)
+  const pvMagOk = () => modOn('magazzino') && GX.art().length > 0;
+  function pvMagCat() {
+    const A = GX.art().slice().sort((a, b) => String(a.descrizione).localeCompare(String(b.descrizione), 'it')), G = giacMap(), groups = new Map();
+    const gk = c => 'g' + nh(c || 'articoli').slice(0, 24);
+    const items = A.map(a => {
+      const cl = String(a.categoria || '').trim() || 'Articoli'; if (!groups.has(gk(cl))) groups.set(gk(cl), { k: gk(cl), t: cl, s: '' });
+      const sp = [['Codice interno', a.codice], ['Codice fornitore', a.codForn], ['Codice a barre', a.barcode], ['Fornitore', a.fornitore], ['Unità', a.um], ['Giacenza', fmtNum(G.get(a.id) || 0, 0) + ' ' + (a.um || '')]].filter(x => String(x[1] || '').trim());
+      const it = { id: a.id, n: a.descrizione, cl, g: gk(cl), sc: [a.codForn ? 'cod. fornitore ' + a.codForn : '', a.fornitore].filter(Boolean).join(' · '), sz: ['Pz'], c: [[a.codice || a.id, '', num(a.prezzo) || null, [0], '']], uv: 1, peso: null, dim: [null, null, null], mod: '', sp, url: '', um: a.um || 'PZ', d: a.note || '', code: a.codice || '', mag: 1 };
+      it.k = amNorm(`${it.n} ${a.codice || ''} ${a.codForn || ''} ${a.barcode || ''} ${cl} ${a.fornitore || ''}`);
+      pvListSup[it.id] = 'mag'; delete pvListPub[it.id];
+      if (num(a.costo)) pvListRaw[it.id] = num(a.costo); else delete pvListRaw[it.id];
+      if (num(a.prezzo)) pvListPub[it.id] = num(a.prezzo);
+      return it;
+    });
+    return { f: 'mag', nome: 'Magazzino', v: '', file: '', tool: true, mag: true, acqList: true, groups: [...groups.values()], n: items.length, items };
+  }
   async function pvLoad(sup) {
+    if (sup === 'mag') return (pvCats.mag = pvMagCat());
     if (pvCats[sup]) return pvCats[sup];
     if (!PV_SUP[sup] || !PV_SUP[sup].file) return null;
     if (!pvLoading[sup]) pvLoading[sup] = fetch(PV_SUP[sup].file).then(r => { if (!r.ok) throw new Error('Catalogo non trovato'); return r.json(); }).then(j => { j.items.forEach(it => { it.k = amNorm(`${it.n} ${it.id} ${it.cl} ${it.sc} ${it.mod || ''} ${it.c.map(c => c[0] + ' ' + (j.tool ? c[1] : '')).join(' ')}`); }); if (j.tool) j.items.forEach(it => { const f0 = it.c.find(c => c[4]); if (f0) it.c.forEach(c => { if (!c[4]) c[4] = f0[4]; }); }); j.items.forEach(it => { pvListSup[it.id] = sup; it.c.forEach((c, i) => { const lp = c[5] != null ? c[5] : c[2]; if (lp != null) { if (!i) pvListRaw[it.id] = lp; pvListRaw[it.id + '|' + c[0]] = lp; } }); }); if (j.pubMode === 'list') j.items.forEach(it => it.c.forEach((c, i) => { if (c[2] != null) { if (!i && it.c.length === 1) pvListPub[it.id] = c[2]; pvListPub[it.id + '|' + c[0]] = c[2]; } })); if (j.hex) Object.entries(j.hex).forEach(([k, v]) => { pvHexX[amNorm(k)] = v; }); pvCats[sup] = j; pvMergeExtra(sup); return j; }).catch(e => { pvLoading[sup] = null; throw e; });
@@ -3188,7 +3207,7 @@
   const pvAcqExp = (it, col) => { const a = pvAcqMap()[it]; if (a == null) return null; if (typeof a === 'number') return a; const v = a[col] != null ? a[col] : a['*']; return v != null && v !== '' ? num(v) : null; };
   const pvAcq = (it, col) => { const e = pvAcqExp(it, col); return e != null ? e : pvAcqSc(it, col); };
   const pvPub = (it, col) => { const pm = pvPubModGet(it, col); if (pm != null) return pm; if (col != null && pvListPub[it + '|' + col] != null) return pvListPub[it + '|' + col]; if (pvListPub[it] != null) return pvListPub[it]; const a = pvAcq(it, col); return a != null ? r2(a * pvRic()) : null; };
-  const pvCode = it => it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
+  const pvCode = it => it.mag ? (it.code || it.id) : it.x ? (it.code || it.id) : /^J\d/.test(it.id) ? 'JRC ' + it.id.slice(1) : it.id;
   const pvInfoKey = (sup = pvSup) => sup === 'payper' ? 'ppAcqInfo' : sup + 'AcqInfo';
   const pvImg = (cat, c) => c && c[4] ? (/^(cimg:|data:)/.test(c[4]) ? c[4] : cat.img && (!cat.imgPre || (cat.img.t && cat.img.t[c[4]] != null)) ? `cimg:${cat.f}:${c[4]}` : /^https?:/.test(c[4]) ? c[4] : (cat.imgPre || '') + c[4] + (cat.imgSuf || '')) : '';
   // foto contenute nei file del catalogo (DeWalt): caricate a blocchi solo quando servono
@@ -3262,6 +3281,8 @@
   }
   const pvLineThumb = l => { const cat = pvCats[l.sup || 'payper'], it = cat && cat.items.find(x => x.id === l.it), c = it && it.c.find(x => x[0] === l.c); return it && c ? pvThumb(cat, it, c, 'sm') : pvSw(l.cn); };
   async function renderPv() {
+    if (pvCats.mag) pvCats.mag = pvMagCat();
+    { const mb = $('.pv-brand [data-pvsup="mag"]'); if (mb) mb.hidden = !pvMagOk(); if (pvSup === 'mag' && !pvMagOk()) pvSup = 'payper'; }
     const gAll = pvAll && pvTab === 'cat' && !pvItem; document.body.classList.toggle('pv-all', gAll);
     sub(gAll ? 'Tutti i fornitori · ricerca e confronto' : `${PV_SUP[pvSup].n} · catalogo e preventivi`);
     $$('[data-pvtab]').forEach(b => b.classList.toggle('on', b.dataset.pvtab === pvTab));
@@ -3321,7 +3342,7 @@
   const pvGK = it => it._kg || (it._kg = pvGDeacc(it.k + ' ' + amNorm(it.mod || '')));
   const pvGStem = w => { w = pvGDeacc(amNorm(w)); if (w.length > 4 && /^[A-Z]+$/.test(w)) { const t = w.replace(/[AEIOU]+$/, ''); return t.length >= 4 ? t : w.slice(0, -1); } return w; };
   const pvGAlts = w => { const s = pvGStem(w), g = PV_GSYN.find(l => l.some(x => s.startsWith(x) || x.startsWith(s) && s.length >= 4)); return g ? [s, ...g] : [s]; };
-  const pvGSups = () => Object.keys(PV_SUP).filter(s => PV_SUP[s].file);
+  const pvGSups = () => Object.keys(PV_SUP).filter(s => PV_SUP[s].file && (s !== 'mag' || pvMagOk()));
   const pvGReady = () => pvGSups().filter(s => pvCats[s]);
   const pvGKey = (sup, id) => sup + '|' + id;
   const pvGRecent = () => { try { const v = JSON.parse(localStorage.getItem('cdc_pvgq') || '[]'); return Array.isArray(v) ? v.slice(0, 6) : []; } catch { return []; } };
@@ -3495,9 +3516,9 @@
         <div class="pv-hero-l">
           <img class="pv-hero-logo" src="logo-${pvSup}.svg" alt="${esc(cat.nome)}">
           <div><span class="pv-code">Catalogo ${esc(cat.v || '')}</span><h2>${esc(cat.nome)}</h2>
-          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'dati dal sito ufficiale · prezzi del volantino dove ci sono' : ['ffg', 'benman', 'hugo'].includes(cat.f) ? 'dati e prezzi di listino dal sito ufficiale FF Group' : cat.f === 'sola' ? 'dati dal sito ufficiale · listino senza IVA (sul sito è IVA inclusa)' : cat.f === 'maxilia' ? 'prezzi Maxilia a pezzo per quantità (stampa del logo inclusa, IVA esclusa) = prezzo d\'acquisto' : cat.f === 'propac' ? 'prezzi Propac IVA esclusa (prima fascia) = prezzo d\'acquisto · sconti quantità nelle versioni' : cat.noList ? 'dati e foto dal sito ufficiale · il sito non ha prezzi: scrivi o importa i prezzi d\'acquisto' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori' + (cat.acqList ? ' · prezzi ' + cat.nome + ' = prezzo d\'acquisto' : '')} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
+          <p>${fmtNum(cat.items.length, 0)} prodotti · ${cat.tool ? (cat.f === 'milwaukee' ? 'dati dal sito ufficiale · prezzi del volantino dove ci sono' : ['ffg', 'benman', 'hugo'].includes(cat.f) ? 'dati e prezzi di listino dal sito ufficiale FF Group' : cat.f === 'sola' ? 'dati dal sito ufficiale · listino senza IVA (sul sito è IVA inclusa)' : cat.f === 'maxilia' ? 'prezzi Maxilia a pezzo per quantità (stampa del logo inclusa, IVA esclusa) = prezzo d\'acquisto' : cat.f === 'propac' ? 'prezzi Propac IVA esclusa (prima fascia) = prezzo d\'acquisto · sconti quantità nelle versioni' : cat.mag ? 'i tuoi articoli di magazzino · prezzo di vendita e costo dall\'anagrafica' : cat.noList ? 'dati e foto dal sito ufficiale · il sito non ha prezzi: scrivi o importa i prezzi d\'acquisto' : 'prezzi al pubblico dal listino') : fmtNum(nCol, 0) + ' colori' + (cat.acqList ? ' · prezzi ' + cat.nome + ' = prezzo d\'acquisto' : '')} · ${G.length} categorie${pvCli ? '' : ` · ${fmtNum(nAcq, 0)} con prezzo d'acquisto`}</p></div>
         </div>
-        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'ffg' ? 'Cerca: nome, codice o modello (es. CDD 12V, livella, smerigliatrice…)' : cat.f === 'benman' ? 'Cerca: nome o codice (es. punta SDS, rullo, chiave combinata…)' : cat.f === 'hugo' ? 'Cerca: nome o codice (es. lucchetto, cilindro, GTS…)' : cat.f === 'sola' ? 'Cerca: nome o modello (es. RED 3, livella, flessometro…)' : cat.f === 'maxilia' ? 'Cerca: nome o codice (es. borraccia, penna, shopper…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'lavor' ? 'Cerca: nome o codice (es. idropulitrice, Predator, aspiratore, 36051-00067…)' : cat.f === 'propac' ? 'Cerca: nome o codice (es. scatola, nastro adesivo, pluriball, BOY202020…)' : cat.f === 'kerakoll' ? 'Cerca: nome o tipo (es. H40, Fugabella, Aquastop, Keralevel, rasante…)' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : cat.f === 'portwest' ? 'Cerca: nome o codice (es. S775, softshell, gilet HV…)' : cat.f === 'activegear' ? 'Cerca: nome o codice (es. FLEX F3140, A-One, cuffie…)' : cat.f === 'promit' ? 'Cerca: nome o codice (es. shopper, borraccia, penna, PM322…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
+        <div class="pv-sb pv-hero-s"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-q" type="search" placeholder="${cat.tool ? (cat.f === 'milwaukee' ? 'Cerca: nome, codice o modello (es. M18 FPD3, Packout, guanti…)' : cat.f === 'ffg' ? 'Cerca: nome, codice o modello (es. CDD 12V, livella, smerigliatrice…)' : cat.f === 'benman' ? 'Cerca: nome o codice (es. punta SDS, rullo, chiave combinata…)' : cat.f === 'hugo' ? 'Cerca: nome o codice (es. lucchetto, cilindro, GTS…)' : cat.f === 'sola' ? 'Cerca: nome o modello (es. RED 3, livella, flessometro…)' : cat.f === 'maxilia' ? 'Cerca: nome o codice (es. borraccia, penna, shopper…)' : cat.f === 'usag' ? 'Cerca: nome, codice o tipo (es. chiave combinata, 285, giravite…)' : cat.f === 'lavor' ? 'Cerca: nome o codice (es. idropulitrice, Predator, aspiratore, 36051-00067…)' : cat.f === 'propac' ? 'Cerca: nome o codice (es. scatola, nastro adesivo, pluriball, BOY202020…)' : cat.f === 'kerakoll' ? 'Cerca: nome o tipo (es. H40, Fugabella, Aquastop, Keralevel, rasante…)' : cat.mag ? 'Cerca: descrizione, codice interno, codice fornitore o codice a barre' : cat.f === 'stanley' ? 'Cerca: nome, codice o tipo (es. flessometro, livella, cassetta…)' : 'Cerca un attrezzo: nome, codice o tipo (es. trapano, DCD796, smerigliatrice…)') : cat.f === 'portwest' ? 'Cerca: nome o codice (es. S775, softshell, gilet HV…)' : cat.f === 'activegear' ? 'Cerca: nome o codice (es. FLEX F3140, A-One, cuffie…)' : cat.f === 'promit' ? 'Cerca: nome o codice (es. shopper, borraccia, penna, PM322…)' : 'Cerca un prodotto: nome, codice o tipo (es. Sunset, polo, gilet…)'}" value="" autocomplete="off"></div>
       </section>
       <div class="pv-sh"><h3>Categorie</h3></div>
       <div class="pv-cats">${G.map(card).join('')}</div>`;
@@ -3606,6 +3627,35 @@
     lines.forEach(l => { const ex = p.righe.find(x => x.it === l.it && x.c === l.c && x.sup === l.sup); if (ex) { Object.entries(l.q).forEach(([s, v]) => { ex.q[s] = num(ex.q[s]) + v; }); } else p.righe.push(l); });
     pvGridQ[it.id] = {}; pvTarget = p.id;
     pvSave(p); toast(`${lines.length} ${lines.length === 1 ? 'riga aggiunta' : 'righe aggiunte'} al preventivo ${p.num}`);
+  }
+  // v111: scansione nel preventivo — cerca il codice negli articoli del magazzino e nei cataloghi dei fornitori
+  async function pvScanFind(code) {
+    const k = codeKey(code), a = artByCode(code);
+    const S = pvGSups().filter(s => s !== 'mag');
+    if (S.some(s => !pvCats[s])) await Promise.all(S.map(s => pvLoad(s).catch(() => null)));
+    const inCat = (sups, key) => { for (const s of sups) { const cat = pvCats[s]; if (!cat) continue; for (const it of cat.items) { if (it.x && !it.c) continue; const c = it.c.find(c => codeKey(c[0]) === key); if (c || codeKey(it.id) === key || codeKey(pvCode(it)) === key) return { sup: s, it, c: c || it.c[0] }; } } return null; };
+    if (a) {
+      // l'articolo è collegato a un catalogo (stesso fornitore e codice del fornitore): si usa il prodotto del catalogo
+      if (a.codForn) { const fs = S.filter(s => fMatch({ nome: PV_SUP[s].n }, a.fornitore || '')); const r = inCat(fs.length ? fs : S, codeKey(a.codForn)); if (r) return r; }
+      if (pvMagOk()) { const cat = await pvLoad('mag'), it = cat.items.find(x => x.id === a.id); if (it) return { sup: 'mag', it, c: it.c[0] }; }
+    }
+    return inCat(S, k);
+  }
+  function pvScan() {
+    const p0 = pvFromForm(); if (!p0) return; pvQuiet(p0); const id = p0.id;
+    let first = true;
+    scanOpen({ title: 'Aggiungi al preventivo', hint: 'Codice a barre, codice interno o codice del fornitore', multi: true, onCode: async code => {
+      if (first) { first = false; if (pvGSups().some(s => s !== 'mag' && !pvCats[s])) { const m = document.querySelector('.scn-msg'); if (m) m.innerHTML = '<span>Carico i cataloghi…</span>'; } }
+      const r = await pvScanFind(code); if (!r) return { ok: false, msg: `Codice ${code} non trovato` };
+      const p = pvGet(id); if (!p) return { ok: false, msg: 'Preventivo non trovato' };
+      const cat = pvCats[r.sup], it = r.it, c = r.c, sz = it.sz[0];
+      const ex = p.righe.find(x => x.sup === r.sup && x.it === it.id && x.c === c[0]);
+      if (ex) ex.q[sz] = num(ex.q[sz]) + 1;
+      else p.righe.push({ sup: r.sup, it: it.id, n: it.n, cl: it.cl, c: c[0], cn: c[1], sz: it.sz, q: { [sz]: 1 }, p: pvPubFor(p, it.id, c[0]), man: false, sc: 0, ...(cat.tool ? { tool: 1 } : {}) });
+      pvSave(p);
+      const l = ex || p.righe[p.righe.length - 1];
+      return { ok: true, msg: `${it.n}${it.sz.length > 1 ? ' · taglia ' + sz + ' (cambiala nel preventivo)' : ''} · ${fmtNum(pvLineQ(l), 0)} pz` };
+    } });
   }
   function pvSaveAcq(it) {
     const all = { ...pvAcqMap() }, base = String($('#pv-acq').value || '').trim(), per = $('#pv-percol') && $('#pv-percol').checked;
@@ -3964,7 +4014,7 @@
           </div>
           ${pvCli ? '' : (() => { const C = pvCliOf(p); return `<div class="pv-cliric">${C ? `<label class="pv-rf"><span>Ricarico per ${esc(C.nome)}</span><span class="pv-ri"><input data-pvric="${esc(C.id)}" inputmode="decimal" value="${pvRicOk(C.ric) ? esc(fmtIn(C.ric)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label><small>${pvRicOk(C.ric) ? `Prezzo al pubblico = prezzo d'acquisto + ${esc(fmtNum(num(C.ric), 1).replace(/,0$/, ''))}%. Vale per le righe con prezzo d'acquisto; le altre usano il listino. I prezzi scritti a mano restano.` : `Vuoto = ricarico standard (+${esc(fmtNum((pvRic() - 1) * 100, 0))}%). Scrivi una percentuale per usare un ricarico solo per questo cliente.`}</small>` : `<small>Scrivi il nome del cliente: si salva da solo nella sezione <b>Clienti</b>, dove puoi dargli un ricarico personale.</small>`}</div>`; })()}
         </div>
-        <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div>
+        <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><div class="pv-addb"><button type="button" class="btn sm" id="pv-scan" title="Aggiungi prodotti leggendo il codice a barre">${SCAN_IC}<span>Scansiona</span></button><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th class="dr-th"></th><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
             ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td class="dr-c">${DRAG_H}</td><td class="pv-c-n"><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc((l.cn ? l.cn + ' · ' : '') + (l.c || l.it)) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td class="pv-c-sz"><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num pv-c-q" data-l="Pezzi">${fmtNum(pvLineQ(l), 0)}</td><td class="num pv-c-p" data-l="Prezzo cad. €"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}">${pvCli ? '' : `<small class="pv-lacq" data-pvla="${i}"></small>`}</td><td class="num pv-c-sc" data-l="Sconto %"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt pv-c-t" data-l="Totale riga" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td class="pv-c-lg"><span class="muted small">—</span></td>' : `<td class="pv-c-lg" data-l="Logo"><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvlrepl="${i}" title="Sostituisci con un altro prodotto"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></button><button type="button" class="pv-lb" data-pvsch="${esc(l.sup || 'payper')}|${esc(l.it)}" title="Scheda tecnica PDF"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></button><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
@@ -5317,10 +5367,16 @@
       <div class="iva-sum" style="margin-top:14px"><div><span>Imponibile</span><b>${eur(num(r.imponibile))}</b></div><div><span>IVA</span><b>${eur(num(r.imposta))}</b></div><div class="t"><span>Totale fattura</span><b>${eur(num(r.totale))}</b></div></div>
       <div class="fa-chk ${l.ok ? 'ok' : l.rows.length ? 'ko' : ''}"><b>${l.ok ? 'Coincide con gli acquisti registrati' : l.rows.length ? 'Non coincide con gli acquisti registrati' : 'Nessun acquisto collegato'}</b><span>${l.rows.length ? `${l.rows.length} righe in Attrezzatura (collegate per ${l.how}) per ${eur(l.tot)} · differenza ${eur(l.diff)}` : 'Nessuna riga di Attrezzatura con lo stesso DDT o gli stessi codici.'}</span></div>
       ${R.length ? `<div class="fa-rows"><div class="fa-rh"><span>Articolo</span><span>Q.tà</span><span>Prezzo</span><span>Totale</span></div>${R.map(x => { const p = pdm.get(String(x.codice || '').trim().toUpperCase()); return `<div class="fa-rr${p ? ' warn' : ''}"><span><b>${esc(x.descrizione || '')}</b><small>${esc(x.codice || '')}${p ? ` · in archivio ${eurP(p.rif)} (${p.d > 0 ? '+' : ''}${fmtNum(p.d * 100, 0)}%)` : ''}</small></span><span>${qtyFmt(num(x.quantita))}</span><span>${eurP(num(x.prezzo))}</span><span>${eur(num(x.totale) || num(x.quantita) * num(x.prezzo))}</span></div>`; }).join('')}</div>` : ''}
-      <div class="row-btns" style="margin-top:14px">${r.pdf ? '<button type="button" class="btn sm" id="fa-open">Apri documento</button>' : ''}<button type="button" class="btn sm" id="fa-pay">${faPaid(r) ? 'Segna da pagare' : 'Segna pagata oggi'}</button><button type="button" class="btn sm" id="fa-edit">Modifica</button>${R.length && !l.rows.length ? '<button type="button" class="btn sm" id="fa-tomov">Aggiungi le righe ad Attrezzatura</button>' : ''}</div>`,
+      <div class="row-btns" style="margin-top:14px">${r.pdf ? '<button type="button" class="btn sm" id="fa-open">Apri documento</button>' : '<button type="button" class="btn sm primary" id="fa-att">Allega documento</button>'}<button type="button" class="btn sm" id="fa-pay">${faPaid(r) ? 'Segna da pagare' : 'Segna pagata oggi'}</button><button type="button" class="btn sm" id="fa-edit">Modifica</button>${R.length && !l.rows.length ? '<button type="button" class="btn sm" id="fa-tomov">Aggiungi le righe ad Attrezzatura</button>' : ''}</div>`,
       null, () => { if (!confirm('Eliminare questa fattura? (il documento resta nel tuo Drive)')) return; write([{ action: 'delete', sheet: 'Fatture', id: r.id }]); toast('Fattura eliminata'); return true; }, 'Chiudi');
     $('#sheet-ok').type = 'button'; $('#sheet-ok').onclick = closeSheet;
-    const o = $('#fa-open'); if (o) o.onclick = () => openDoc(r.pdf, `${r.fornitore} ${r.numero}`);
+    const o = $('#fa-open'); if (o) o.onclick = () => docView(r.pdf, `${r.fornitore} ${r.numero}`);
+    const at = $('#fa-att'); if (at) at.onclick = async () => {
+      let f; try { f = await pickDoc(); } catch (e) { if (e.message !== 'annullato') toast(e.message); return; }
+      if (isLocal()) return toast('Nella demo il documento non viene salvato');
+      try { busy('Salvo il documento nel tuo Drive…'); const id = await api('uploadDoc', { name: `Fattura ${r.fornitore} ${r.numero} ${r.data}.${f.ext}`.replace(/[\\/]/g, '-'), mime: f.mime, data: f.data }); busy(); write([{ action: 'upsert', sheet: 'Fatture', row: { ...r, pdf: id } }]); toast('Documento archiviato'); closeSheet(); }
+      catch (e) { busy(); if (!(e instanceof AuthError)) toast('Documento non salvato: ' + e.message); }
+    };
     $('#fa-pay').onclick = () => { write([{ action: 'upsert', sheet: 'Fatture', row: { ...r, stato: faPaid(r) ? 'da pagare' : 'pagata', pagata: faPaid(r) ? '' : today() } }]); closeSheet(); toast(faPaid(r) ? 'Segnata da pagare' : 'Segnata come pagata'); };
     $('#fa-edit').onclick = () => { closeSheet(); setTimeout(() => formFat(r), 250); };
     const tm = $('#fa-tomov'); if (tm) tm.onclick = () => { closeSheet(); setTimeout(() => openScan({ fornitore: r.fornitore, data: r.data, ndoc: r.numero }, R.filter(x => x.descrizione).map(x => ({ ...x, quantita: num(x.quantita) || 1, prezzo: num(x.prezzo) }))), 250); };
@@ -5339,17 +5395,65 @@
       <div class="f-row"><label class="f"><span>Centro di costo</span><select name="centro"><option value="">—</option>${opt(centri(), r.centro)}</select></label><label class="f"><span>Stato</span><select name="stato">${opt(['da pagare', 'pagata'], faPaid(r) ? 'pagata' : 'da pagare')}</select></label></div>
       <label class="f"><span>DDT / ordini collegati</span><input name="ddt" value="${esc(r.ddt)}" placeholder="numeri separati da virgola"></label>
       <label class="f"><span>Note</span><input name="note" value="${esc(r.note)}"></label>
-      ${file || r.pdf ? `<div class="muted small">${IC.spark ? '' : ''}📎 ${file ? esc(file.name) + ' sarà salvato nel tuo Google Drive' : 'Documento già salvato nel tuo Google Drive'}</div>` : ''}`,
+      <div class="ad-box" id="fa-doc"></div>`,
       async fd => {
         const row = { ...r, ...Object.fromEntries(fd), imponibile: num(fd.get('imponibile')), imposta: num(fd.get('imposta')), totale: num(fd.get('totale')) || r2(num(fd.get('imponibile')) + num(fd.get('imposta'))), fornitore: String(fd.get('fornitore')).trim(), numero: String(fd.get('numero')).trim() };
         if (row.stato === 'pagata' && !row.pagata) row.pagata = today();
         if (row.stato !== 'pagata') row.pagata = '';
         if (isNew) row.creato = new Date().toISOString();
         if (isNew && faRows().some(x => fornKey(x.fornitore) === fornKey(row.fornitore) && normDoc(x.numero) === normDoc(row.numero)) && !confirm('Esiste già una fattura con questo fornitore e numero. Salvarla comunque?')) return;
-        if (file && !isLocal()) { try { busy('Salvo il documento nel tuo Drive…'); row.pdf = await api('uploadDoc', { name: `${row.fornitore} ${row.numero} ${row.data}.${file.ext}`, mime: file.mime, data: file.data }); } catch (e) { busy(); return toast('Documento non salvato: ' + e.message); } busy(); }
+        if (file && !isLocal()) { try { busy('Salvo il documento nel tuo Drive…'); row.pdf = await api('uploadDoc', { name: `Fattura ${row.fornitore} ${row.numero} ${row.data}.${file.ext}`.replace(/[\\/]/g, '-'), mime: file.mime, data: file.data }); } catch (e) { busy(); return toast('Documento non salvato: ' + e.message); } busy(); }
         write([{ action: 'upsert', sheet: 'Fatture', row }]);
         faP = ''; toast(isNew ? 'Fattura salvata' : 'Fattura aggiornata'); return true;
       }, isNew ? null : () => { if (!confirm('Eliminare questa fattura?')) return; write([{ action: 'delete', sheet: 'Fatture', id: r.id }]); toast('Fattura eliminata'); return true; });
+    // v111: il documento della fattura (PDF o foto) si allega anche a mano e resta nell'archivio
+    adBox($('#fa-doc'), () => file, f => { file = f; }, r.pdf, `Fattura ${r.numero || ''}`);
+  }
+  // riquadro «documento allegato»: scegli/fotografa, apri quello salvato, sostituisci
+  function adBox(box, getF, setF, savedId, name) {
+    if (!box) return;
+    const draw = () => {
+      const f = getF();
+      box.innerHTML = f ? `<span class="ad-ic">${DOC_IC}</span><span class="ad-t"><b>${esc(f.name)}</b><small>${isLocal() ? 'nella demo il file non viene salvato' : 'viene salvato nel tuo Google Drive quando premi Salva'}</small></span><button type="button" class="btn sm ghost" data-ad="pick">Cambia</button>`
+        : savedId ? `<span class="ad-ic ok">${DOC_IC}</span><span class="ad-t"><b>Documento nell'archivio</b><small>salvato nel tuo Google Drive</small></span><button type="button" class="btn sm" data-ad="open">Apri</button><button type="button" class="btn sm ghost" data-ad="pick">Sostituisci</button>`
+        : `<span class="ad-ic">${DOC_IC}</span><span class="ad-t"><b>Nessun documento allegato</b><small>carica il PDF o fotografa il documento: resta sempre nell'archivio</small></span><button type="button" class="btn sm primary" data-ad="pick">Allega</button>`;
+    };
+    box.onclick = async e => {
+      const b = e.target.closest('[data-ad]'); if (!b) return; e.preventDefault();
+      if (b.dataset.ad === 'open') return docView(savedId, name);
+      try { setF(await pickDoc()); draw(); } catch (er) { if (er.message !== 'annullato') toast(er.message); }
+    };
+    draw();
+  }
+  // anteprima di un documento salvato nel Drive (PDF disegnato pagina per pagina, oppure foto) con «Scarica»
+  async function docView(id, name) {
+    if (!id) return;
+    let d;
+    try { busy('Apro il documento…'); d = await api('getDoc', { id }); } catch (e) { busy(); if (!(e instanceof AuthError)) toast(e.message); return; }
+    const bin = atob(d.data), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const mime = d.mime || 'application/pdf', href = URL.createObjectURL(new Blob([u8], { type: mime })), fname = d.name || name || 'documento';
+    const dl = () => { const a = document.createElement('a'); a.href = href; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); };
+    const back = $('#sheet').hidden ? null : { t: $('#sheet-title').textContent };
+    busy();
+    const ov = document.createElement('div'); ov.className = 'dv'; ov.innerHTML = `<div class="dv-bar"><b>${esc(fname)}</b><span></span><button type="button" class="btn sm" data-dv="dl">Scarica</button><button type="button" class="dv-x" data-dv="x" aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="dv-pages"><div class="empty">Carico…</div></div>`;
+    document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add('in'));
+    const close = () => { ov.classList.remove('in'); document.removeEventListener('keydown', key, true); setTimeout(() => { ov.remove(); URL.revokeObjectURL(href); }, 250); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    document.addEventListener('keydown', key, true);
+    ov.onclick = e => { const b = e.target.closest('[data-dv]'); if (!b) return; if (b.dataset.dv === 'dl') dl(); else close(); };
+    const pages = $('.dv-pages', ov);
+    if (/^image\//.test(mime)) { pages.innerHTML = `<img src="${href}" alt="">`; return; }
+    try {
+      if (!window.pdfjsLib) await loadLib('lib-pdfjs.js');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib-pdfjs-worker.js';
+      const pdf = await pdfjsLib.getDocument({ data: u8.slice() }).promise; pages.innerHTML = '';
+      for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+        const pg = await pdf.getPage(i), w = Math.min(980, pages.clientWidth - 24 || 800), v0 = pg.getViewport({ scale: 1 }), sc = w / v0.width, vp = pg.getViewport({ scale: sc * (devicePixelRatio || 1) });
+        const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.style.width = w + 'px'; pages.appendChild(c);
+        await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+        if (!ov.isConnected) return;
+      }
+    } catch (e) { pages.innerHTML = `<div class="empty">Anteprima non disponibile · premi «Scarica»</div>`; }
   }
   function pickDoc() {
     return new Promise((resolve, reject) => {
@@ -7605,13 +7709,52 @@
      Fogli Google: Clienti, Articoli, MagMov, DDT, Vendite (Code.gs cdc-4.2).
      Le righe dei documenti sono JSON: { art, c, d, um, q, p, sc, iva } e { h: 1, d, ddt } per le intestazioni dei DDT.
      ========================================================= */
-  const GX = { cli: () => db.clienti || (db.clienti = []), art: () => db.articoli || (db.articoli = []), mov: () => db.magmov || (db.magmov = []), ddt: () => db.ddt || (db.ddt = []), fv: () => db.vendite || (db.vendite = []) };
+  const GX = { cli: () => db.clienti || (db.clienti = []), art: () => db.articoli || (db.articoli = []), mov: () => db.magmov || (db.magmov = []), ddt: () => db.ddt || (db.ddt = []), fv: () => db.vendite || (db.vendite = []), dfo: () => db.docforn || (db.docforn = []) };
   const gxOk = () => isLocal() || !db.v || db.v >= 'cdc-4.2';
   const gxWarn = () => gxOk() ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google alla versione cdc-4.2</b><span>Serve per salvare clienti, magazzino, DDT e fatture (ora lo script è la versione ${esc(db.v)}).</span></div>`;
   const jp = (v, d) => { if (v && typeof v === 'object') return v; try { const x = JSON.parse(v || ''); return x == null ? d : x; } catch { return d; } };
   const cliOf = id => GX.cli().find(c => c.id === id) || null;
   const cliName = id => (cliOf(id) || {}).nome || 'Cliente eliminato';
   const artOf = id => GX.art().find(a => a.id === id) || null;
+  // v111: codice interno automatico (ART-0001, ART-0002…), codice del fornitore e codice a barre
+  const artNum = c => { const m = /^ART-(\d+)$/i.exec(String(c || '').trim()); return m ? parseInt(m[1], 10) : 0; };
+  const artNext = (extra = 0) => 'ART-' + String(GX.art().reduce((m, a) => Math.max(m, artNum(a.codice)), 0) + 1 + extra).padStart(4, '0');
+  const codeKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/\s+/g, '');
+  // cerca un articolo con il codice letto (codice a barre, codice interno o codice del fornitore)
+  function artByCode(code) {
+    const k = codeKey(code); if (!k) return null;
+    const A = GX.art(), z = k.replace(/^0+/, '');
+    return A.find(a => codeKey(a.barcode) === k) || A.find(a => codeKey(a.codice) === k) || A.find(a => codeKey(a.codForn) === k) || (z && z !== k ? A.find(a => codeKey(a.barcode).replace(/^0+/, '') === z) : null) || null;
+  }
+  // gli articoli che non hanno ancora un codice interno lo ricevono in automatico (una volta)
+  let artFixDone = false;
+  function artFixCodes() {
+    if (artFixDone || (me && me.ruolo === 'lettura')) return; artFixDone = true;
+    const L = GX.art().filter(a => !String(a.codice || '').trim()); if (!L.length) return;
+    let n = GX.art().reduce((m, a) => Math.max(m, artNum(a.codice)), 0);
+    const used = new Set(GX.art().map(a => codeKey(a.codice)));
+    const ops = L.sort((a, b) => String(a.creato || '').localeCompare(String(b.creato || ''))).map(a => { let c; do { c = 'ART-' + String(++n).padStart(4, '0'); } while (used.has(c)); used.add(c); return { action: 'upsert', sheet: 'Articoli', row: { ...a, codice: c } }; });
+    write(ops); toast(`Codice interno assegnato a ${ops.length} ${ops.length === 1 ? 'articolo' : 'articoli'}`);
+  }
+  // v111: lettore di codici a barre (scan.js + ZXing, caricati solo quando servono)
+  const DOC_IC = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
+  const SCAN_IC = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M7 8v8M10 8v8M13 8v8M16.5 8v8"/></svg>';
+  async function scanOpen(o) {
+    try { await loadLib('scan.js?v=1'); } catch { return toast('Lettore non disponibile: controlla la connessione'); }
+    if (!window.CDC_SCAN) return toast('Lettore non disponibile');
+    return window.CDC_SCAN.open(o);
+  }
+  // compila un campo del modulo aperto con il codice letto
+  function scanFill(inp) {
+    if (!inp) return;
+    scanOpen({ title: 'Scansiona il codice a barre', onCode: c => { inp.value = c; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); return { ok: true, msg: c }; } });
+  }
+  // dalla lista del magazzino: apre l'articolo letto, o ne crea uno nuovo con quel codice a barre
+  function magScan() {
+    let found = null, code = '';
+    scanOpen({ title: 'Cerca in magazzino', hint: 'Inquadra il codice a barre dell\'articolo', onCode: c => { code = c; found = artByCode(c); return found ? { ok: true, msg: found.descrizione } : { ok: true, msg: 'Articolo nuovo: ' + c }; },
+      onClose: n => { if (!n) return; setTimeout(() => { if (found) artForm(found); else if (confirm(`Nessun articolo con il codice ${code}. Crearne uno nuovo?`)) artForm({ barcode: code }); }, 280); } });
+  }
   const giacMap = () => { const M = new Map(); GX.mov().forEach(m => M.set(m.articolo, r2((M.get(m.articolo) || 0) + num(m.quantita)))); return M; };
   const lnTot = l => r2(num(l.q) * num(l.p) * (1 - num(l.sc) / 100));
   function docTot(righe) {
@@ -7739,20 +7882,21 @@
   function renderMag() {
     const el = $('#mg-body'); if (!el) return;
     sub('Articoli, giacenze, carichi e scarichi');
+    if (GX.art().some(a => !String(a.codice || '').trim())) setTimeout(artFixCodes, 0);
     const A = GX.art().slice().sort((a, b) => String(a.descrizione).localeCompare(String(b.descrizione), 'it')), G = giacMap(), q = nh(mgQ);
     const low = a => num(a.scorta) > 0 && (G.get(a.id) || 0) <= num(a.scorta);
     const val = A.reduce((s, a) => s + Math.max(0, G.get(a.id) || 0) * num(a.costo), 0);
     const m0 = today().slice(0, 7), MM = GX.mov().filter(m => String(m.data).slice(0, 7) === m0), nLow = A.filter(low).length;
     const tabs = `<div class="gx-seg" role="tablist"><button type="button" data-mgtab="art" class="${mgTab === 'art' ? 'on' : ''}">Articoli</button><button type="button" data-mgtab="mov" class="${mgTab === 'mov' ? 'on' : ''}">Movimenti</button></div>`;
-    let h = gxWarn() + `<div class="gx-bar">${tabs}<label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="mg-q" placeholder="Cerca codice o descrizione…" value="${esc(mgQ)}"></label>
+    let h = gxWarn() + `<div class="gx-bar">${tabs}<label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="mg-q" placeholder="Cerca codice, codice a barre o descrizione…" value="${esc(mgQ)}"><button type="button" class="scan-ib" data-gx="mag-scan" title="Scansiona un codice a barre" aria-label="Scansiona un codice a barre">${SCAN_IC}</button></label>
       <div class="gx-act"><button type="button" class="btn sm" data-gx="mag-imp"><span class="lb-d">Importa Excel</span><span class="lb-m">Importa</span></button><button type="button" class="btn sm" data-gx="mag-xls"><span class="lb-d">Esporta</span><span class="lb-m">Esporta</span></button><button type="button" class="btn sm" data-gx="mov-new">Carico / scarico</button><button type="button" class="btn sm primary" data-gx="art-new">+ Articolo</button></div></div>
       ${gxKpi([['Articoli', fmtNum(A.length, 0), `${A.filter(a => (G.get(a.id) || 0) > 0).length} disponibili`], ['Valore del magazzino', eur0(val), 'giacenze al costo'], ['Sotto scorta', fmtNum(nLow, 0), nLow ? 'da riordinare' : 'tutto a posto', nLow ? 'warn' : ''], ['Movimenti del mese', fmtNum(MM.length, 0), `${MM.filter(m => num(m.quantita) > 0).length} carichi · ${MM.filter(m => num(m.quantita) < 0).length} scarichi`]])}`;
     if (!A.length) h += gxEmpty(GIC.mag, 'Magazzino vuoto', 'Aggiungi gli articoli che tieni in magazzino, oppure importali da Excel. Le giacenze si aggiornano da sole con carichi, DDT e fatture.', '<button type="button" class="btn primary" data-gx="art-new">+ Aggiungi il primo articolo</button>');
     else if (mgTab === 'art') {
-      const F = A.filter(a => (!q || nh([a.codice, a.descrizione, a.categoria, a.fornitore, a.barcode].join(' ')).includes(q)) && (!mgLow || low(a)));
+      const F = A.filter(a => (!q || nh([a.codice, a.codForn, a.descrizione, a.categoria, a.fornitore, a.barcode].join(' ')).includes(q)) && (!mgLow || low(a)));
       h += `<div class="gx-chips"><button type="button" class="chip-f${mgLow ? '' : ' on'}" data-mglow="0">Tutti <em>${A.length}</em></button><button type="button" class="chip-f${mgLow ? ' on' : ''}" data-mglow="1">Sotto scorta <em>${nLow}</em></button></div>
       <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Articolo</th><th class="r">Giacenza</th><th class="r">Scorta min.</th><th class="r">Costo</th><th class="r">Prezzo</th><th class="r">Valore</th><th></th></tr></thead><tbody>
-      ${F.slice(0, 400).map(a => { const g = G.get(a.id) || 0; return `<tr data-art="${esc(a.id)}"><td data-l="Articolo"><b>${esc(a.descrizione)}</b><small>${esc([a.codice, a.categoria, a.fornitore].filter(Boolean).join(' · '))}</small></td><td class="r" data-l="Giacenza"><span class="gx-q${low(a) ? ' low' : g <= 0 ? ' zero' : ''}">${fmtNum(g, g % 1 ? 2 : 0)} ${esc(a.um || '')}</span></td><td class="r" data-l="Scorta min.">${num(a.scorta) ? fmtNum(num(a.scorta), 0) : '—'}</td><td class="r" data-l="Costo">${num(a.costo) ? eur(num(a.costo)) : '—'}</td><td class="r" data-l="Prezzo">${num(a.prezzo) ? eur(num(a.prezzo)) : '—'}</td><td class="r" data-l="Valore">${g > 0 && num(a.costo) ? eur0(g * num(a.costo)) : '—'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="mov-art" data-id="${esc(a.id)}">±</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="gx-none">Nessun articolo trovato</td></tr>'}
+      ${F.slice(0, 400).map(a => { const g = G.get(a.id) || 0; return `<tr data-art="${esc(a.id)}"><td data-l="Articolo"><b>${esc(a.descrizione)}</b><small>${esc([a.codice, a.codForn ? 'forn. ' + a.codForn : '', a.categoria, a.fornitore].filter(Boolean).join(' · '))}</small></td><td class="r" data-l="Giacenza"><span class="gx-q${low(a) ? ' low' : g <= 0 ? ' zero' : ''}">${fmtNum(g, g % 1 ? 2 : 0)} ${esc(a.um || '')}</span></td><td class="r" data-l="Scorta min.">${num(a.scorta) ? fmtNum(num(a.scorta), 0) : '—'}</td><td class="r" data-l="Costo">${num(a.costo) ? eur(num(a.costo)) : '—'}</td><td class="r" data-l="Prezzo">${num(a.prezzo) ? eur(num(a.prezzo)) : '—'}</td><td class="r" data-l="Valore">${g > 0 && num(a.costo) ? eur0(g * num(a.costo)) : '—'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="mov-art" data-id="${esc(a.id)}">±</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="gx-none">Nessun articolo trovato</td></tr>'}
       </tbody></table>${F.length > 400 ? `<p class="muted small gx-more">Mostrati 400 articoli su ${F.length}: usa la ricerca.</p>` : ''}</div>`;
     } else {
       const M = GX.mov().map(m => ({ m, a: artOf(m.articolo) })).filter(x => !q || nh([x.a && x.a.codice, x.a && x.a.descrizione, x.m.causale].join(' ')).includes(q)).sort((x, y) => String(y.m.data).localeCompare(String(x.m.data)) || String(y.m.creato).localeCompare(String(x.m.creato)));
@@ -7765,21 +7909,24 @@
     const qi = $('#mg-q'); if (qi) qi.oninput = () => { mgQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderMag(); const x = $('#mg-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
   }
   function artForm(a) {
-    const n = !a; a = a ? { ...a } : { id: uid(), um: 'PZ', iva: 22, creato: today() };
+    const n = !a || !a.id; a = a && a.id ? { ...a } : { id: uid(), um: 'PZ', iva: 22, creato: today(), codice: artNext(), ...(a || {}) };
     const g = n ? 0 : (giacMap().get(a.id) || 0);
     const f = (k, l, t = 'text', ph = '') => `<label class="f"><span>${l}</span><input name="${k}" type="${t}"${t === 'number' ? ' step="any" inputmode="decimal"' : ''} value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"${k === 'descrizione' ? ' data-focus required' : ''}></label>`;
     const CAT = categorie();
     openSheet(n ? 'Nuovo articolo' : a.descrizione, `${f('descrizione', 'Descrizione', 'Es. Cemento 32,5 R sacco 25 kg')}
-      <div class="f-row f3">${f('codice', 'Codice', 'facoltativo')}<label class="f"><span>Unità</span><select name="um">${UM.map(u => `<option${u === a.um ? ' selected' : ''}>${u}</option>`).join('')}</select></label>${f('barcode', 'Codice a barre', 'EAN')}</div>
-      <div class="f-row"><label class="f"><span>Categoria</span><input name="categoria" list="art-cats" value="${esc(a.categoria || '')}"><datalist id="art-cats">${CAT.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>${f('fornitore', 'Fornitore')}</div>
+      <div class="f-row f3">${f('codice', 'Codice interno', 'automatico')}${f('codForn', 'Codice del fornitore', 'es. 4933451240')}<label class="f"><span>Unità</span><select name="um">${UM.map(u => `<option${u === a.um ? ' selected' : ''}>${u}</option>`).join('')}</select></label></div>
+      <div class="f-row"><label class="f"><span>Codice a barre</span><span class="scan-fld"><input name="barcode" value="${esc(a.barcode || '')}" placeholder="EAN · scansiona o scrivi" inputmode="numeric"><button type="button" class="scan-ib" data-scanfill="barcode" title="Scansiona con la fotocamera" aria-label="Scansiona con la fotocamera">${SCAN_IC}</button></span></label><label class="f"><span>Fornitore</span><input name="fornitore" list="art-forn" value="${esc(a.fornitore || '')}"><datalist id="art-forn">${[...new Set([...FOR().map(x => x.nome), ...GX.art().map(x => x.fornitore)].map(x => String(x || '').trim()).filter(Boolean))].sort().map(x => `<option value="${esc(x)}">`).join('')}</datalist></label></div>
+      <label class="f"><span>Categoria</span><input name="categoria" list="art-cats" value="${esc(a.categoria || '')}"><datalist id="art-cats">${CAT.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
       <div class="f-row f3">${f('costo', 'Costo d\'acquisto €', 'number', 'IVA esclusa')}${f('prezzo', 'Prezzo di vendita €', 'number', 'IVA esclusa')}<label class="f"><span>IVA</span><select name="iva">${IVE.map(v => `<option value="${v}"${num(a.iva) === v ? ' selected' : ''}>${v}%</option>`).join('')}</select></label></div>
       <div class="f-row">${f('scorta', 'Scorta minima', 'number', 'avviso sotto questa quantità')}${n ? f('giac0', 'Giacenza iniziale', 'number', '0') : `<div class="f"><span>Giacenza attuale</span><div class="gx-giac"><b>${fmtNum(g, g % 1 ? 2 : 0)} ${esc(a.um || '')}</b><button type="button" class="btn sm" data-gx="mov-art" data-id="${esc(a.id)}">Carico / scarico</button></div></div>`}</div>
       <label class="f"><span>Note</span><input name="note" value="${esc(a.note || '')}"></label>`, fd => {
       const o = { ...a };
-      ['descrizione', 'codice', 'um', 'barcode', 'categoria', 'fornitore', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
+      ['descrizione', 'codice', 'codForn', 'um', 'barcode', 'categoria', 'fornitore', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
+      if (!o.codice) o.codice = artNext();
+      if (o.barcode && GX.art().some(x => x.id !== o.id && codeKey(x.barcode) === codeKey(o.barcode)) && !confirm('Questo codice a barre è già su un altro articolo. Salvare lo stesso?')) return;
       ['costo', 'prezzo', 'iva', 'scorta'].forEach(k => { const v = String(fd.get(k) ?? '').trim(); o[k] = v === '' ? '' : num(v); });
       if (o.descrizione.length < 2) { toast('Scrivi la descrizione'); return; }
-      if (o.codice && GX.art().some(x => x.id !== o.id && String(x.codice).trim().toUpperCase() === o.codice.toUpperCase())) { toast('Esiste già un articolo con questo codice'); return; }
+      if (o.codice && GX.art().some(x => x.id !== o.id && String(x.codice).trim().toUpperCase() === o.codice.toUpperCase())) { toast('Esiste già un articolo con questo codice interno'); return; }
       const ops = [{ action: 'upsert', sheet: 'Articoli', row: o }], g0 = n ? num(fd.get('giac0')) : 0;
       if (g0) ops.push({ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: today(), articolo: o.id, tipo: 'carico', quantita: g0, costo: num(o.costo), causale: 'Giacenza iniziale', doc: '', note: '', creato: new Date().toISOString() } });
       write(ops); toast(n ? 'Articolo aggiunto' : 'Articolo aggiornato'); return true;
@@ -7792,26 +7939,34 @@
   function movForm(artId) {
     const A = GX.art().slice().sort((a, b) => String(a.descrizione).localeCompare(String(b.descrizione), 'it')), G = giacMap();
     if (!A.length) return toast('Aggiungi prima un articolo');
-    let tipo = 'carico';
+    let tipo = 'carico', mvFile = null;
     const CAUS = { carico: ['Acquisto da fornitore', 'Reso da cliente', 'Produzione', 'Altro'], scarico: ['Uso interno', 'Merce danneggiata', 'Omaggio', 'Reso a fornitore', 'Altro'], rettifica: ['Inventario'] };
     openSheet('Carico / scarico', `<div class="gx-seg wide" data-mvseg><button type="button" data-mv="carico" class="on">Carico</button><button type="button" data-mv="scarico">Scarico</button><button type="button" data-mv="rettifica">Inventario</button></div>
-      <label class="f"><span>Articolo</span><select name="articolo" data-focus>${A.map(a => `<option value="${esc(a.id)}"${a.id === artId ? ' selected' : ''}>${esc(a.descrizione)}${a.codice ? ' · ' + esc(a.codice) : ''} — ${fmtNum(G.get(a.id) || 0, 0)} ${esc(a.um || '')}</option>`).join('')}</select></label>
+      <label class="f"><span>Articolo <button type="button" class="link scan-lk" data-mvscan>${SCAN_IC}scansiona</button></span><select name="articolo" data-focus>${A.map(a => `<option value="${esc(a.id)}"${a.id === artId ? ' selected' : ''}>${esc(a.descrizione)}${a.codice ? ' · ' + esc(a.codice) : ''} — ${fmtNum(G.get(a.id) || 0, 0)} ${esc(a.um || '')}</option>`).join('')}</select></label>
       <div class="f-row f3"><label class="f"><span data-mvq>Quantità caricata</span><input name="q" type="number" step="any" inputmode="decimal" required></label><label class="f" data-mvc><span>Costo unitario €</span><input name="costo" type="number" step="any" inputmode="decimal" placeholder="IVA esclusa"></label><label class="f"><span>Data</span><input name="data" type="date" value="${today()}"></label></div>
-      <div class="f-row"><label class="f"><span>Causale</span><select name="causale">${CAUS.carico.map(c => `<option>${c}</option>`).join('')}</select></label><label class="f"><span>Note</span><input name="note" placeholder="es. numero DDT del fornitore"></label></div>
-      <p class="muted small" data-mvh>La quantità si aggiunge alla giacenza.</p>`, fd => {
+      <div class="f-row"><label class="f"><span>Causale</span><select name="causale">${CAUS.carico.map(c => `<option>${c}</option>`).join('')}</select></label><label class="f"><span>Note</span><input name="note" placeholder="es. merce per il cantiere"></label></div>
+      <div class="mv-ddt" data-mvddt><div class="f-row"><label class="f"><span>DDT del fornitore n.</span><input name="ddtn" placeholder="facoltativo"></label><label class="f"><span>Fornitore</span><input name="ddtf" placeholder="dall'articolo"></label></div><div class="ad-box" id="mv-doc"></div></div>
+      <p class="muted small" data-mvh>La quantità si aggiunge alla giacenza.</p>`, async fd => {
       const id = String(fd.get('articolo')), a = artOf(id), q = num(fd.get('q'));
       if (!a) return; if (!String(fd.get('q') || '').trim()) { toast('Scrivi la quantità'); return; }
       let qty = tipo === 'carico' ? Math.abs(q) : tipo === 'scarico' ? -Math.abs(q) : r2(q - (giacMap().get(id) || 0));
       if (tipo === 'rettifica' && !qty) { toast('La giacenza è già questa'); return true; }
-      write([{ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: String(fd.get('data') || today()), articolo: id, tipo, quantita: qty, costo: tipo === 'carico' ? num(fd.get('costo')) || num(a.costo) : num(a.costo), causale: String(fd.get('causale') || ''), doc: '', note: String(fd.get('note') || '').trim(), creato: new Date().toISOString() } }]);
+      const dataM = String(fd.get('data') || today()), ddtn = tipo === 'carico' ? String(fd.get('ddtn') || '').trim() : '', ddtf = String(fd.get('ddtf') || '').trim() || a.fornitore || '';
+      const ops = [], dfr = tipo === 'carico' && (ddtn || mvFile) ? { id: uid(), tipo: 'ddt', fornitore: ddtf, numero: ddtn, data: dataM, totale: '', file: '', nomeFile: '', mime: '', fattura: '', note: `Carico ${a.descrizione}`, creato: new Date().toISOString() } : null;
+      if (dfr && mvFile && !isLocal()) { try { busy('Salvo il DDT nel tuo Drive…'); dfr.file = await api('uploadDoc', { name: `DDT ${ddtf} ${ddtn} ${dataM}.${mvFile.ext}`.replace(/[\\/]/g, '-').replace(/\s+/g, ' '), mime: mvFile.mime, data: mvFile.data }); dfr.nomeFile = mvFile.name; dfr.mime = mvFile.mime; } catch (e) { busy(); toast('DDT non salvato: ' + e.message); return; } busy(); }
+      if (dfr) ops.push({ action: 'upsert', sheet: 'DocForn', row: dfr });
+      ops.push({ action: 'upsert', sheet: 'MagMov', row: { id: uid(), data: dataM, articolo: id, tipo, quantita: qty, costo: tipo === 'carico' ? num(fd.get('costo')) || num(a.costo) : num(a.costo), causale: String(fd.get('causale') || ''), doc: dfr ? dfr.id : '', note: [ddtn ? 'DDT n. ' + ddtn : '', String(fd.get('note') || '').trim()].filter(Boolean).join(' · '), creato: new Date().toISOString() } });
+      write(ops);
       toast(tipo === 'rettifica' ? 'Giacenza aggiornata' : tipo === 'carico' ? 'Carico registrato' : 'Scarico registrato'); return true;
     }, null, 'Registra');
     const sel = $('#sheet-body [name=articolo]'), cst = $('#sheet-body [name=costo]');
     const fillCost = () => { const a = artOf(sel.value); cst.placeholder = a && num(a.costo) ? `${fmtNum(num(a.costo), 2)} (costo dell'articolo)` : 'IVA esclusa'; };
-    sel.onchange = fillCost; fillCost();
+    sel.onchange = () => { fillCost(); const a = artOf(sel.value), f = $('#sheet-body [name=ddtf]'); if (f) f.placeholder = a && a.fornitore ? a.fornitore : 'nome del fornitore'; }; sel.onchange();
+    adBox($('#mv-doc'), () => mvFile, f => { mvFile = f; }, '', 'DDT');
+    $('[data-mvscan]').onclick = e => { e.preventDefault(); scanOpen({ title: 'Scegli l\'articolo', onCode: c => { const a = artByCode(c); if (!a) return { ok: false, msg: `Codice ${c} non trovato` }; sel.value = a.id; fillCost(); return { ok: true, msg: a.descrizione }; }, onClose: () => { const q = $('#sheet-body [name=q]'); if (q) q.focus(); } }); };
     $('[data-mvseg]').onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; tipo = b.dataset.mv; $$('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
       $('[data-mvq]').textContent = tipo === 'carico' ? 'Quantità caricata' : tipo === 'scarico' ? 'Quantità scaricata' : 'Giacenza contata';
-      $('[data-mvc]').hidden = tipo !== 'carico'; $('[data-mvh]').textContent = tipo === 'carico' ? 'La quantità si aggiunge alla giacenza.' : tipo === 'scarico' ? 'La quantità si toglie dalla giacenza.' : 'Scrivi quanti pezzi hai contato: la differenza viene registrata come inventario.';
+      $('[data-mvc]').hidden = tipo !== 'carico'; $('[data-mvddt]').hidden = tipo !== 'carico'; $('[data-mvh]').textContent = tipo === 'carico' ? 'La quantità si aggiunge alla giacenza.' : tipo === 'scarico' ? 'La quantità si toglie dalla giacenza.' : 'Scrivi quanti pezzi hai contato: la differenza viene registrata come inventario.';
       $('#sheet-body [name=causale]').innerHTML = CAUS[tipo].map(c => `<option>${c}</option>`).join(''); };
   }
   async function magImport() {
@@ -7822,10 +7977,13 @@
       const A = GX.art(), ops = []; let nNew = 0, nUp = 0;
       rows.forEach(r => {
         const desc = String(key(r, 'descrizione', 'articolo', 'nome', 'prodotto')).trim(); if (!desc) return;
-        const cod = String(key(r, 'codice', 'cod', 'sku')).trim();
-        const ex = (cod && A.find(a => String(a.codice).trim().toUpperCase() === cod.toUpperCase())) || A.find(a => nh(a.descrizione) === nh(desc));
+        const cf = String(Object.keys(r).filter(h => /forn|produtt|fabbric|costrutt/.test(nh(h)) && /cod|art|rif/.test(nh(h))).map(h => r[h])[0] ?? '').trim();
+        const ck = Object.keys(r).find(h => /cod|sku/.test(nh(h)) && !/forn|produtt|fabbric|costrutt|barre|ean/.test(nh(h))), cod = ck ? String(r[ck]).trim() : '';
+        const bc = String(Object.keys(r).filter(h => /barre|ean|barcode/.test(nh(h))).map(h => r[h])[0] ?? '').trim();
+        const ex = (cod && A.find(a => String(a.codice).trim().toUpperCase() === cod.toUpperCase())) || (cf && A.find(a => codeKey(a.codForn) === codeKey(cf))) || (bc && A.find(a => codeKey(a.barcode) === codeKey(bc))) || A.find(a => nh(a.descrizione) === nh(desc));
         const o = ex ? { ...ex } : { id: uid(), um: 'PZ', iva: 22, creato: today() };
-        o.descrizione = desc; if (cod) o.codice = cod;
+        o.descrizione = desc; if (cod) o.codice = cod; if (cf) o.codForn = cf; if (bc) o.barcode = bc;
+        if (!String(o.codice || '').trim()) o.codice = artNext(nNew);
         const um = String(key(r, 'um', 'unita')).trim().toUpperCase(); if (um) o.um = um;
         [['costo', 'costo', 'acquisto'], ['prezzo', 'prezzo', 'vendita', 'listino'], ['iva', 'iva', 'aliquota'], ['scorta', 'scorta', 'minimo']].forEach(([k, ...ks]) => { const v = key(r, ...ks); if (String(v).trim() !== '') o[k] = num(v); });
         const cat = String(key(r, 'categoria')).trim(); if (cat) o.categoria = cat;
@@ -7841,9 +7999,9 @@
   async function magExport() {
     try {
       await loadXlsx(); const G = giacMap();
-      const rows = GX.art().map(a => { const g = G.get(a.id) || 0; return { Codice: a.codice || '', Descrizione: a.descrizione, UM: a.um || '', Categoria: a.categoria || '', Fornitore: a.fornitore || '', Giacenza: g, 'Scorta minima': num(a.scorta) || '', Costo: num(a.costo) || '', Prezzo: num(a.prezzo) || '', IVA: num(a.iva), Valore: r2(Math.max(0, g) * num(a.costo)) }; });
+      const rows = GX.art().map(a => { const g = G.get(a.id) || 0; return { Codice: a.codice || '', 'Codice fornitore': a.codForn || '', 'Codice a barre': a.barcode || '', Descrizione: a.descrizione, UM: a.um || '', Categoria: a.categoria || '', Fornitore: a.fornitore || '', Giacenza: g, 'Scorta minima': num(a.scorta) || '', Costo: num(a.costo) || '', Prezzo: num(a.prezzo) || '', IVA: num(a.iva), Valore: r2(Math.max(0, g) * num(a.costo)) }; });
       const wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Codice: '', Descrizione: '', UM: '', Categoria: '', Fornitore: '', Giacenza: '', 'Scorta minima': '', Costo: '', Prezzo: '', IVA: '', Valore: '' }]);
-      ws['!cols'] = [12, 40, 6, 18, 18, 10, 12, 10, 10, 6, 12].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, 'Magazzino');
+      ws['!cols'] = [12, 16, 16, 40, 6, 18, 18, 10, 12, 10, 10, 6, 12].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, 'Magazzino');
       XLSX.writeFile(wb, `magazzino-${today()}.xlsx`); toast('Excel scaricato');
     } catch (e) { toast(e.message); }
   }
@@ -7906,7 +8064,7 @@
         <label class="gx-chk"><input type="checkbox" name="prezzi"${d.prezzi ? ' checked' : ''}> Mostra i prezzi nel PDF del DDT</label>`
         : `<div class="f-row"><label class="f"><span>Pagamento</span><select name="pagamento"><option value="">Come da cliente</option>${PAG.map(p => `<option${p === d.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label><div class="f"><span>Tipo</span><div class="gx-ro">${d.tipo === 'TD24' ? 'Fattura differita (TD24) dai DDT' : 'Fattura immediata (TD01)'}</div></div></div>`}
       <div class="dx"><div class="dx-h"><span>Articolo / descrizione</span><span>UM</span><span>Q.tà</span><span>Prezzo €</span><span>Sc.%</span><span>IVA</span><span>Totale</span><span></span></div><div id="dx-rows"></div>
-        ${lock || lockF ? '' : '<button type="button" class="btn sm" data-dx="add">+ Riga</button>'}<div class="dx-tot" id="dx-tot"></div></div>
+        ${lock || lockF ? '' : `<div class="dx-adds"><button type="button" class="btn sm" data-dx="add">+ Riga</button><button type="button" class="btn sm" data-dx="scan">${SCAN_IC}Scansiona</button></div>`}<div class="dx-tot" id="dx-tot"></div></div>
       <datalist id="dx-arts">${A.map(a => `<option value="${esc((a.codice ? a.codice + ' — ' : '') + a.descrizione)}">`).join('')}</datalist>
       <label class="f"><span>Note</span><textarea name="note" rows="2">${esc(d.note || '')}</textarea></label>
       ${n ? '' : `<div class="gx-docact"><button type="button" class="btn sm" data-gx="${isD ? 'ddt' : 'fv'}-pdf" data-id="${esc(d.id)}">Scarica PDF</button>${isD ? '' : `<button type="button" class="btn sm" data-gx="fv-xml" data-id="${esc(d.id)}">File XML</button><button type="button" class="btn sm" data-gx="fv-paid" data-id="${esc(d.id)}">${d.stato === 'pagata' ? 'Segna da incassare' : 'Segna pagata'}</button>`}${isD ? `<button type="button" class="btn sm ghost" data-gx="ddt-copy" data-id="${esc(d.id)}">Duplica</button>` : ''}</div>`}`,
@@ -7948,13 +8106,23 @@
     box.addEventListener('input', e => { const r = e.target.closest('.dx-r'), k = e.target.dataset.k; if (!r || !k) return; const l = R[+r.dataset.i]; l[k] = e.target.value; if (k === 'd') { l.art = ''; l.c = ''; } tot(); });
     box.addEventListener('change', e => {
       const r = e.target.closest('.dx-r'); if (!r || e.target.dataset.k !== 'd') return;
-      const l = R[+r.dataset.i], v = e.target.value.trim(), a = A.find(x => (x.codice ? x.codice + ' — ' : '') + x.descrizione === v);
+      const l = R[+r.dataset.i], v = e.target.value.trim(), a = A.find(x => (x.codice ? x.codice + ' — ' : '') + x.descrizione === v) || (/^\S+$/.test(v) ? artByCode(v) : null);
       if (a) { Object.assign(l, { art: a.id, c: a.codice || '', d: a.descrizione, um: a.um || 'PZ', p: num(a.prezzo) || l.p, iva: a.iva === '' || a.iva == null ? 22 : num(a.iva) }); const ri = r.dataset.i; setTimeout(() => { draw(); const nx = $(`.dx-r[data-i="${ri}"] [data-k="q"]`); if (nx) nx.select(); }, 0); }
       else l.d = v;
     });
     $('#sheet-body').addEventListener('click', function dx(e) {
       const b = e.target.closest('[data-dx]'); if (!b || !$('#dx-rows')) return;
       if (b.dataset.dx === 'add') { R.push({ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: R.length ? R[R.length - 1].iva : 22 }); draw(); const ls = $$('.dx-r [data-k="d"]'); ls[ls.length - 1].focus(); }
+      if (b.dataset.dx === 'scan') {
+        // a ogni lettura: se l'articolo è già nel documento aumenta la quantità, altrimenti aggiunge la riga
+        scanOpen({ title: isD ? 'Aggiungi al DDT' : 'Aggiungi alla fattura', hint: 'Inquadra i codici uno dopo l\'altro', multi: true, onCode: c => {
+          const a = artByCode(c); if (!a) return { ok: false, msg: `Codice ${c} non trovato in magazzino` };
+          const ex = R.find(l => l.art === a.id);
+          if (ex) ex.q = num(ex.q) + 1;
+          else { const blank = R.findIndex(l => !l.art && !String(l.d || '').trim()); const row = { art: a.id, c: a.codice || '', d: a.descrizione, um: a.um || 'PZ', q: 1, p: num(a.prezzo) || '', sc: '', iva: a.iva === '' || a.iva == null ? 22 : num(a.iva) }; if (blank >= 0) R[blank] = row; else R.push(row); }
+          draw(); return { ok: true, msg: `${a.descrizione} · ${fmtNum(num((ex || R.find(l => l.art === a.id)).q), 0)} ${a.um || 'PZ'}` };
+        } });
+      }
       if (b.dataset.dx === 'del') { R.splice(+b.closest('.dx-r').dataset.i, 1); if (!R.length) R.push({ art: '', c: '', d: '', um: 'PZ', q: 1, p: '', sc: '', iva: 22 }); draw(); }
     });
     draw();
@@ -8137,6 +8305,12 @@
       if (k === 'cli-open') { const c = cliOf(id); if (c) cliForm(c); return; }
       if (k === 'art-new') return artForm();
       if (k === 'mov-new') return movForm();
+      if (k === 'mag-scan') return magScan();
+      if (k === 'fo-tab') { foTab = id; return renderForn(); }
+      if (k === 'ar-t') { arT = id; return renderForn(); }
+      if (k === 'doc-new') { const pre = id ? { fornitore: id } : {}; if (!$('#sheet').hidden) { closeSheet(); setTimeout(() => docFornForm(null, pre), 280); return; } return docFornForm(null, pre); }
+      if (k === 'doc-open') { e.stopPropagation(); return docView(id); }
+      if (k === 'ar-row') { if (t.closest('[data-gx="doc-open"]')) return; const [kk, rid] = id.split(':'); if (kk === 'fa') { faDetail(rid); } else { const r = GX.dfo().find(x => x.id === rid); if (r) docFornForm(r); } return; }
       if (k === 'mov-art') return movForm(id);
       if (k === 'mov-del') { const m = GX.mov().find(x => x.id === id); if (m && confirm('Eliminare questo movimento? La giacenza torna come prima.')) { write([{ action: 'delete', sheet: 'MagMov', id }]); toast('Movimento eliminato'); } return; }
       if (k === 'mag-imp') return magImport();
@@ -8320,7 +8494,55 @@
      v101 · FORNITORI (anagrafica, spesa, fatture da pagare, cataloghi)
      ========================================================= */
   const FOR = () => db.fornitori || (db.fornitori = []);
-  let foQ = '';
+  let foQ = '', foTab = 'anag', arQ = '', arT = '';
+  // v111: archivio documenti dei fornitori = fatture (foglio Fatture) + DDT e altri documenti (foglio DocForn)
+  const DF_T = { ddt: ['DDT di trasporto', 'soon'], fattura: ['Fattura', 'paid'], nc: ['Nota di credito', 'late'], ordine: ['Ordine / conferma', ''], listino: ['Listino / offerta', ''], altro: ['Altro', ''] };
+  function arRows() {
+    const F = faRows().map(r => ({ k: 'fa', id: r.id, tipo: 'fattura', fornitore: r.fornitore, numero: r.numero, data: r.data, totale: num(r.totale), file: r.pdf || '', r }));
+    const D = GX.dfo().map(r => ({ k: 'df', id: r.id, tipo: r.tipo || 'altro', fornitore: r.fornitore, numero: r.numero, data: r.data, totale: r.totale === '' || r.totale == null ? null : num(r.totale), file: r.file || '', r }));
+    return [...F, ...D].sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  }
+  const dfoOk = () => isLocal() || !db.v || db.v >= 'cdc-4.9';
+  function docFornForm(d0, preset = {}) {
+    const n = !d0; const d = d0 ? { ...d0 } : { id: uid(), tipo: 'ddt', fornitore: '', numero: '', data: today(), totale: '', file: '', nomeFile: '', mime: '', fattura: '', note: '', creato: new Date().toISOString(), ...preset };
+    let file = null;
+    const forn = [...new Set([...FOR().map(x => x.nome), ...faRows().map(x => x.fornitore), ...GX.dfo().map(x => x.fornitore)].map(x => String(x || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+    openSheet(n ? 'Carica documento del fornitore' : `${(DF_T[d.tipo] || DF_T.altro)[0]} ${d.numero ? 'n. ' + d.numero : ''}`, `${dfoOk() ? '' : '<div class="gx-note warn"><span>Aggiorna lo script Google alla versione <b>cdc-4.9</b> per salvare DDT e documenti nell\'archivio.</span></div>'}
+      <div class="gx-seg wide df-seg" role="radiogroup">${Object.entries(DF_T).filter(([k]) => k !== 'nc').map(([k, v]) => `<button type="button" data-dft="${k}" class="${k === d.tipo ? 'on' : ''}">${esc(v[0].split(' ')[0])}</button>`).join('')}</div>
+      <div class="ad-box" id="df-doc"></div>
+      <div class="f-row"><label class="f"><span>Fornitore</span><input name="fornitore" list="df-forn" required value="${esc(d.fornitore)}" data-focus placeholder="Es. Edilmateriali Rossi"><datalist id="df-forn">${forn.map(x => `<option value="${esc(x)}">`).join('')}</datalist></label><label class="f"><span>Numero documento</span><input name="numero" value="${esc(d.numero)}" placeholder="Es. 1452"></label></div>
+      <div class="f-row"><label class="f"><span>Data</span><input name="data" type="date" required value="${esc(validD(d.data) ? d.data : today())}"></label><label class="f"><span>Totale € (facoltativo)</span><input name="totale" inputmode="decimal" value="${esc(d.totale === '' || d.totale == null ? '' : fmtIn(d.totale))}" placeholder="IVA inclusa"></label></div>
+      <label class="f" data-dffa><span>Fattura che lo comprende (facoltativo)</span><input name="fattura" value="${esc(d.fattura || '')}" placeholder="numero della fattura, quando arriva"></label>
+      <label class="f"><span>Note</span><input name="note" value="${esc(d.note || '')}" placeholder="es. merce per il cantiere di via Roma"></label>`, async fd => {
+      if (d.tipo === 'fattura') return;
+      const o = { ...d, fornitore: String(fd.get('fornitore') || '').trim(), numero: String(fd.get('numero') || '').trim(), data: String(fd.get('data') || today()), fattura: String(fd.get('fattura') || '').trim(), note: String(fd.get('note') || '').trim() };
+      const tt = String(fd.get('totale') || '').trim(); o.totale = tt === '' ? '' : num(tt);
+      if (!o.fornitore) { toast('Scrivi il fornitore'); return; }
+      if (n && !file && !isLocal()) { toast('Allega il documento (PDF o foto)'); return; }
+      if (file && !isLocal()) {
+        try { busy('Salvo il documento nel tuo Drive…'); o.file = await api('uploadDoc', { name: `${(DF_T[o.tipo] || DF_T.altro)[0]} ${o.fornitore} ${o.numero} ${o.data}.${file.ext}`.replace(/[\\/]/g, '-').replace(/\s+/g, ' '), mime: file.mime, data: file.data }); o.nomeFile = file.name; o.mime = file.mime; }
+        catch (e) { busy(); toast('Documento non salvato: ' + e.message); return; }
+        busy();
+      }
+      write([{ action: 'upsert', sheet: 'DocForn', row: o }]); toast(n ? 'Documento archiviato' : 'Documento aggiornato'); return true;
+    }, n ? null : () => { if (!confirm('Togliere questo documento dall\'archivio? Il file resta nel tuo Google Drive.')) return; write([{ action: 'delete', sheet: 'DocForn', id: d.id }]); toast('Documento tolto dall\'archivio'); return true; }, n ? 'Archivia' : 'Salva');
+    $('#sheet-form').classList.add('wide');
+    adBox($('#df-doc'), () => file, f => { file = f; }, d.file, `${d.numero || 'documento'}`);
+    const seg = $('.df-seg'), fa = $('[data-dffa]');
+    const upd = () => { fa.hidden = d.tipo !== 'ddt'; };
+    seg.onclick = e => {
+      const b = e.target.closest('[data-dft]'); if (!b) return;
+      if (b.dataset.dft === 'fattura') {
+        // le fatture hanno la loro scheda (importi, scadenza, stato): si passa lì portando il file scelto
+        const f = $('#sheet-form'), pre = { fornitore: f.fornitore.value.trim(), numero: f.numero.value.trim(), data: f.data.value, totale: num(f.totale.value) || '' };
+        if (!n && d.file && !confirm('Spostare questo documento tra le fatture?')) return;
+        const keepF = file, oldId = !n ? d.id : '', saved = !n ? d.file : '';
+        closeSheet(); setTimeout(() => { if (oldId) { write([{ action: 'delete', sheet: 'DocForn', id: oldId }]); } formFat({ ...pre, pdf: saved }, keepF); }, 280); return;
+      }
+      d.tipo = b.dataset.dft; $$('[data-dft]', seg).forEach(x => x.classList.toggle('on', x === b)); upd();
+    };
+    upd();
+  }
   const fKey = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?R\.?L\.?S?|S\.?P\.?A\.?|S\.?N\.?C\.?|S\.?A\.?S\.?|SRL|SPA|SNC|SAS|ITALIA)\b/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim();
   const fMatch = (f, name) => { const a = fKey(f.nome), b = fKey(name); return !!a && !!b && (a === b || a.split(' ')[0] === b.split(' ')[0] && a.split(' ')[0].length >= 4); };
   const fCat = f => Object.entries(PV_SUP).find(([, v]) => fMatch({ nome: v.n }, f.nome));
@@ -8345,7 +8567,9 @@
     const q = nh(foQ), F = q ? L.filter(f => nh([f.nome, f.piva, f.citta, f.categoria, f.referente].join(' ')).includes(q)) : L;
     const sum = k => [...S.values()].reduce((s, x) => s + x[k], 0);
     const warn = isLocal() || !db.v || db.v >= 'cdc-4.5' ? '' : `<div class="card gl-warn"><b>Aggiorna lo script Google alla versione cdc-4.5</b><span>Serve per salvare i fornitori (ora lo script è la versione ${esc(db.v)}).</span></div>`;
-    el.innerHTML = warn + `<div class="gx-bar"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="fo-q" placeholder="Cerca nome, P.IVA, categoria…" value="${esc(foQ)}"></label>
+    const ftabs = `<div class="gx-seg" role="tablist"><button type="button" data-gx="fo-tab" data-id="anag" class="${foTab === 'anag' ? 'on' : ''}">Fornitori</button><button type="button" data-gx="fo-tab" data-id="arch" class="${foTab === 'arch' ? 'on' : ''}">Archivio documenti</button></div>`;
+    if (foTab === 'arch') return renderArch(el, ftabs, warn);
+    el.innerHTML = warn + `<div class="gx-bar">${ftabs}<label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="fo-q" placeholder="Cerca nome, P.IVA, categoria…" value="${esc(foQ)}"></label>
       <div class="gx-act">${nuovi.length ? `<button type="button" class="btn sm" data-gx="forn-imp">Aggiungi quelli già usati (${nuovi.length})</button>` : ''}<a class="btn sm" href="#preventivi">Cataloghi</a><button type="button" class="btn sm primary" data-gx="forn-new">+ Fornitore</button></div></div>
       ${gxKpi([['Fornitori', fmtNum(L.length, 0), nuovi.length ? `${nuovi.length} da aggiungere dagli acquisti` : 'in anagrafica'], [`Spesa ${y}`, eur0(sum('spesa')), 'acquisti IVA esclusa'], ['Da pagare', eur0(sum('open')), 'fatture non pagate', sum('open') > 0 ? 'warn' : ''], ['Scadute', eur0(sum('late')), sum('late') > 0 ? 'da saldare subito' : 'nessuna', sum('late') > 0 ? 'bad' : '']])}
       ${!L.length ? gxEmpty('<path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/>', 'Nessun fornitore in anagrafica', nuovi.length ? `Negli acquisti e nelle fatture ci sono già ${nuovi.length} fornitori: aggiungili con un clic e completa i dati.` : 'Aggiungi i fornitori con partita IVA, contatti, pagamento e IBAN: vedi quanto spendi con ognuno e cosa devi pagare.', `${nuovi.length ? `<button type="button" class="btn primary" data-gx="forn-imp">Aggiungi i ${nuovi.length} fornitori già usati</button> ` : ''}<button type="button" class="btn${nuovi.length ? '' : ' primary'}" data-gx="forn-new">+ Fornitore</button>`)
@@ -8354,11 +8578,28 @@
         </tbody></table></div>`}`;
     const qi = $('#fo-q'); if (qi) qi.oninput = () => { foQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderForn(); const x = $('#fo-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
   }
+  function renderArch(el, ftabs, warn) {
+    sub('Archivio documenti dei fornitori · DDT, fatture e altro');
+    const all = arRows(), q = nh(arQ);
+    const cnt = k => all.filter(x => k === 'miss' ? !x.file : k === 'altro' ? !['ddt', 'fattura'].includes(x.tipo) : x.tipo === k).length;
+    const L = all.filter(x => (!arT || (arT === 'miss' ? !x.file : arT === 'altro' ? !['ddt', 'fattura'].includes(x.tipo) : x.tipo === arT)) && (!q || nh([x.fornitore, x.numero, (DF_T[x.tipo] || DF_T.altro)[0], x.r.note, x.r.fattura].join(' ')).includes(q)));
+    const m0 = today().slice(0, 7);
+    el.innerHTML = warn + `<div class="gx-bar">${ftabs}<label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="ar-q" placeholder="Cerca fornitore o numero…" value="${esc(arQ)}"></label>
+      <div class="gx-act"><button type="button" class="btn sm primary" data-gx="doc-new">+ Carica documento</button></div></div>
+      ${gxKpi([['Documenti', fmtNum(all.length, 0), `${all.filter(x => String(x.data).slice(0, 7) === m0).length} questo mese`], ['DDT', fmtNum(cnt('ddt'), 0), 'di trasporto'], ['Fatture', fmtNum(cnt('fattura'), 0), `${all.filter(x => x.tipo === 'fattura' && x.file).length} con documento`], ['Senza documento', fmtNum(cnt('miss'), 0), cnt('miss') ? 'da allegare' : 'tutto archiviato', cnt('miss') ? 'warn' : '']])}
+      <div class="gx-chips">${[['', 'Tutti', all.length], ['ddt', 'DDT', cnt('ddt')], ['fattura', 'Fatture', cnt('fattura')], ['altro', 'Altri', cnt('altro')], ['miss', 'Senza documento', cnt('miss')]].map(([k, t, c]) => `<button type="button" class="chip-f${arT === k ? ' on' : ''}" data-gx="ar-t" data-id="${k}">${t} <em>${c}</em></button>`).join('')}</div>
+      ${!all.length ? gxEmpty(DOC_IC.replace(/<\/?svg[^>]*>/g, ''), 'Archivio vuoto', 'Carica qui i DDT e i documenti dei tuoi fornitori (PDF o foto): restano salvati nel tuo Google Drive e li ritrovi quando vuoi. Le fatture registrate compaiono da sole.', '<button type="button" class="btn primary" data-gx="doc-new">+ Carica il primo documento</button>')
+        : `<div class="card gx-list"><table class="gx-tbl ar-tbl"><thead><tr><th>Data</th><th>Documento</th><th>Fornitore</th><th class="r">Totale</th><th>File</th></tr></thead><tbody>
+        ${L.slice(0, 400).map(x => `<tr data-gx="ar-row" data-id="${esc(x.k + ':' + x.id)}"><td data-l="Data">${esc(dIt(x.data))}</td><td data-l="Documento"><span class="chip ${(DF_T[x.tipo] || DF_T.altro)[1]}">${esc((DF_T[x.tipo] || DF_T.altro)[0])}</span>${x.numero ? `<small>n. ${esc(x.numero)}${x.r.fattura ? ' · fatt. ' + esc(x.r.fattura) : ''}</small>` : ''}</td><td data-l="Fornitore"><b>${esc(x.fornitore || '—')}</b>${x.r.note ? `<small>${esc(x.r.note)}</small>` : ''}</td><td class="r" data-l="Totale">${x.totale != null && x.totale !== 0 ? eur(x.totale) : '—'}</td><td data-l="File">${x.file ? `<button type="button" class="btn sm ar-open" data-gx="doc-open" data-id="${esc(x.file)}">${DOC_IC}Apri</button>` : '<span class="chip soon">da allegare</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="gx-none">Nessun documento</td></tr>'}
+        </tbody></table>${L.length > 400 ? `<p class="muted small gx-more">Mostrati 400 documenti su ${L.length}: usa la ricerca.</p>` : ''}</div>`}`;
+    const qi = $('#ar-q'); if (qi) qi.oninput = () => { arQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderForn(); const x = $('#ar-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
+  }
   function fornForm(f0) {
     const n = !f0, f = f0 ? { ...f0 } : { id: uid(), pagamento: PAG[2], creato: today() };
     const fi = (k, l, ph = '') => `<label class="f"><span>${l}</span><input name="${k}" value="${esc(f[k] || '')}" placeholder="${esc(ph)}"${k === 'nome' ? ' data-focus required' : ''}></label>`;
     const x = n ? null : fornStats().get(f.id), cat = n ? null : fCat(f);
     const FA = n ? [] : faRows().filter(r => fMatch(f, r.fornitore)).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 6);
+    const DD = n ? [] : GX.dfo().filter(r => fMatch(f, r.fornitore)).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
     openSheet(n ? 'Nuovo fornitore' : f.nome, `${!n && x ? `<div class="gx-kpis fo-k">${[['Spesa ' + new Date().getFullYear(), eur0(x.spesa), `${x.righe} righe di acquisto`], ['Da pagare', eur0(x.open), x.late ? `${eur0(x.late)} scaduti` : `${x.nf} fatture`]].map(([l, v, s2]) => `<div class="gx-k"><span>${l}</span><b>${v}</b><small>${s2}</small></div>`).join('')}</div>` : ''}
       ${fi('nome', 'Ragione sociale', 'Es. Molino del Sud S.r.l.')}
       <div class="f-row">${fi('piva', 'Partita IVA', '11 cifre')}${fi('cf', 'Codice fiscale', 'se diverso')}</div>
@@ -8369,7 +8610,8 @@
       <div class="f-row"><label class="f"><span>Categoria</span><input name="categoria" list="fo-cats" value="${esc(f.categoria || '')}" placeholder="Es. materie prime"><datalist id="fo-cats">${categorie().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label><label class="f"><span>Pagamento</span><select name="pagamento">${PAG.map(p => `<option${p === f.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label></div>
       ${fi('iban', 'IBAN per i bonifici', 'IT…')}
       <label class="f"><span>Note</span><textarea name="note" rows="2" placeholder="es. giorni di consegna, minimo d'ordine, sconti concordati">${esc(f.note || '')}</textarea></label>
-      ${FA.length ? `<div class="gx-mini"><b>Ultime fatture</b>${FA.map(r => `<div class="gx-mr"><span>n. ${esc(r.numero || '—')}<small>${esc(dIt(r.data))}${r.scadenza ? ' · scade ' + esc(dIt(r.scadenza)) : ''}</small></span><span class="chip ${faPaid(r) ? 'paid' : faLate(r) ? 'late' : 'soon'}">${faPaid(r) ? 'pagata' : faLate(r) ? 'scaduta' : 'da pagare'}</span><b>${eur(num(r.totale))}</b></div>`).join('')}</div>` : ''}
+      ${FA.length ? `<div class="gx-mini"><b>Ultime fatture</b>${FA.map(r => `<div class="gx-mr"><span>n. ${esc(r.numero || '—')}<small>${esc(dIt(r.data))}${r.scadenza ? ' · scade ' + esc(dIt(r.scadenza)) : ''}</small></span><span class="chip ${faPaid(r) ? 'paid' : faLate(r) ? 'late' : 'soon'}">${faPaid(r) ? 'pagata' : faLate(r) ? 'scaduta' : 'da pagare'}</span><b>${eur(num(r.totale))}</b>${r.pdf ? `<button type="button" class="btn sm" data-gx="doc-open" data-id="${esc(r.pdf)}">Apri</button>` : ''}</div>`).join('')}</div>` : ''}
+      ${!n ? `<div class="gx-mini"><b>DDT e documenti</b>${DD.map(r => `<div class="gx-mr"><span>${esc((DF_T[r.tipo] || DF_T.altro)[0])}${r.numero ? ' n. ' + esc(r.numero) : ''}<small>${esc(dIt(r.data))}${r.note ? ' · ' + esc(r.note) : ''}</small></span>${r.file ? `<button type="button" class="btn sm" data-gx="doc-open" data-id="${esc(r.file)}">Apri</button>` : '<span class="chip soon">senza file</span>'}</div>`).join('') || '<div class="gx-mr"><span class="muted small">Nessun DDT archiviato</span></div>'}<button type="button" class="btn sm" data-gx="doc-new" data-id="${esc(f.nome)}">+ Carica documento</button></div>` : ''}
       ${!n ? `<div class="gx-docact">${cat ? `<a class="btn sm" href="#preventivi" data-focat="${cat[0]}">Apri il catalogo ${esc(cat[1].n)}</a>` : ''}${f.email ? `<a class="btn sm" href="mailto:${esc(f.email)}">Scrivi un ordine</a>` : ''}${f.tel ? `<a class="btn sm" href="tel:${esc(String(f.tel).replace(/\s+/g, ''))}">Chiama</a>` : ''}</div>` : ''}`, fd => {
       const o = { ...f };
       ['nome', 'piva', 'cf', 'indirizzo', 'cap', 'citta', 'prov', 'referente', 'tel', 'email', 'pec', 'categoria', 'pagamento', 'iban', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
@@ -8390,6 +8632,7 @@
   /* ================= Eventi ================= */
   function bind() {
     document.addEventListener('click', gxClick);
+    $('#sheet-body').addEventListener('click', e => { const sf = e.target.closest('[data-scanfill]'); if (sf) { e.preventDefault(); scanFill($(`#sheet-form [name="${sf.dataset.scanfill}"]`)); return; } });
     $('#sheet-body').addEventListener('click', e => { const c = e.target.closest('[data-copy]'); if (c) { const v = c.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast('Copiato'), () => toast(v)); } });
     window.addEventListener('hashchange', go);
     $('#sheet-form').addEventListener('submit', e => {
@@ -8482,6 +8725,7 @@
       if (t.closest('#pv-qback')) { pvQuiet(pvFromForm()); pvEdit = ''; renderPv(); return; }
       if (t.closest('#pv-save')) { pvQuiet(pvFromForm()); toast('Preventivo salvato'); return; }
       if (pvCliClick(t)) return;
+      if (t.closest('#pv-scan')) { pvScan(); return; }
       if (t.closest('#pv-addp')) { const p = pvFromForm(); pvQuiet(p); pvTarget = p.id; pvTab = 'cat'; pvEdit = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-pdf')) { pvPdfAsk(); return; }
       if (t.closest('#pv-work')) { pvWorkPdf(); return; }
