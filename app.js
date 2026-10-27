@@ -395,12 +395,12 @@
     $('#auth-title').textContent = AUTH_TXT[p][0]; $('#auth-sub').textContent = AUTH_TXT[p][1];
     if (p === 'forgot') { $$('#forgot-form [data-step]').forEach(d => { d.hidden = d.dataset.step !== '1'; }); const em = $('#login-email').value; if (em) $('#forgot-form [name=email]').value = em; }
     authMsg();
-    setTimeout(() => { const f = $(`#setup [data-pane="${p}"] input:not([type=hidden])`); if (f && matchMedia('(min-width: 640px)').matches) f.focus(); }, 60);
+    // v105: nessun cursore automatico nella pagina di accesso (solo quando si apre «Password dimenticata»)
+    if (p !== 'login') setTimeout(() => { const f = $(`#setup [data-pane="${p}"] input:not([type=hidden])`); if (f && matchMedia('(min-width: 640px)').matches) f.focus(); }, 60);
   }
   function showLogin(msg) {
     $('#app').hidden = true; $('#setup').hidden = false;
     authMsg(msg);
-    setTimeout(() => $('#login-email') && ($('#login-email').value ? $('#login-pw') : $('#login-email')).focus(), 60);
   }
   const device = () => ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '') + (matchMedia('(max-width: 640px)').matches ? ' · telefono' : '');
   async function authCall(action, body) {
