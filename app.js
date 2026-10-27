@@ -5266,16 +5266,27 @@
   const faDdt = r => String(r.ddt || '').split(/[,;\s]+/).map(x => x.replace(/[^0-9a-z]/gi, '').toUpperCase()).filter(x => x.length > 2);
   const normDoc = s => String(s || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
   const fornKey = s => String(s || '').toUpperCase().replace(/S\.?R\.?L\.?|S\.?P\.?A\.?|ITALIA|[^A-Z0-9 ]/g, ' ').trim().split(/\s+/)[0] || '';
+  // v117: indice degli acquisti per numero di documento e per codice (prima ogni fattura scorreva tutti gli acquisti: con 1.500 fatture e 12.000 acquisti la sezione impiegava ~10 s)
+  // vale solo per l'operazione in corso: si ricostruisce alla successiva, così segue sempre le modifiche
+  let faIx = null;
+  function faIndex() {
+    if (faIx && faIx.M === db.movimenti) return faIx;
+    const doc = new Map(), code = new Map(), pos = new Map(), add = (m, k, v) => { if (!k) return; let a = m.get(k); if (!a) m.set(k, a = []); a.push(v); };
+    db.movimenti.forEach((m, i) => { pos.set(m, i); add(doc, m.ndoc ? normDoc(m.ndoc) : '', m); add(code, String(m.codice || '').trim().toUpperCase(), m); });
+    faIx = { M: db.movimenti, doc, code, pos }; setTimeout(() => { faIx = null; }, 0);
+    return faIx;
+  }
+  const faByIdx = (a, b) => faIndex().pos.get(a) - faIndex().pos.get(b);
   // collega la fattura agli acquisti registrati: prima per numero di DDT/fattura, poi per codici articolo dello stesso fornitore
   function faLink(r) {
-    const docs = new Set([...faDdt(r), normDoc(r.numero)].filter(Boolean)), fk = fornKey(r.fornitore);
-    let rows = db.movimenti.filter(m => m.ndoc && docs.has(normDoc(m.ndoc)));
+    const docs = new Set([...faDdt(r), normDoc(r.numero)].filter(Boolean)), fk = fornKey(r.fornitore), X = faIndex();
+    let rows = [...docs].flatMap(d => X.doc.get(d) || []).sort(faByIdx);
     let how = rows.length ? 'documento' : '';
     if (!rows.length) {
       const codes = new Set(faRighe(r).map(x => String(x.codice || '').trim().toUpperCase()).filter(Boolean));
       if (codes.size) {
         const d0 = validD(r.data) ? parseD(r.data).getTime() : null;
-        rows = db.movimenti.filter(m => codes.has(String(m.codice || '').trim().toUpperCase()) && (!fk || !m.fornitore || fornKey(m.fornitore) === fk) && (!d0 || !validD(m.data) || Math.abs(parseD(m.data) - d0) < 75 * 864e5));
+        rows = [...codes].flatMap(c => X.code.get(c) || []).sort(faByIdx).filter(m => (!fk || !m.fornitore || fornKey(m.fornitore) === fk) && (!d0 || !validD(m.data) || Math.abs(parseD(m.data) - d0) < 75 * 864e5));
         if (rows.length) how = 'codici';
       }
     }
@@ -5288,7 +5299,7 @@
     const out = [];
     faRighe(r).forEach(x => {
       const c = String(x.codice || '').trim().toUpperCase(); if (!c || !num(x.prezzo)) return;
-      const ms = db.movimenti.filter(m => String(m.codice || '').trim().toUpperCase() === c && num(m.prezzo)).sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+      const ms = (faIndex().code.get(c) || []).filter(m => num(m.prezzo)).sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
       if (!ms.length) return;
       const ref = num(ms[0].prezzo), p = num(x.prezzo), d = (p / ref - 1);
       if (Math.abs(d) > .02) out.push({ codice: c, descrizione: x.descrizione || ms[0].descrizione, prezzo: p, rif: ref, d, q: num(x.quantita) || 1 });

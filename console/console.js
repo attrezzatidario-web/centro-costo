@@ -257,7 +257,8 @@
     const own = (D.ws || []).filter(w => w.tipo !== 'cliente');
     return `<div class="bar"><div class="chips">${Object.entries(CLI_F).map(([k, l]) => `<button type="button" class="chip ${F.cli === k ? 'on' : ''}" data-fcli="${k}">${l}<em>${n(k)}</em></button>`).join('')}</div><label class="filter">${ico('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>')}<input type="search" id="f-q" placeholder="Nome, città, P.IVA…" value="${esc(F.q)}"></label></div>
       ${L.length ? `<div class="cards stag">${L.map((w, i) => cliCard(w, i)).join('')}</div>` : C.length ? empty('Nessun cliente con questi filtri', 'Cambia filtro o cerca un altro nome.') : empty('Ancora nessun cliente', 'Quando un cliente ha pagato, crea il suo gestionale: scegli attività, piano e sezioni, e gli mandi le credenziali.', '<button class="btn primary" type="button" data-act="new">Crea il primo cliente</button>')}
-      <h4 class="sec-t">I tuoi gestionali</h4><div class="cards own">${own.map((w, i) => cliCard(w, i)).join('')}</div>`;
+      <h4 class="sec-t">I tuoi gestionali</h4><div class="cards own">${own.map((w, i) => cliCard(w, i)).join('')}</div>
+      ${window.CDC_STRESS ? `<div class="banner st-b">${ico('bolt')}<div><b>Test estremo</b><span>${stressWs() ? `«${esc(stressWs().nome)}» esiste già: puoi riempirlo di nuovo o completare un caricamento interrotto.` : 'Crea un gestionale di prova pieno di dati (3 anni, circa 57.000 righe su tutte le sezioni) per vedere come si comporta con tantissimi dati.'}</span></div><button class="btn sm" type="button" data-act="stress">${stressWs() ? 'Riempi di nuovo' : 'Crea il test'}</button></div>` : ''}`;
   }
   function cliCard(w, i) {
     const U = usersOf(w.codice), s = stOf(w), d = daysTo(w.scadenza), pct = okD(w.scadenza) ? Math.max(0, Math.min(100, d / 365 * 100)) : 100;
@@ -642,6 +643,81 @@
     toast('Cliente creato', 'ok');
   }
 
+  /* ================= TEST ESTREMO: gestionale di prova pieno di dati ================= */
+  const stressWs = () => clients().find(w => String(w.nome).trim().toUpperCase() === (window.CDC_STRESS || {}).NAME);
+  // invia al gestionale di prova con il SUO token (non tocca la sessione della Console né quella del gestionale)
+  async function postWs(t, action, extra) {
+    const r = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: t, ...extra }), credentials: 'omit', referrerPolicy: 'no-referrer' });
+    let j; try { j = await r.json(); } catch { throw new Error('Risposta non valida dallo script Google (forse il blocco era troppo grande o lo script è andato in tempo scaduto)'); }
+    if (!j.ok) throw new Error(j.error || 'Errore'); return j.result;
+  }
+  const fmtN = n => Number(n).toLocaleString('it-IT');
+  const fmtT = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h} h ${m} min` : m ? `${m} min ${s % 60 ? (s % 60) + ' s' : ''}` : `${s} s`; };
+  let stressRun = null;
+  async function stress() {
+    const S = window.CDC_STRESS; if (!S) return;
+    if (stressRun) return stressView();
+    const w0 = stressWs(), P = LS.get('cdcx_stress', null), resume = !!(w0 && P && P.codice === w0.codice && P.done > 0 && P.done < P.tot);
+    const go = await ask(w0 ? `Riempire «${esc(w0.nome)}»?` : 'Creare il gestionale «TEST ESTREMO»?',
+      `${w0 ? '' : 'Creo un cliente di prova (attività allestimento veicoli, tutte le sezioni accese) e '}lo riempio con circa <b>57.000 righe</b> inventate: 3 anni di acquisti, fatture, spedizioni, carburante, Lyreco, Amazon, 1.200 clienti, 250 fornitori, 2.500 articoli, DDT, fatture di vendita, incassi e 400 preventivi.<br><br>Ci vuole un po': <b>lascia aperta questa pagina</b>. Se si interrompe, rilancialo e riprende da dove era${resume ? ` (ora è al ${Math.floor(P.done / P.tot * 100)}%)` : ''}. Ricaricare di nuovo non crea doppioni.`, resume ? 'Riprendi' : w0 ? 'Riempi' : 'Crea e riempi');
+    if (!go) return;
+    await new Promise(r => setTimeout(r, 60)); // la finestra di conferma si chiude dopo questa riga
+    const st = stressRun = { stop: false, done: 0, tot: 0, parts: [], t0: Date.now(), sent0: 0, msg: 'Preparo i dati…', err: '', end: false, codice: w0 ? w0.codice : '' };
+    stressView();
+    try {
+      if (!st.codice) {
+        st.msg = 'Creo il gestionale «TEST ESTREMO»…'; stressDraw();
+        const mod = {}; (SET.moduli || []).forEach(m => { if (!m.only) mod[m.k] = true; });
+        const r = await post('adminNewClient', { azienda: S.NAME, citta: 'Roma', piva: '', note: 'Gestionale di prova con dati inventati (test estremo)', settore: 'veicoli', piano: 'pro', canone: 0, scadenza: '', moduli: mod, nome: 'Test Estremo', telefono: '', email: 'test.estremo@centrodicosto.example', invia: false });
+        st.codice = r.codice; if (r.data) D = r.data; render();
+      }
+      st.msg = 'Apro il gestionale di prova…'; stressDraw();
+      const o = await post('adminOpen', { codice: st.codice }), T = o.token;
+      st.msg = 'Preparo i dati…'; stressDraw();
+      await new Promise(r => setTimeout(r, 30));
+      const { ops, parts } = S.ops(); st.tot = ops.length; st.parts = parts;
+      const P2 = LS.get('cdcx_stress', null);
+      st.done = P2 && P2.codice === st.codice && P2.tot === ops.length && P2.done < ops.length ? P2.done : 0; st.sent0 = st.done; st.t0 = Date.now();
+      let size = 400, fails = 0;
+      while (st.done < st.tot && !st.stop) {
+        const part = ops.slice(st.done, st.done + size), t = Date.now();
+        st.msg = ''; stressDraw();
+        try {
+          await postWs(T, 'batch', { ops: part });
+          st.done += part.length; fails = 0; LS.set('cdcx_stress', { codice: st.codice, done: st.done, tot: st.tot });
+          const sec = (Date.now() - t) / 1000; size = Math.max(50, Math.min(3000, Math.round(size * Math.min(2, Math.max(.4, 25 / Math.max(1, sec))))));
+        } catch (e) {
+          if (++fails > 4) throw e;
+          size = Math.max(50, Math.round(size / 2)); st.msg = `Il server ha risposto con un errore, riprovo con blocchi più piccoli (${size} righe)…`; stressDraw();
+          await new Promise(r => setTimeout(r, 3000 * fails));
+        }
+      }
+      st.end = true; st.msg = st.stop ? 'Fermato: rilancia il test per riprendere da qui.' : '';
+      if (!st.stop) { LS.set('cdcx_stress', { codice: st.codice, done: st.tot, tot: st.tot }); toast('Test estremo pronto', 'ok'); }
+    } catch (e) { st.end = true; st.err = e instanceof AuthError ? 'Sessione scaduta: rientra nella Console e rilancia il test.' : e.message; }
+    stressDraw();
+    load(true).catch(() => {});
+  }
+  function stressView() {
+    modal('Test estremo', '<div id="st-run"></div>', () => true, { noFoot: true, cls: 'lock small' });
+    stressDraw();
+  }
+  function stressDraw() {
+    const el = $('#st-run'), st = stressRun; if (!el || !st) return;
+    const pct = st.tot ? st.done / st.tot * 100 : 0, sec = (Date.now() - st.t0) / 1000, sp = sec > 2 ? (st.done - st.sent0) / sec : 0, eta = sp ? (st.tot - st.done) / sp : 0;
+    let acc = 0; const cur = st.parts.findIndex(([, n]) => (acc += n) > st.done);
+    acc = 0;
+    el.innerHTML = `<div class="st-run">
+      <div class="st-top"><b>${st.tot ? Math.floor(pct) + '%' : '…'}</b><span>${st.tot ? `${fmtN(st.done)} di ${fmtN(st.tot)} righe` : esc(st.msg)}</span></div>
+      <div class="meter st-m${st.end && !st.err && !st.stop ? ' ok' : ''}"><i style="--w:${pct}%"></i></div>
+      ${st.tot ? `<p class="muted small">${st.end ? (st.err ? '' : st.stop ? esc(st.msg) : `Completato in ${fmtT(sec)}.`) : `${sp ? `${fmtN(Math.round(sp))} righe al secondo · mancano circa ${fmtT(eta)}` : 'Misuro la velocità…'}${st.msg ? ' · ' + esc(st.msg) : ''}`}</p>` : ''}
+      ${st.err ? `<div class="banner bad">${ico('warn')}<div><b>Caricamento interrotto</b><span>${esc(st.err)}</span></div></div>` : ''}
+      ${st.parts.length ? `<ul class="st-parts">${st.parts.map(([n, k], i) => { const a = acc; acc += k; const d = Math.max(0, Math.min(k, st.done - a)); return `<li class="${d >= k ? 'ok' : i === cur ? 'on' : ''}"><span>${esc(n)}</span><em>${fmtN(d)} / ${fmtN(k)}</em></li>`; }).join('')}</ul>` : ''}
+      <div class="st-f">${st.end ? `<button class="btn ghost" type="button" data-act="stclose">Chiudi</button>${st.codice && !st.err ? `<button class="btn primary" type="button" data-act="stopen">${ico('open')} Apri il gestionale</button>` : '<button class="btn primary" type="button" data-act="stress">Riprova</button>'}` : `<button class="btn ghost" type="button" data-act="ststop"${st.stop ? ' disabled' : ''}>${st.stop ? 'Mi fermo dopo questo blocco…' : 'Ferma'}</button>`}</div>
+    </div>`;
+  }
+  setInterval(() => { if (stressRun && !stressRun.end) stressDraw(); }, 1000);
+
   /* ================= effetti ================= */
   function burst(host) {
     if (RM || !host) return;
@@ -764,13 +840,17 @@
       const frg = t.closest('[data-freg-go]'); if (frg) { F.reg = frg.dataset.fregGo; F.q = ''; }
       const tb = t.closest('[data-tab]'); if (tb) { dTab = tb.dataset.tab; refreshDrawer(); const w = wsOf(drawerId); if (dTab === 'sezioni' && w && !(w.codice in wsInfo)) loadWsInfo(w.codice); return; }
       if (t.closest('#drawer') && !t.closest('.drawer-in')) { closeDrawer(); return; }
-      if (t.closest('#modal') && !t.closest('.modal-card')) { const m = $('#modal'); if (!$('#modal-card').classList.contains('wz')) { if (m._res) { m._res(); m._res = null; } closeModal(); } return; }
+      if (t.closest('#modal') && !t.closest('.modal-card')) { const m = $('#modal'); if (!$('#modal-card').classList.contains('wz') && !$('#modal-card').classList.contains('lock')) { if (m._res) { m._res(); m._res = null; } closeModal(); } return; }
       const a = t.closest('[data-act]'); if (!a) return;
       const k = a.dataset.act, w = wsOf(a.dataset.ws || drawerId), em = a.dataset.email;
       if (k === 'mclose') { const m = $('#modal'); if (m._res) { m._res(); m._res = null; } closeModal(); return; }
       if (k === 'close') return closeDrawer();
       if (k === 'logout') { if (await ask('Uscire dalla Console?', 'Per rientrare servono email e password.', 'Esci')) logout(); return; }
       if (k === 'new') return wizard();
+      if (k === 'stress') { if (stressRun && stressRun.end) { stressRun = null; closeModal(); } return stress(); }
+      if (k === 'ststop') { if (stressRun) { stressRun.stop = true; stressDraw(); } return; }
+      if (k === 'stclose') { const c = stressRun && stressRun.end; closeModal(); if (c) stressRun = null; return; }
+      if (k === 'stopen') { const c = stressRun && stressRun.codice; closeModal(); stressRun = null; if (c) return openWs(c); return; }
       if (k === 'pay') return payForm(a.dataset.ws || (drawerKind === 'cli' ? drawerId : ''));
       if (k === 'useradd') return userAdd(a.dataset.ws || '');
       if (k === 'creds') return credsReset(em);
