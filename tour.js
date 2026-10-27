@@ -58,6 +58,106 @@
   ];
   const WISH = ['Un nuovo fornitore con il suo listino', 'Un report per il commercialista', 'Import dal tuo vecchio programma', 'Una sezione tutta tua', 'Ordini ai fornitori', 'Scadenzario dei pagamenti', 'Etichette e codici a barre', 'Collegamento all\'e-commerce'];
 
+
+  /* ===== v106: «Dentro il gestionale» — schermate di esempio animate, adattate all'attività ===== */
+  const SHOW = [
+    ['dash', 'Dashboard', 'Il quadro di tutto, a colpo d\'occhio', ['Ricavi, costi e utile del mese, confrontati con il mese prima', 'Spese per {sedi} e per categoria', 'Fatture in scadenza e avvisi in evidenza']],
+    ['acq', '{acq}', 'Ogni spesa al suo posto', ['Scrivi o importi le righe: la categoria si assegna da sola', 'Cerchi qualsiasi voce in un attimo', 'Ogni spesa ha {sede} e il suo fornitore']],
+    ['fat', 'Fatture fornitori', 'La fattura si compila da sola', ['Fotografi o carichi il PDF: l\'IA legge fornitore, righe e importi', 'Scadenze e pagamenti sotto controllo', 'Il PDF resta archiviato, sempre a portata di mano']],
+    ['prev', 'Preventivi', 'Preventivi professionali in pochi minuti', ['Scegli i prodotti dai cataloghi, con foto e codici', 'Ricarico e sconti calcolati da soli', 'PDF pronto da mandare su WhatsApp o email']],
+    ['mag', 'Magazzino', 'Sai sempre cosa hai', ['Giacenze aggiornate a ogni carico e scarico', 'Avviso quando un articolo è sotto scorta', 'Valore del magazzino calcolato in automatico']],
+    ['ven', 'DDT e fatture', 'Dai DDT alla fattura di fine mese', ['DDT dal telefono, anche con firma del cliente', 'A fine mese raccogli i DDT in una fattura con un clic', 'PDF e file XML pronti per lo SdI']],
+    ['inc', 'Incassi', 'Quanto entra, giorno per giorno', ['Chiusure di cassa con contanti, POS e altro', 'Calendario del mese con le giornate migliori', 'Ricavi e utile in Dashboard senza fare conti']],
+    ['for', 'Fornitori', 'Tutti i fornitori in un posto', ['Spesa dell\'anno e fatture da pagare per ognuno', 'Contatti, IBAN e condizioni di pagamento', 'Ordini veloci dai loro cataloghi']]
+  ];
+  const PRZ = [24.9, 189, 32.5, 14.2];
+  const eu = v => '€ ' + Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const eu0 = v => '€ ' + Math.round(v).toLocaleString('it-IT');
+  function sxTxt(t, s) { const sd = s.sede || ['Sede', 'Sedi']; return t.replace('{sedi}', sd[1].toLowerCase()).replace('{sede}', (sd[2] ? 'la sua ' : 'il suo ') + sd[0].toLowerCase()).replace('{acq}', s.acq || 'Acquisti'); }
+  function showMock(k, s, cats, ex) {
+    const sd = s.sede || ['Sede', 'Sedi'], SD = ['Roma', 'Milano', 'Napoli'].map(c => `${sd[0]} ${c}`);
+    if (k === 'dash') return `<div class="sx-kpis">${[['Ricavi', 48250, 'ok', '+14%'], ['Costi', 31120, '', '+3%'], ['Utile', 17130, 'ok', '+38%'], ['Da pagare', 4380, 'warn', '3 fatture']].map(([l, v, c, d], i) => `<div class="sx-k" style="--i:${i}"><small>${l}</small><b data-cnt="${v}" data-eur="1">€ 0</b><em class="${c}">${d}</em></div>`).join('')}</div>
+      <div class="sx-row2"><div class="sx-box"><div class="sx-bh">Ricavi e costi <span>ultimi 6 mesi</span></div><div class="sx-cols">${[[60, 44], [66, 48], [58, 46], [74, 50], [80, 52], [92, 58]].map(([a, b], i) => `<div style="--i:${i}"><i class="r" style="--h:${a}%"></i><i class="c" style="--h:${b}%"></i><span>${['mag', 'giu', 'lug', 'ago', 'set', 'ott'][i]}</span></div>`).join('')}</div></div>
+      <div class="sx-box"><div class="sx-bh">Spese per ${esc(sd[1].toLowerCase())}</div>${SD.map((n, i) => `<div class="sx-hb" style="--i:${i}"><span>${esc(n)}</span><i style="--w:${[82, 58, 37][i]}%"></i><b>${eu0([12840, 9110, 5870][i])}</b></div>`).join('')}<div class="sx-bh" style="margin-top:12px">Categorie</div>${cats.slice(0, 3).map((c, i) => `<div class="sx-hb c" style="--i:${i + 3}"><span>${esc(c)}</span><i style="--w:${[64, 41, 27][i]}%"></i><b>${[34, 22, 15][i]}%</b></div>`).join('')}</div></div>`;
+    if (k === 'acq') return `<div class="sx-tool"><div class="sx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sx-type" data-type="${esc(ex[0][0].split(' ').slice(0, 2).join(' ').toLowerCase())}"></span></div><span class="sx-btn">+ Nuova spesa</span></div>
+      <div class="sx-table"><div class="sx-tr th"><span>Data</span><span>Descrizione</span><span>Categoria</span><span>Importo</span></div>${ex.map(([t, c], i) => `<div class="sx-tr" style="--i:${i}"><span>${['24/10', '22/10', '21/10', '18/10'][i]}</span><span class="d">${esc(t)}</span><span><em class="sx-chip">${esc(c)}</em></span><span class="n">${eu(PRZ[i] * (i === 1 ? 1 : 4))}</span></div>`).join('')}
+      <div class="sx-tr new"><span>oggi</span><span class="d">${esc(ex[1][0])}</span><span><em class="sx-chip ai">✦ ${esc(ex[1][1])}</em></span><span class="n">${eu(PRZ[1])}</span></div></div>`;
+    if (k === 'fat') return `<div class="sx-split"><div class="sx-paper"><div class="pp-h"><i></i><i></i></div>${[80, 60, 90, 70, 85, 55].map((w, i) => `<span style="--w:${w}%;--i:${i}"></span>`).join('')}<div class="pp-t"><i></i></div><div class="sx-scan"></div></div>
+      <div class="sx-fields">${[['Fornitore', 'Rossi Forniture S.r.l.'], ['Numero', 'FT 2026/1184'], ['Data', '24/10/2026'], ['Scadenza', '23/11/2026'], ['Totale', '€ 1.284,60']].map(([l, v], i) => `<div class="sx-fd" style="--i:${i}"><small>${l}</small><b>${v}</b></div>`).join('')}
+        <div class="sx-lines">${ex.slice(0, 3).map(([t, c], i) => `<div style="--i:${i}"><span>${esc(t)}</span><em class="sx-chip">${esc(c)}</em></div>`).join('')}</div><div class="sx-ok">✓ Registrata · da pagare tra 30 giorni</div></div></div>`;
+    if (k === 'prev') return `<div class="sx-split prev"><div class="sx-cat">${ex.map(([t], i) => `<div class="sx-pc" style="--i:${i}"><i class="ph p${i}"></i><b>${esc(t)}</b><span>${eu(PRZ[i])}</span><em class="${i < 3 ? 'in' : ''}">${i < 3 ? '✓ aggiunto' : '+ aggiungi'}</em></div>`).join('')}</div>
+      <div class="sx-cart"><div class="sx-bh">Preventivo n. 87</div>${ex.slice(0, 3).map(([t], i) => `<div class="ln" style="--i:${i}"><span>${[2, 1, 5][i]} × ${esc(t.split(' ').slice(0, 3).join(' '))}</span><b>${eu(PRZ[i] * [2, 1, 5][i] * 1.3)}</b></div>`).join('')}
+        <div class="rc"><span>Ricarico</span><div class="sl"><i></i></div><b>30%</b></div><div class="tt"><span>Totale</span><b data-cnt="${Math.round((PRZ[0] * 2 + PRZ[1] + PRZ[2] * 5) * 1.3 * 1.22)}" data-eur="1">€ 0</b></div><span class="sx-btn pdf">Scarica PDF</span></div></div>`;
+    if (k === 'mag') return `<div class="sx-kpis three">${[['Articoli', 248, ''], ['Valore magazzino', 18460, 'eur'], ['Sotto scorta', 3, 'warn']].map(([l, v, c], i) => `<div class="sx-k" style="--i:${i}"><small>${l}</small><b data-cnt="${v}"${c === 'eur' ? ' data-eur="1"' : ''} class="${c}">0</b></div>`).join('')}</div>
+      <div class="sx-table mag">${ex.map(([t], i) => `<div class="sx-tr" style="--i:${i}"><span class="d">${esc(t)}</span><span class="st"><i style="--w:${[72, 18, 55, 9][i]}%" class="${[72, 18, 55, 9][i] < 20 ? 'lo' : ''}"></i></span><span class="n">${[36, 4, 22, 2][i]} pz</span><span>${[72, 18, 55, 9][i] < 20 ? '<em class="sx-chip warn">da riordinare</em>' : '<em class="sx-chip okc">ok</em>'}</span></div>`).join('')}</div>
+      <div class="sx-mv"><span class="in">▲ Carico +24 · ${esc(ex[0][0])}</span><span class="out">▼ Scarico −6 · DDT n. 48</span></div>`;
+    if (k === 'ven') return `<div class="sx-ddt">${['Bianchi S.r.l.', 'Bianchi S.r.l.', 'Bianchi S.r.l.', 'Bianchi S.r.l.'].map((c, i) => `<div class="sx-d" style="--i:${i}"><b>DDT ${44 + i}</b><span>${['03', '10', '17', '24'][i]}/10 · ${c}</span><em>${eu([320, 415.5, 288, 506.4][i])}</em></div>`).join('')}</div>
+      <div class="sx-arrow"><span class="sx-btn">Crea fattura di fine mese</span></div>
+      <div class="sx-inv"><div><small>Fattura n. 112 · 31/10/2026</small><b>Bianchi S.r.l.</b><span>4 DDT raccolti · IVA 22%</span></div><div class="r"><b data-cnt="1874" data-eur="1">€ 0</b><span><em class="sx-chip">PDF</em><em class="sx-chip xml">XML per lo SdI</em></span></div></div>`;
+    if (k === 'inc') return `<div class="sx-kpis three">${[['Incassato a ottobre', 38920, 'eur'], ['Media al giorno', 1297, 'eur'], ['Giorno migliore', 2480, 'eur']].map(([l, v], i) => `<div class="sx-k" style="--i:${i}"><small>${l}</small><b data-cnt="${v}" data-eur="1">€ 0</b></div>`).join('')}</div>
+      <div class="sx-cal">${['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(d => `<span class="h">${d}</span>`).join('')}<span></span><span></span>${Array.from({ length: 31 }, (_, i) => { const v = [.3, .45, .5, .55, .8, 1, .7][(i + 2) % 7] * (.75 + ((i * 37) % 25) / 100); return `<span class="d" style="--v:${v.toFixed(2)};--i:${i}">${i + 1}</span>`; }).join('')}</div>
+      <div class="sx-mv"><span class="in">Contanti 42%</span><span class="pos">POS 51%</span><span class="alt">Altro 7%</span></div>`;
+    if (k === 'for') return `<div class="sx-forn">${[['Rossi Forniture S.r.l.', cats[0], 14820, 1284.6], ['Metro Italia', cats[1] || cats[0], 9640, 0], ['Global Service', cats[2] || cats[0], 6210, 512], ['Edison Energia', 'Utenze', 3980, 0]].map(([n, c, a, d], i) => `<div class="sx-f" style="--i:${i}"><span class="av">${esc(n[0])}</span><div><b>${esc(n)}</b><span>${esc(c)}</span></div><div class="r"><small>Spesa 2026</small><b>${eu0(a)}</b>${d ? `<em class="sx-chip warn">da pagare ${eu(d)}</em>` : '<em class="sx-chip okc">tutto pagato</em>'}</div></div>`).join('')}</div>`;
+    return '';
+  }
+  function showcase(s, cats, ex) {
+    return `<section class="tr-sec tr-show" id="tr-show"><div class="tr-h rv"><span class="tr-eye">Dentro il gestionale</span><h2>Guarda come funziona</h2><p class="tr-sub">Le schermate vere, con esempi per la tua attività. Passano da sole, oppure scegli tu.</p></div>
+      <div class="sx rv"><nav class="sx-tabs" role="tablist">${SHOW.map(([k, t], i) => `<button type="button" role="tab" data-sx="${k}" class="${i ? '' : 'on'}"><b>${esc(sxTxt(t, s))}</b><span>${esc(SHOW[i][2])}</span><i class="pg"></i></button>`).join('')}</nav>
+        <div class="sx-stage"><div class="sx-win"><div class="sx-top"><i></i><i></i><i></i><span id="sx-url">centrodicosto · ${esc(sxTxt(SHOW[0][1], s))}</span></div><div class="sx-app"><aside class="sx-side">${SHOW.map(([k]) => `<i data-sxi="${k}" class="${k === 'dash' ? 'on' : ''}"></i>`).join('')}</aside><div class="sx-main" id="sx-main"></div></div></div>
+          <ul class="sx-pts" id="sx-pts"></ul></div></div></section>`;
+  }
+  let sxK = 'dash', sxT = null, sxCtx = null;
+  function sxShow(k, auto) {
+    if (!root || !sxCtx) return; const [s, cats, ex] = sxCtx, it = SHOW.find(x => x[0] === k); if (!it) return;
+    sxK = k;
+    $$('.sx-tabs [data-sx]', root).forEach(b => { const on = b.dataset.sx === k; b.classList.toggle('on', on); if (on) { const pg = $('.pg', b); pg.style.animation = 'none'; void pg.offsetWidth; pg.style.animation = ''; b.classList.toggle('auto', !!auto); const tb = b.parentNode; if (tb.scrollWidth > tb.clientWidth) tb.scrollTo({ left: b.offsetLeft - tb.clientWidth / 2 + b.clientWidth / 2, behavior: reduced() ? 'auto' : 'smooth' }); } });
+    $$('.sx-side [data-sxi]', root).forEach(i => i.classList.toggle('on', i.dataset.sxi === k));
+    const m = $('#sx-main', root); m.innerHTML = `<div class="sx-h"><b>${esc(sxTxt(it[1], s))}</b><span>${esc(it[2])}</span></div>${showMock(k, s, cats, ex)}`;
+    $('#sx-url', root).textContent = 'centrodicosto · ' + sxTxt(it[1], s);
+    $('#sx-pts', root).innerHTML = it[3].map((p, i) => `<li style="--i:${i}">${esc(sxTxt(p, s))}</li>`).join('');
+    $$('[data-cnt]', m).forEach(c => { c._done = 1; count(c); });
+    const ty = $('.sx-type', m); if (ty) { const full = ty.dataset.type; let n = 0; const st = setInterval(() => { if (!root || !ty.isConnected) return clearInterval(st); ty.textContent = full.slice(0, ++n); if (n >= full.length) clearInterval(st); }, 90); }
+    if (!reduced()) { clearTimeout(sxT); sxT = setTimeout(() => { const i = SHOW.findIndex(x => x[0] === sxK); sxShow(SHOW[(i + 1) % SHOW.length][0], true); }, auto === false ? 14000 : 6500); }
+  }
+  /* una giornata tipo */
+  function dayline(s, ex) {
+    const D = [['08:30', 'Apri la dashboard', 'Incassi di ieri, spese del mese e fatture in scadenza: sai subito come stai andando.', 'dash'],
+      ['10:15', 'Arriva una fattura', `La fotografi: l'IA legge righe e importi e assegna le categorie, per esempio «${ex[0][0]}» → ${ex[0][1]}.`, 'fat'],
+      ['12:00', 'Un cliente chiede un preventivo', 'Scegli dal catalogo, applichi il ricarico e mandi il PDF su WhatsApp mentre sei ancora al telefono.', 'prev'],
+      ['16:00', 'Consegni la merce', 'Fai il DDT dal telefono: il magazzino si aggiorna da solo.', 'ven'],
+      ['19:30', 'Chiudi la giornata', 'Segni l\'incasso: ricavi e utile del giorno si aggiornano senza fare conti.', 'inc'],
+      ['Fine mese', 'Fatture in un clic', 'I DDT del mese diventano fatture con PDF e XML pronti per lo SdI.', 'ven']];
+    return `<section class="tr-sec tr-day"><div class="tr-h rv"><span class="tr-eye">Una giornata con Centro di Costo</span><h2>Meno carte, più tempo per lavorare</h2><p class="tr-sub">Ecco come cambia una giornata qualsiasi in ${esc((PL[s.id] ? 'una delle ' + PL[s.id] : 'azienda'))}.</p></div>
+      <ol class="tr-dl">${D.map(([h, t, d, k], i) => `<li class="rv" style="--d:${i * 90}ms"><span class="tm">${h}</span><span class="dot"></span><div class="dc"><b>${esc(t)}</b><p>${esc(d)}</p><button type="button" class="tr-lk" data-sxgo="${k}">Guarda la schermata →</button></div></li>`).join('')}</ol></section>`;
+  }
+  /* prima e dopo + calcolatore del tempo risparmiato */
+  function beforeAfter() {
+    const P = [['Fatture in una scatola, sulla mail e su WhatsApp', 'Tutte le fatture lette, archiviate e cercabili'], ['Un Excel diverso per ogni cosa', 'Un solo posto per spese, incassi, clienti e magazzino'], ['A fine mese non sai quanto hai guadagnato', 'Utile del mese sempre aggiornato'], ['Preventivi rifatti ogni volta da zero', 'Preventivi dal catalogo in pochi minuti'], ['Scopri che manca un articolo quando serve', 'Avviso automatico sotto scorta'], ['Ore a ricopiare DDT nelle fatture', 'Fattura di fine mese in un clic']];
+    return `<section class="tr-sec tr-ba"><div class="tr-h rv"><h2>Prima e dopo</h2><p class="tr-sub">Le stesse cose che fai già, senza perdere tempo.</p></div>
+      <div class="ba rv"><div class="ba-c no"><h3><span>✕</span>Senza gestionale</h3><ul>${P.map(([a], i) => `<li style="--i:${i}">${esc(a)}</li>`).join('')}</ul></div><div class="ba-arrow" aria-hidden="true">→</div><div class="ba-c yes"><h3><span>✓</span>Con Centro di Costo</h3><ul>${P.map(([, b], i) => `<li style="--i:${i}">${esc(b)}</li>`).join('')}</ul></div></div>
+      <div class="calc rv"><div class="calc-l"><h3>Quanto tempo risparmi?</h3><p>Sposta i cursori con i numeri della tua attività.</p>
+        ${[['f', 'Fatture fornitori al mese', 40, 200], ['p', 'Preventivi al mese', 15, 100], ['d', 'DDT o consegne al mese', 30, 300]].map(([k, l, v, mx]) => `<label class="calc-r"><span>${l}<b data-cv="${k}">${v}</b></span><input type="range" min="0" max="${mx}" value="${v}" data-calc="${k}"></label>`).join('')}</div>
+        <div class="calc-o"><small>Tempo risparmiato</small><b id="calc-h">0</b><span>ore al mese</span><em id="calc-g"></em><p>Stima indicativa: fattura da 6 a 1 minuto, preventivo da 20 a 5, DDT da 8 a 2.</p></div></div></section>`;
+  }
+  function calcUpd() {
+    if (!root) return; const v = k => +($(`[data-calc="${k}"]`, root) || {}).value || 0;
+    ['f', 'p', 'd'].forEach(k => { const b = $(`[data-cv="${k}"]`, root); if (b) b.textContent = v(k); });
+    const h = (v('f') * 5 + v('p') * 15 + v('d') * 6) / 60, el = $('#calc-h', root); if (!el) return;
+    const from = +el.dataset.v || 0; el.dataset.v = h;
+    const t0 = performance.now(); const f = t => { const k = Math.min(1, (t - t0) / 500), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(from + (h - from) * e); if (k < 1) requestAnimationFrame(f); }; requestAnimationFrame(f);
+    $('#calc-g', root).textContent = `≈ ${Math.round(h * 12 / 8)} giornate di lavoro all'anno`;
+  }
+  /* domande frequenti */
+  const FAQ = [['Devo installare qualcosa?', 'No. Si apre dal browser su PC, tablet e telefono. Sul telefono puoi aggiungerlo alla schermata Home e si usa come un\'app.'],
+    ['Dove sono i miei dati?', 'Ogni azienda ha il suo archivio separato: solo tu e i collaboratori a cui dai l\'accesso potete vederlo. Le password non vengono mai salvate in chiaro.'],
+    ['Posso provarlo prima?', 'Sì: la demo si apre senza registrazione, con dati di esempio della tua attività. Niente di quello che fai viene salvato.'],
+    ['Fa la fattura elettronica?', 'Prepara il PDF e il file XML nel formato FatturaPA, pronti da caricare sul portale dell\'Agenzia delle Entrate o dal tuo intermediario.'],
+    ['Posso importare i dati che ho già?', 'Sì: fatture, file Excel e storico. Te li importo io all\'avvio, così parti subito senza ricopiare nulla.'],
+    ['Possono usarlo i miei collaboratori?', 'Sì, ognuno con il suo accesso. Puoi decidere chi può modificare, chi può solo consultare e quali sezioni vede.'],
+    ['Quanto costa?', 'Dipende da attività, sezioni e personalizzazioni che ti servono. Dopo una breve chiacchierata ti preparo una proposta chiara, con un canone annuale.'],
+    ['E se mi serve una funzione che non c\'è?', 'Me lo dici e la aggiungo: il gestionale cresce insieme alla tua attività.']];
+  function faq() { return `<section class="tr-sec tr-faq" id="tr-faq"><div class="tr-h rv"><h2>Domande frequenti</h2></div><div class="fq rv">${FAQ.map(([q, a], i) => `<details${i ? '' : ' open'}><summary>${esc(q)}<i></i></summary><p>${esc(a)}</p></details>`).join('')}</div></section>`; }
+
   let root = null, opts = {}, sel = 'veicoli', obs = null, timers = [];
   const SET = () => window.CDC_SETTORI || { list: [], get: () => null };
 
@@ -135,9 +235,10 @@
     const word = PL[s.id] || (s.s || s.n || '').toLowerCase();
     const ex = EX[s.id] || EX.altro;
     const mail = `mailto:${C.email}?subject=${encodeURIComponent('Centro di Costo · ' + (s.n || ''))}&body=${encodeURIComponent(`Ciao ${C.nome || ''},\nvorrei maggiori informazioni sul gestionale per la mia attività (${s.n || ''}).\n\nAzienda:\nCittà:\nCosa mi servirebbe:\n`)}`;
+    sxCtx = [s, cats, ex];
     root.innerHTML = `<div class="tr-scroll">
       <header class="tr-bar"><i class="tr-prog" id="tr-prog"></i><div class="tr-brand"><img src="logo.svg" alt="" width="30" height="30"><b>Centro di Costo</b></div>
-        <div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
+        <nav class="tr-nav"><a href="#tr-show" data-go>Come funziona</a><a href="#tr-funz" data-go>Funzioni</a><a href="#tr-how" data-go>Su misura</a><a href="#tr-faq" data-go>Domande</a></nav><div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
 
       <section class="tr-hero">
         <div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="grid"></i></div>
@@ -154,9 +255,11 @@
       <section class="tr-sets"><div class="tr-setsc rv"><div class="tr-setsh"><h2>Scegli la tua attività</h2><p class="tr-sub">Nomi, sezioni e categorie si adattano da soli.</p></div>
         <div class="tr-chips">${S.list.map(x => `<button type="button" class="tr-chip${x.id === sel ? ' on' : ''}" data-trset="${x.id}"><svg viewBox="0 0 24 24">${x.ic}</svg>${esc(x.s || x.n)}</button>`).join('')}</div></div></section>
 
-      <section class="tr-sec"><div class="tr-h rv"><h2>Tutto quello che serve, in un posto solo</h2><p class="tr-sub">Ogni funzione si accende o si spegne: tieni solo quello che usi.</p></div>
+${showcase(s, cats, ex)}
+      <section class="tr-sec" id="tr-funz"><div class="tr-h rv"><h2>Tutto quello che serve, in un posto solo</h2><p class="tr-sub">Ogni funzione si accende o si spegne: tieni solo quello che usi.</p></div>
         <div class="tr-grid">${FEAT.map(([k, t, d], i) => `<article class="tr-f rv" style="--d:${(i % 3) * 90}ms"><span class="tr-fn">${String(i + 1).padStart(2, '0')}</span><div class="tr-ill">${ILL[k]}</div><h3>${t}${SOON.has(k) ? '<span class="tr-soon">in arrivo</span>' : ''}</h3><p>${d}</p></article>`).join('')}</div></section>
 
+${dayline(s, ex)}
       <section class="tr-sec tr-fit"><div class="tr-fit-l rv"><span class="tr-eye">Per ${esc(word)}</span><h2>Parla la lingua della tua attività</h2>
           <ul class="tr-pts"><li><b>${esc(s.sede ? s.sede[1] : 'Sedi')}</b> al posto di sedi generiche: confronti le spese tra ${s.sede && s.sede[2] ? 'le tue' : 'i tuoi'} ${esc((s.sede ? s.sede[1] : 'sedi').toLowerCase())}</li><li><b>${cats.length} categorie di spesa</b> già pronte e modificabili</li><li><b>Ogni riga riconosciuta da sola</b>: scrivi o importi, la categoria si assegna in automatico</li></ul>
           <div class="tr-cats">${cats.map((c, i) => `<span style="--i:${i}">${esc(c)}</span>`).join('')}</div></div>
@@ -165,10 +268,12 @@
 
       <section class="tr-sec tr-num rv"><div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="grid"></i></div>${[[17, '', 'fornitori con catalogo'], [25000, '+', 'codici prodotto con foto'], [11, '', 'attività già pronte'], [24, '/7', 'da PC e telefono']].map(([n, u, l]) => `<div><b data-cnt="${n}" data-u="${u}">0</b><span>${l}</span></div>`).join('')}</section>
 
-      <section class="tr-sec tr-how"><div class="tr-h rv"><h2>Su misura, davvero</h2><p class="tr-sub">Non un programma uguale per tutti: il tuo gestionale lo preparo io, insieme a te.</p></div>
+${beforeAfter()}
+      <section class="tr-sec tr-how" id="tr-how"><div class="tr-h rv"><h2>Su misura, davvero</h2><p class="tr-sub">Non un programma uguale per tutti: il tuo gestionale lo preparo io, insieme a te.</p></div>
         <ol class="tr-steps">${STEPS.map(([t, d], i) => `<li class="rv" style="--d:${i * 120}ms"><span class="n">${i + 1}</span><b>${t}</b><p>${d}</p></li>`).join('')}</ol>
         <div class="tr-wish rv"><h3>Pensi a qualcosa che non c'è? Lo aggiungo.</h3><div class="tr-wl">${WISH.map((w, i) => `<span style="--i:${i}">${esc(w)}</span>`).join('')}</div><p class="tr-wish-p">…e tutto quello che ti serve: scrivimelo.</p></div></section>
 
+${faq()}
       <section class="tr-sec tr-end rv"><div class="tr-card"><div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b3"></i><i class="grid"></i></div><div><h2>Parliamone</h2><p>Raccontami di cosa hai bisogno: ti rispondo personalmente e ti preparo una proposta per la tua attività.</p>
           <div class="tr-who"><span class="tr-av">${esc(String(C.nome || 'D')[0])}</span><span><b>${esc(C.nome || '')}</b><small>${esc(C.email || '')}${C.tel ? ' · ' + esc(C.tel) : ''}</small></span></div></div>
         <div class="tr-cta col"><a class="tr-btn" href="${esc(mail)}">Scrivimi una email</a>${C.wa ? `<a class="tr-btn alt" href="https://wa.me/${esc(C.wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${C.tel ? `<a class="tr-btn alt" href="tel:${esc(String(C.tel).replace(/\s+/g, ''))}">Chiama ${esc(C.tel)}</a>` : ''}<button type="button" class="tr-btn ghost" data-tr="req">Richiedi il tuo gestionale</button>${opts.demo ? '' : '<button type="button" class="tr-btn ghost" data-tr="demo">Prova la demo</button>'}</div></div>
@@ -178,7 +283,7 @@
   }
   function count(el) {
     const to = +el.dataset.cnt, u = el.dataset.u || '', eur = /€/.test(el.textContent);
-    const fmt = v => Math.round(v).toLocaleString('it-IT') + (eur ? ' €' : u);
+    const fmt = v => el.dataset.eur ? '€ ' + Math.round(v).toLocaleString('it-IT') : Math.round(v).toLocaleString('it-IT') + (eur ? ' €' : u);
     if (reduced()) { el.textContent = fmt(to); return; }
     const t0 = performance.now(), dur = 1400;
     const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = fmt(to * e); if (k < 1) requestAnimationFrame(step); };
@@ -210,6 +315,8 @@
       timers.push(setInterval(() => { if (!document.hidden) toastNext(); }, 3400));
       timers.push(setInterval(() => { if (!document.hidden) aiCycle(); }, 5200));
     }
+    // schermate di esempio e calcolatore
+    clearTimeout(sxT); sxShow(sxK, true); calcUpd();
     // movimento con il mouse, luce sulle card, barra di avanzamento
     const scene = $('#tr-scene', root), hero = $('.tr-hero', root), prog = $('#tr-prog', root);
     if (hero && scene && matchMedia('(hover: hover)').matches && !reduced()) hero.onpointermove = e => { const r = hero.getBoundingClientRect(); scene.style.setProperty('--px', ((e.clientX - r.left) / r.width - .5).toFixed(3)); scene.style.setProperty('--py', ((e.clientY - r.top) / r.height - .5).toFixed(3)); };
@@ -217,6 +324,9 @@
     if (prog) sc.onscroll = () => { prog.style.transform = `scaleX(${Math.min(1, sc.scrollTop / Math.max(1, sc.scrollHeight - sc.clientHeight))})`; };
   }
   function onClick(e) {
+    const sxb = e.target.closest('[data-sx]'); if (sxb) { sxShow(sxb.dataset.sx, false); return; }
+    const sxg = e.target.closest('[data-sxgo]'); if (sxg) { sxShow(sxg.dataset.sxgo, false); const t = $('#tr-show', root); t && t.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); return; }
+    const gl = e.target.closest('a[data-go]'); if (gl) { e.preventDefault(); const t = $(gl.getAttribute('href'), root); t && t.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); return; }
     const a = e.target.closest('[data-tr]'), c = e.target.closest('[data-trset]');
     if (c) { sel = c.dataset.trset; opts.fixed = true; const y = $('.tr-scroll', root).scrollTop; render(); const s2 = $('.tr-scroll', root); s2.scrollTop = y; $$('.rv', root).forEach(el => el.classList.add('in')); return; }
     if (!a) return;
@@ -228,7 +338,7 @@
   function onKey(e) { if (e.key === 'Escape') close(); }
   function close() {
     if (!root) return;
-    timers.forEach(clearInterval); timers = []; obs && obs.disconnect();
+    timers.forEach(clearInterval); timers = []; obs && obs.disconnect(); clearTimeout(sxT);
     root.classList.add('bye'); document.removeEventListener('keydown', onKey);
     const st = document.getElementById('setup'); if (st) st.inert = false;
     const r = root; root = null; setTimeout(() => { r.remove(); document.body.classList.remove('tr-open'); }, reduced() ? 0 : 260);
@@ -242,6 +352,7 @@
     const st = document.getElementById('setup'); if (st) st.inert = true;
     document.body.appendChild(root); document.body.classList.add('tr-open');
     root.addEventListener('click', onClick); document.addEventListener('keydown', onKey);
+    root.addEventListener('input', e => { if (e.target.matches('[data-calc]')) calcUpd(); });
     render();
   }
   window.CDC_TOUR = { open, close };
