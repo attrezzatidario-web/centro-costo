@@ -1,4 +1,4 @@
-/* Centro di Costo — «Scopri cosa può fare» (v97)
+/* Centro di Costo — «Scopri cosa può fare» (v97, rinnovata in v104)
    Pagina di presentazione per i clienti: si apre dalla pagina di accesso e dalla demo.
    Si adatta all'attività scelta (settori.js). Animazioni leggere in CSS, ferme con «riduci movimento». */
 (() => {
@@ -61,14 +61,73 @@
   let root = null, opts = {}, sel = 'veicoli', obs = null, timers = [];
   const SET = () => window.CDC_SETTORI || { list: [], get: () => null };
 
-  function heroMock() {
-    return `<div class="tr-mock" aria-hidden="true">
-      <div class="tm-top"><i></i><i></i><i></i><span>Dashboard</span></div>
-      <div class="tm-kpi"><div><small>Utile del mese</small><b data-cnt="8460">0 €</b><em class="up">▲ 12% rispetto al mese prima</em></div>
-        <svg class="tm-donut" viewBox="0 0 42 42"><circle r="15.9" cx="21" cy="21" class="bg"/>${[[38, 0], [27, 38], [20, 65], [15, 85]].map(([v, o], i) => `<circle r="15.9" cx="21" cy="21" class="sg s${i}" style="--v:${v};--o:${o};--i:${i}"/>`).join('')}</svg></div>
-      <div class="tm-bars">${Array.from({ length: 12 }, (_, i) => `<i style="--i:${i};--h:${30 + ((i * 37) % 60)}%"></i>`).join('')}</div>
-      <div class="tm-rows">${[['Fattura letta dall\'IA', '14 righe · categorie assegnate'], ['Preventivo inviato', 'PDF con foto dei prodotti'], ['Sotto scorta', '3 articoli da riordinare']].map(([t, d], i) => `<div class="tm-r" style="--i:${i}"><span class="tm-ic"></span><span><b>${t}</b><small>${d}</small></span></div>`).join('')}</div>
+  // scena animata dell'apertura: finestra della dashboard + card in vetro che si muovono
+  const MESI = ['mag', 'giu', 'lug', 'ago', 'set', 'ott'];
+  function heroScene(s, cats, ex) {
+    const C3 = cats.slice(0, 3);
+    return `<div class="tr-scene" id="tr-scene" aria-hidden="true">
+      <div class="ts-win" style="--z:14">
+        <div class="ts-top"><i></i><i></i><i></i><span>Dashboard · ${esc(s.s || s.n || 'La tua azienda')}</span><em class="ts-live">dal vivo</em></div>
+        <div class="ts-body">
+          <div class="ts-kpis"><div><small>Incassi</small><b data-k="inc">€ 0</b></div><div><small>Spese</small><b data-k="spe">€ 0</b></div><div class="u"><small>Utile</small><b data-k="ut">€ 0</b><em data-k="dl">+12%</em></div></div>
+          <svg class="ts-chart" viewBox="0 0 400 130" preserveAspectRatio="none"><defs><linearGradient id="ts-ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#5fd3a5" stop-opacity=".35"/><stop offset="1" stop-color="#5fd3a5" stop-opacity="0"/></linearGradient></defs>
+            ${[26, 60, 94].map(y => `<line x1="0" x2="400" y1="${y}" y2="${y}" class="gl"/>`).join('')}
+            <path class="ar" d=""/><path class="li" d="" pathLength="1"/><path class="ls" d="" pathLength="1"/><circle class="dt" r="5"/></svg>
+          <div class="ts-mo">${MESI.map(m => `<span>${m}</span>`).join('')}</div>
+        </div>
+      </div>
+      <div class="ts-card ts-donut" style="--z:28;--d:1"><svg viewBox="0 0 42 42"><circle class="t" r="15.9" cx="21" cy="21"/>${[0, 1, 2, 3].map(i => `<circle class="sg g${i}" r="15.9" cx="21" cy="21" pathLength="100"/>`).join('')}</svg>
+        <div class="ts-lg"><small>Spese per categoria</small>${C3.map((c, i) => `<span class="g${i}"><i></i>${esc(c)}</span>`).join('')}</div></div>
+      <div class="ts-card ts-ai" style="--z:22;--d:2"><div class="ts-aih"><span class="ts-spark">✦</span>Fattura letta dall'IA</div>
+        ${ex.slice(0, 3).map(([t, c], i) => `<div class="ts-air" style="--i:${i}"><span>${esc(t)}</span><em>${esc(c)}</em></div>`).join('')}</div>
+      <div class="ts-toast" style="--z:36"><span class="ts-ti"></span><div><b></b><small></small></div></div>
     </div>`;
+  }
+  // curva morbida tra i punti
+  function curve(pts, W, H) {
+    const P = pts.map((y, i) => [i / (pts.length - 1) * W, H - 10 - y * (H - 22)]);
+    let d = `M0 ${P[0][1].toFixed(1)}`;
+    for (let i = 0; i < P.length - 1; i++) { const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2; d += ` C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)} ${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)} ${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`; }
+    return { d, end: P[P.length - 1] };
+  }
+  const SCN = [
+    { inc: 32480, spe: 20000, dl: '+12%', a: [.35, .45, .40, .62, .58, .80], b: [.30, .32, .38, .36, .42, .40], c: [38, 27, 20, 15] },
+    { inc: 41250, spe: 22370, dl: '+21%', a: [.30, .38, .55, .50, .72, .90], b: [.28, .34, .32, .40, .38, .44], c: [32, 30, 24, 14] },
+    { inc: 28940, spe: 19480, dl: '+6%', a: [.42, .36, .48, .45, .52, .60], b: [.36, .30, .40, .38, .44, .42], c: [44, 22, 20, 14] },
+    { inc: 36700, spe: 21390, dl: '+15%', a: [.25, .40, .36, .58, .68, .76], b: [.32, .30, .36, .44, .40, .46], c: [35, 31, 19, 15] }
+  ];
+  const TOASTS = [['doc', 'Fattura registrata', '14 righe · categorie assegnate'], ['in', 'Incasso del giorno', '+ € 1.240,00 · cassa'], ['ok', 'Preventivo inviato', 'PDF con foto dei prodotti'], ['warn', 'Sotto scorta', '3 articoli da riordinare'], ['ddt', 'Fattura di fine mese', '6 DDT raccolti · XML pronto']];
+  const TI = { doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>', in: '<path d="M12 19V5M5 12l7-7 7 7"/>', ok: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', warn: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/>', ddt: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' };
+  let scn = 0, cur = null, tIdx = 0;
+  const eurF = v => '€ ' + Math.round(v).toLocaleString('it-IT');
+  const easeIO = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  function sceneSet(i, instant) {
+    const sc = $('#tr-scene', root); if (!sc) return;
+    const S = SCN[i % SCN.length], from = cur || { inc: 0, spe: 0, a: S.a.map(() => 0.3), b: S.b.map(() => 0.3) };
+    $('[data-k="dl"]', sc).textContent = S.dl;
+    let off = 0; $$('.ts-donut .sg', sc).forEach((c, k) => { c.setAttribute('stroke-dasharray', `${S.c[k] - 1} ${101 - S.c[k]}`); c.setAttribute('stroke-dashoffset', -off); off += S.c[k]; });
+    const draw = (k) => {
+      const v = { inc: from.inc + (S.inc - from.inc) * k, spe: from.spe + (S.spe - from.spe) * k, a: from.a.map((y, j) => y + (S.a[j] - y) * k), b: from.b.map((y, j) => y + (S.b[j] - y) * k) };
+      const A = curve(v.a, 400, 130), B = curve(v.b, 400, 130);
+      $('.ts-chart .li', sc).setAttribute('d', A.d); $('.ts-chart .ls', sc).setAttribute('d', B.d); $('.ts-chart .ar', sc).setAttribute('d', `${A.d} L400 130 L0 130 Z`);
+      const dt = $('.ts-chart .dt', sc); dt.setAttribute('cx', A.end[0]); dt.setAttribute('cy', A.end[1]);
+      $('[data-k="inc"]', sc).textContent = eurF(v.inc); $('[data-k="spe"]', sc).textContent = eurF(v.spe); $('[data-k="ut"]', sc).textContent = eurF(v.inc - v.spe);
+      cur = v;
+    };
+    if (instant || reduced()) return draw(1);
+    const t0 = performance.now(), dur = 1300;
+    const f = t => { if (!root) return; const k = Math.min(1, (t - t0) / dur); draw(easeIO(k)); if (k < 1) requestAnimationFrame(f); };
+    requestAnimationFrame(f);
+  }
+  function toastNext() {
+    const t = $('.ts-toast', root); if (!t) return;
+    const [k, a, b] = TOASTS[tIdx++ % TOASTS.length];
+    t.classList.remove('show');
+    setTimeout(() => { if (!root) return; const ic = $('.ts-ti', t); ic.className = 'ts-ti k-' + k; ic.innerHTML = `<svg viewBox="0 0 24 24">${TI[k]}</svg>`; $('b', t).textContent = a; $('small', t).textContent = b; t.classList.add('show'); }, 420);
+  }
+  function aiCycle() {
+    const rows = $$('.ts-air', root); if (!rows.length) return;
+    rows.forEach(r => r.classList.remove('on')); rows.forEach((r, i) => setTimeout(() => r.classList.add('on'), 350 + i * 650));
   }
   function render() {
     const S = SET(), s = S.get(sel) || S.list[0] || { n: '', s: '', sede: ['Sede', 'Sedi'], cat: [] };
@@ -77,24 +136,26 @@
     const ex = EX[s.id] || EX.altro;
     const mail = `mailto:${C.email}?subject=${encodeURIComponent('Centro di Costo · ' + (s.n || ''))}&body=${encodeURIComponent(`Ciao ${C.nome || ''},\nvorrei maggiori informazioni sul gestionale per la mia attività (${s.n || ''}).\n\nAzienda:\nCittà:\nCosa mi servirebbe:\n`)}`;
     root.innerHTML = `<div class="tr-scroll">
-      <header class="tr-bar"><div class="tr-brand"><img src="logo.svg" alt="" width="30" height="30"><b>Centro di Costo</b></div>
+      <header class="tr-bar"><i class="tr-prog" id="tr-prog"></i><div class="tr-brand"><img src="logo.svg" alt="" width="30" height="30"><b>Centro di Costo</b></div>
         <div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
 
       <section class="tr-hero">
-        <div class="tr-hl rv">
-          <span class="tr-eye">Gestionale aziendale su misura</span>
-          <h1>Il gestionale su misura per <span class="tr-word" data-word>${esc(word)}</span></h1>
+        <div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="grid"></i></div>
+        <div class="tr-hl">
+          <span class="tr-eye"><i></i>Gestionale aziendale su misura</span>
+          <h1>Il gestionale su misura per <span class="tr-rot" data-word><b>${esc(word)}</b></span></h1>
           <p>Quanto incassi, quanto spendi e quanto ti resta. Fornitori, preventivi, clienti, magazzino e fatture in un unico posto, su PC e telefono. Preparato su misura per come lavori, e personalizzabile quanto vuoi.</p>
-          <div class="tr-cta">${opts.demo ? '' : `<button type="button" class="tr-btn" data-tr="demo">Prova la demo</button>`}<button type="button" class="tr-btn ${opts.demo ? '' : 'alt'}" data-tr="req">Richiedi il tuo gestionale</button><a class="tr-btn ghost" href="${esc(mail)}">Scrivimi</a></div>
+          <div class="tr-cta">${opts.demo ? '' : `<button type="button" class="tr-btn glow" data-tr="demo"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Prova la demo</button>`}<button type="button" class="tr-btn ${opts.demo ? 'glow' : 'white'}" data-tr="req">Richiedi il tuo gestionale</button><a class="tr-btn glass" href="${esc(mail)}">Scrivimi</a></div>
+          <ul class="tr-trust"><li>Pronto in pochi giorni</li><li>I dati restano solo tuoi</li><li>PC, tablet e telefono</li></ul>
         </div>
-        <div class="tr-hr rv">${heroMock()}</div>
+        <div class="tr-hr">${heroScene(s, cats, ex)}</div>
       </section>
 
-      <section class="tr-sec tr-sets rv"><h2>Scegli la tua attività</h2><p class="tr-sub">Nomi, sezioni e categorie si adattano da soli.</p>
-        <div class="tr-chips">${S.list.map(x => `<button type="button" class="tr-chip${x.id === sel ? ' on' : ''}" data-trset="${x.id}"><svg viewBox="0 0 24 24">${x.ic}</svg>${esc(x.s || x.n)}</button>`).join('')}</div></section>
+      <section class="tr-sets"><div class="tr-setsc rv"><div class="tr-setsh"><h2>Scegli la tua attività</h2><p class="tr-sub">Nomi, sezioni e categorie si adattano da soli.</p></div>
+        <div class="tr-chips">${S.list.map(x => `<button type="button" class="tr-chip${x.id === sel ? ' on' : ''}" data-trset="${x.id}"><svg viewBox="0 0 24 24">${x.ic}</svg>${esc(x.s || x.n)}</button>`).join('')}</div></div></section>
 
       <section class="tr-sec"><div class="tr-h rv"><h2>Tutto quello che serve, in un posto solo</h2><p class="tr-sub">Ogni funzione si accende o si spegne: tieni solo quello che usi.</p></div>
-        <div class="tr-grid">${FEAT.map(([k, t, d], i) => `<article class="tr-f rv" style="--d:${(i % 3) * 90}ms"><div class="tr-ill">${ILL[k]}</div><h3>${t}${SOON.has(k) ? '<span class="tr-soon">in arrivo</span>' : ''}</h3><p>${d}</p></article>`).join('')}</div></section>
+        <div class="tr-grid">${FEAT.map(([k, t, d], i) => `<article class="tr-f rv" style="--d:${(i % 3) * 90}ms"><span class="tr-fn">${String(i + 1).padStart(2, '0')}</span><div class="tr-ill">${ILL[k]}</div><h3>${t}${SOON.has(k) ? '<span class="tr-soon">in arrivo</span>' : ''}</h3><p>${d}</p></article>`).join('')}</div></section>
 
       <section class="tr-sec tr-fit"><div class="tr-fit-l rv"><span class="tr-eye">Per ${esc(word)}</span><h2>Parla la lingua della tua attività</h2>
           <ul class="tr-pts"><li><b>${esc(s.sede ? s.sede[1] : 'Sedi')}</b> al posto di sedi generiche: confronti le spese tra ${s.sede && s.sede[2] ? 'le tue' : 'i tuoi'} ${esc((s.sede ? s.sede[1] : 'sedi').toLowerCase())}</li><li><b>${cats.length} categorie di spesa</b> già pronte e modificabili</li><li><b>Ogni riga riconosciuta da sola</b>: scrivi o importi, la categoria si assegna in automatico</li></ul>
@@ -102,13 +163,13 @@
         <div class="tr-fit-r rv"><div class="tr-cls" aria-hidden="true"><div class="cl-h">Riconoscimento automatico</div>${ex.map(([t, c], i) => `<div class="cl-r" style="--i:${i}"><span class="cl-t">${esc(t)}</span><span class="cl-a"></span><span class="cl-c">${esc(c)}</span></div>`).join('')}</div></div>
       </section>
 
-      <section class="tr-sec tr-num rv">${[[17, '', 'fornitori con catalogo'], [25000, '+', 'codici prodotto con foto'], [11, '', 'attività già pronte'], [24, '/7', 'da PC e telefono']].map(([n, u, l]) => `<div><b data-cnt="${n}" data-u="${u}">0</b><span>${l}</span></div>`).join('')}</section>
+      <section class="tr-sec tr-num rv"><div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="grid"></i></div>${[[17, '', 'fornitori con catalogo'], [25000, '+', 'codici prodotto con foto'], [11, '', 'attività già pronte'], [24, '/7', 'da PC e telefono']].map(([n, u, l]) => `<div><b data-cnt="${n}" data-u="${u}">0</b><span>${l}</span></div>`).join('')}</section>
 
       <section class="tr-sec tr-how"><div class="tr-h rv"><h2>Su misura, davvero</h2><p class="tr-sub">Non un programma uguale per tutti: il tuo gestionale lo preparo io, insieme a te.</p></div>
         <ol class="tr-steps">${STEPS.map(([t, d], i) => `<li class="rv" style="--d:${i * 120}ms"><span class="n">${i + 1}</span><b>${t}</b><p>${d}</p></li>`).join('')}</ol>
-        <div class="tr-wish rv"><h3>Pensi a qualcosa che non c'è? Lo aggiungo.</h3><div class="tr-wl">${WISH.map((w, i) => `<span style="--i:${i}">${esc(w)}</span>`).join('')}</div></div></section>
+        <div class="tr-wish rv"><h3>Pensi a qualcosa che non c'è? Lo aggiungo.</h3><div class="tr-wl">${WISH.map((w, i) => `<span style="--i:${i}">${esc(w)}</span>`).join('')}</div><p class="tr-wish-p">…e tutto quello che ti serve: scrivimelo.</p></div></section>
 
-      <section class="tr-sec tr-end rv"><div class="tr-card"><div><h2>Parliamone</h2><p>Raccontami di cosa hai bisogno: ti rispondo personalmente e ti preparo una proposta per la tua attività.</p>
+      <section class="tr-sec tr-end rv"><div class="tr-card"><div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b3"></i><i class="grid"></i></div><div><h2>Parliamone</h2><p>Raccontami di cosa hai bisogno: ti rispondo personalmente e ti preparo una proposta per la tua attività.</p>
           <div class="tr-who"><span class="tr-av">${esc(String(C.nome || 'D')[0])}</span><span><b>${esc(C.nome || '')}</b><small>${esc(C.email || '')}${C.tel ? ' · ' + esc(C.tel) : ''}</small></span></div></div>
         <div class="tr-cta col"><a class="tr-btn" href="${esc(mail)}">Scrivimi una email</a>${C.wa ? `<a class="tr-btn alt" href="https://wa.me/${esc(C.wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${C.tel ? `<a class="tr-btn alt" href="tel:${esc(String(C.tel).replace(/\s+/g, ''))}">Chiama ${esc(C.tel)}</a>` : ''}<button type="button" class="tr-btn ghost" data-tr="req">Richiedi il tuo gestionale</button>${opts.demo ? '' : '<button type="button" class="tr-btn ghost" data-tr="demo">Prova la demo</button>'}</div></div>
         <p class="tr-foot">Centro di Costo · gestionale aziendale</p></section>
@@ -132,11 +193,28 @@
     const w = $('[data-word]', root), L = SET().list;
     if (w && !opts.fixed && !reduced() && L.length) {
       let i = Math.max(0, L.findIndex(x => x.id === sel));
-      timers.push(setInterval(() => { i = (i + 1) % L.length; w.classList.add('out'); setTimeout(() => { w.textContent = PL[L[i].id] || (L[i].s || L[i].n).toLowerCase(); w.classList.remove('out'); }, 260); }, 2400));
+      timers.push(setInterval(() => {
+        i = (i + 1) % L.length;
+        const old = $('b:not(.out)', w), nw = document.createElement('b');
+        w.style.width = w.getBoundingClientRect().width + 'px';
+        nw.textContent = PL[L[i].id] || (L[i].s || L[i].n).toLowerCase(); nw.className = 'in'; w.appendChild(nw);
+        void w.offsetWidth; w.style.width = nw.getBoundingClientRect().width + 'px';
+        if (old) { old.classList.add('out'); setTimeout(() => old.remove(), 700); }
+        setTimeout(() => nw.classList.remove('in'), 30);
+      }, 2600));
     }
-    // barre della dashboard che respirano
-    const bars = $$('.tm-bars i', root);
-    if (bars.length && !reduced()) timers.push(setInterval(() => bars.forEach(b => b.style.setProperty('--h', `${25 + Math.random() * 70}%`)), 2600));
+    // scena dell'apertura: dati che cambiano, notifiche, righe lette dall'IA
+    cur = null; sceneSet(scn, true); setTimeout(() => { if (root) { $('#tr-scene', root) && $('#tr-scene', root).classList.add('on'); toastNext(); aiCycle(); } }, 250);
+    if (!reduced()) {
+      timers.push(setInterval(() => { if (!document.hidden) sceneSet(++scn); }, 4200));
+      timers.push(setInterval(() => { if (!document.hidden) toastNext(); }, 3400));
+      timers.push(setInterval(() => { if (!document.hidden) aiCycle(); }, 5200));
+    }
+    // movimento con il mouse, luce sulle card, barra di avanzamento
+    const scene = $('#tr-scene', root), hero = $('.tr-hero', root), prog = $('#tr-prog', root);
+    if (hero && scene && matchMedia('(hover: hover)').matches && !reduced()) hero.onpointermove = e => { const r = hero.getBoundingClientRect(); scene.style.setProperty('--px', ((e.clientX - r.left) / r.width - .5).toFixed(3)); scene.style.setProperty('--py', ((e.clientY - r.top) / r.height - .5).toFixed(3)); };
+    $$('.tr-f', root).forEach(f => { f.onpointermove = e => { const r = f.getBoundingClientRect(); f.style.setProperty('--mx', (e.clientX - r.left) + 'px'); f.style.setProperty('--my', (e.clientY - r.top) + 'px'); }; });
+    if (prog) sc.onscroll = () => { prog.style.transform = `scaleX(${Math.min(1, sc.scrollTop / Math.max(1, sc.scrollHeight - sc.clientHeight))})`; };
   }
   function onClick(e) {
     const a = e.target.closest('[data-tr]'), c = e.target.closest('[data-trset]');
@@ -152,6 +230,7 @@
     if (!root) return;
     timers.forEach(clearInterval); timers = []; obs && obs.disconnect();
     root.classList.add('bye'); document.removeEventListener('keydown', onKey);
+    const st = document.getElementById('setup'); if (st) st.inert = false;
     const r = root; root = null; setTimeout(() => { r.remove(); document.body.classList.remove('tr-open'); }, reduced() ? 0 : 260);
   }
   function open(o) {
@@ -159,6 +238,8 @@
     if (root) root.remove();
     root = document.createElement('div');
     if (!$('link[data-tour]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'tour.css?v=' + (opts.v || 1); l.dataset.tour = 1; const r0 = root; r0.style.visibility = 'hidden'; l.onload = l.onerror = () => { r0.style.visibility = ''; }; document.head.appendChild(l); } root.id = 'tour'; root.className = 'tour'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'Scopri cosa può fare il gestionale');
+    try { document.activeElement && document.activeElement.blur(); } catch {}
+    const st = document.getElementById('setup'); if (st) st.inert = true;
     document.body.appendChild(root); document.body.classList.add('tr-open');
     root.addEventListener('click', onClick); document.addEventListener('keydown', onKey);
     render();
