@@ -219,8 +219,9 @@
   const isMain = () => !me || !!me.principale;
   // nome e città dell'azienda per intestazioni e PDF (Config «azienda» o dati del gestionale)
   const ORG = {
-    get n() { const a = (db.config || {}).azienda; return (a && a.nome) || (me && me.wsNome) || 'Soluzione Veicolare S.r.l.'; },
-    get sede() { const a = (db.config || {}).azienda; return (a && a.citta) || (me && me.wsCitta) || 'San Cesareo (RM)'; },
+    get n() { const a = (db.config || {}).azienda; return (a && a.nome) || (me && me.wsNome) || (isMain() ? 'Soluzione Veicolare S.r.l.' : 'La tua azienda'); },
+    get sede() { const a = (db.config || {}).azienda; return (a && a.citta) || (me && me.wsCitta) || (isMain() ? 'San Cesareo (RM)' : ''); },
+    get foot() { return [this.n, this.sede].filter(Boolean).join(' · '); }, // v116: senza sede non resta il « · » finale
     get N() { return this.n.toUpperCase(); }
   };
   /* ================= v95: settore di attività, moduli e nomi ================= */
@@ -231,7 +232,7 @@
   // la demo ricorda sul dispositivo il settore scelto; gli altri gestionali lo prendono dal registro «Gestionali»
   const settoreId = () => DEMO ? (LS.get('cdc_demo_set', '') || 'veicoli') : ((me && me.wsSettore) || (isMain() ? 'veicoli' : 'altro'));
   const settore = () => SET.get(settoreId()) || SET_DEF;
-  const modAvail = k => { const m = SET.moduli.find(x => x.k === k); return !(m && m.only) || (settoreId() === m.only && (isMain() || DEMO)); };
+  const modAvail = k => { const m = SET.moduli.find(x => x.k === k); return !(m && m.only) || (settoreId() === m.only && isMain() && !DEMO); }; // v116: Torental è un cliente vero: non compare nella demo
   function modOn(k) {
     if (!MOD_K.includes(k)) return true;
     if (!modAvail(k)) return false;
@@ -339,8 +340,8 @@
   }
   // v97: presentazione «Scopri cosa può fare» (tour.js + tour.css, caricati solo quando servono)
   async function openTour() {
-    try { await loadLib('tour.js?v=115'); } catch { return demoInfo(); }
-    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 115, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
+    try { await loadLib('tour.js?v=116'); } catch { return demoInfo(); }
+    const go = () => window.CDC_TOUR ? window.CDC_TOUR.open({ v: 116, settore: me ? settoreId() : '', demo: DEMO, contatti: CONTATTI,
       onDemo: () => demoStart(),
       onRequest: id => contactReq(id) }) : demoInfo();
     if (window.CDC_TOUR) go(); else setTimeout(go, 150);
@@ -1556,7 +1557,7 @@
 
   function formMov(r) {
     const isNew = !r;
-    r = r || { id: uid(), data: today(), ndoc: '', codice: '', descrizione: '', um: 'PZ', quantita: 1, prezzo: '', iva: 0.22, centro: LS.get('cdc_lastcc', centri()[0]), societa: LS.get('cdc_lastsoc', 'Soluzione Veicolare'), categoria: '', fornitore: '', note: '' };
+    r = r || { id: uid(), data: today(), ndoc: '', codice: '', descrizione: '', um: 'PZ', quantita: 1, prezzo: '', iva: 0.22, centro: LS.get('cdc_lastcc', centri()[0]), societa: isMain() ? LS.get('cdc_lastsoc', 'Soluzione Veicolare') : '', categoria: '', fornitore: '', note: '' };
     openSheet(isNew ? 'Nuovo movimento' : 'Modifica movimento', `
       ${isNew && aiReady() ? `<div class="ai-row" style="grid-template-columns:1fr"><button type="button" class="ai-btn" id="scan-btn">${IC.camera}Scansiona DDT o fattura</button></div>` : ''}
       <label class="f"><span>Descrizione</span><input name="descrizione" required data-focus value="${esc(r.descrizione)}" placeholder="Es. Guanti nitrile L"></label>
@@ -1573,7 +1574,7 @@
         <label class="f"><span>Categoria</span><select name="categoria">${opt(categorie(), r.categoria || autoCat(r.descrizione))}</select></label>
       </div>
       <div class="f-row">
-        <label class="f"><span>Società</span><select name="societa">${opt(SOC, r.societa || 'Soluzione Veicolare')}</select></label>
+        ${isMain() ? `<label class="f"><span>Società</span><select name="societa">${opt(SOC, r.societa || 'Soluzione Veicolare')}</select></label>` : `<input type="hidden" name="societa" value="${esc(r.societa || '')}">`}
         <label class="f"><span>Data</span><input name="data" type="date" value="${esc(validD(r.data) ? r.data : '')}"></label>
       </div>
       <div class="f-row">
@@ -1602,7 +1603,7 @@
       $('#fm-sum').innerHTML = `<div><span>Imponibile</span><b>${eur(n)}</b></div><div><span>IVA ${Number(form.iva.value) ? fmtNum(Number(form.iva.value) * 100, 0) + '%' : 'esente'}</span><b>${eur(iv)}</b></div><div class="t"><span>Totale</span><b>${eur(n + iv)}</b></div>`; };
     upd(); form.quantita.addEventListener('input', upd); form.prezzo.addEventListener('input', upd); form.iva.addEventListener('change', upd);
     form.descrizione.addEventListener('input', () => { if (!catTouched) form.categoria.value = autoCat(form.descrizione.value); });
-    form.centro.addEventListener('change', () => { if (form.centro.value === 'ATTREZZATI') form.societa.value = 'Attrezzati'; });
+    form.centro.addEventListener('change', () => { if (isMain() && form.centro.value === 'ATTREZZATI') form.societa.value = 'Attrezzati'; });
     const sb = $('#scan-btn'); if (sb) sb.onclick = scanDoc;
     $('[data-mvcod]').onclick = e => { e.preventDefault(); scanOpen({ title: 'Codice dell\'articolo', onCode: c => { const a = artByCode(c); form.codice.value = a ? (a.codForn || a.codice || c) : c; if (a) { if (!form.descrizione.value.trim()) form.descrizione.value = a.descrizione; if (!form.prezzo.value.trim() && num(a.costo)) form.prezzo.value = fmtIn(num(a.costo)); if (!form.fornitore.value.trim() && a.fornitore) form.fornitore.value = a.fornitore; if (a.um) form.um.value = a.um; upd(); } return { ok: true, msg: a ? a.descrizione : c }; } }); };
   }
@@ -1648,7 +1649,7 @@
       <div class="ai-note">${IC.spark}${righe.length} righe riconosciute: controlla prima di salvare</div>
       <div class="f-row">
         <label class="f"><span>Centro di costo</span><select name="centro">${opt(centri(), cc)}</select></label>
-        <label class="f"><span>Società</span><select name="societa">${opt(SOC, cc === 'ATTREZZATI' ? 'Attrezzati' : 'Soluzione Veicolare')}</select></label>
+        ${isMain() ? `<label class="f"><span>Società</span><select name="societa">${opt(SOC, cc === 'ATTREZZATI' ? 'Attrezzati' : 'Soluzione Veicolare')}</select></label>` : '<input type="hidden" name="societa" value="">'}
       </div>
       <div class="f-row">
         <label class="f"><span>Fornitore</span><input name="fornitore" value="${esc(res.fornitore || '')}"></label>
@@ -2429,7 +2430,7 @@
     sel.innerHTML = `<option value=""${gasP ? '' : ' selected'}>Tutto il periodo</option>` + months.slice().reverse().map(k => `<option value="${k}"${k === gasP ? ' selected' : ''}>${esc(mLabel(k))}</option>`).join('');
     const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(gasP);
     $('#ga-prev').disabled = ix >= opts.length - 1; $('#ga-next').disabled = ix <= 0;
-    sub(ivaLbl() + ' · rifornimenti sede di San Cesareo');
+    sub(ivaLbl() + (isMain() ? ' · rifornimenti sede di San Cesareo' : ' · rifornimenti dei mezzi'));
     const all = gasRows();
     const rows = gasP ? all.filter(r => String(r.data).slice(0, 7) === gasP) : all;
     const anim = gasAnim && !reduced(); gasAnim = false;
@@ -4335,7 +4336,7 @@
         }
       }
       const N = doc.internal.getNumberOfPages(), oggi = new Date().toLocaleDateString('it-IT');
-      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5); doc.text(`Scheda tecnica · ${oggi}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text(`${ORG.foot}`, M, H - 7.5); doc.text(`Scheda tecnica · ${oggi}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
       doc.setProperties({ title: `Scheda tecnica ${it.n}`, author: ORG.n, creator: 'Centro di Costo' });
       const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Scheda_tecnica_${slug(PV_SUP[sup].n)}_${slug(pvCode(it))}_${slug(it.n).slice(0, 40)}.pdf`);
@@ -4732,7 +4733,7 @@
       const L = p.loghi || {}, LGF = L.f ? await pvLogoGet(L.f) : null, LGR = L.r ? await pvLogoGet(L.r) : null;
       pvPersPages(doc, { FF, p, cards: cards.map(c => [c[0], c[1]]), LGF, LGR, same: !!(L.f && L.r && L.f.id === L.r.id), noFirstPage: true });
       const N = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= N; i++) { doc.setPage(i); doc.setDrawColor(227, 231, 238); doc.setLineWidth(.3); doc.line(16, 285, 194, 285); doc.setTextColor(120, 128, 142); doc.setFont(FF, 'normal'); doc.setFontSize(7.5); doc.text(`${ORG.n} · ${ORG.sede}`, 16, 289.5); doc.text(`Pagina ${i} di ${N}`, 194, 289.5, { align: 'right' }); }
+      for (let i = 1; i <= N; i++) { doc.setPage(i); doc.setDrawColor(227, 231, 238); doc.setLineWidth(.3); doc.line(16, 285, 194, 285); doc.setTextColor(120, 128, 142); doc.setFont(FF, 'normal'); doc.setFontSize(7.5); doc.text(`${ORG.foot}`, 16, 289.5); doc.text(`Pagina ${i} di ${N}`, 194, 289.5, { align: 'right' }); }
       doc.setProperties({ title: `Anteprima logo ${p.num}`, author: ORG.n });
       doc.save(`Anteprima_logo_${pvSlug((p.cliente && p.cliente.nome) || p.num)}.pdf`);
       busy(); toast('PDF delle anteprime scaricato');
@@ -4992,7 +4993,7 @@
       stroke([230, 233, 239]); doc.setLineWidth(.2); for (let ly = ny + 3; ly < y + 30; ly += 6.5) doc.line(M + 4, ly, W - M - 4, ly);
       // piè di pagina
       const N = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 11, W - M, H - 11); color(C.muted); font('normal', 7.2); doc.text(`${ORG.n} · ${ORG.sede} · uso interno`, M, H - 6.5); doc.text(`Scheda di lavoro ${p.num}`, W / 2, H - 6.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 6.5, { align: 'right' }); }
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 11, W - M, H - 11); color(C.muted); font('normal', 7.2); doc.text(`${ORG.foot} · uso interno`, M, H - 6.5); doc.text(`Scheda di lavoro ${p.num}`, W / 2, H - 6.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 6.5, { align: 'right' }); }
       doc.setProperties({ title: `Scheda di lavoro ${p.num}`, author: ORG.n, creator: 'Centro di Costo' });
       doc.save(`Scheda_lavoro_${p.num}${cl.nome ? '_' + pvSlug(cl.nome) : ''}.pdf`);
       busy(); toast('Scheda di lavoro scaricata');
@@ -5241,7 +5242,7 @@
         if (it && it.c.length > lines.length) { if (yy + 16 > H - 22) { doc.addPage(); yy = 22; } color(C.muted); font('bold', 8); doc.text('ALTRI COLORI DISPONIBILI', M, yy + 2); color(C.ink2); font('normal', 8.2); const al = doc.splitTextToSize(it.c.filter(c => !lines.some(x => x.c === c[0])).map(c => c[1].toLowerCase().replace(/(^|\s|\/)\S/g, m => m.toUpperCase())).join(' · '), CW); doc.text(al, M, yy + 7); }
       });
       const N = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5); doc.text(`Preventivo ${p.num} · ${dIt}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
+      for (let i = 1; i <= N; i++) { doc.setPage(i); stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12); color(C.muted); font('normal', 7.5); doc.text(`${ORG.foot}`, M, H - 7.5); doc.text(`Preventivo ${p.num} · ${dIt}`, W / 2, H - 7.5, { align: 'center' }); doc.text(`Pagina ${i} di ${N}`, W - M, H - 7.5, { align: 'right' }); }
       doc.setProperties({ title: `Preventivo ${p.num}`, author: ORG.n, creator: 'Centro di Costo' });
       const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Preventivo_${p.num}${cl.nome ? '_' + slug(cl.nome) : ''}.pdf`);
@@ -5843,7 +5844,7 @@
       const nota = [o.note, trData().nota].filter(Boolean).join('\n');
       if (nota) { color(C.muted); font('semibold', 7.5); doc.text('NOTE', M, y); color(C.ink); font('normal', 9); doc.text(doc.splitTextToSize(nota, W - 2 * M), M, y + 6); }
       const N = doc.internal.getNumberOfPages();
-      for (let p = 1; p <= N; p++) { doc.setPage(p); color(C.muted); font('normal', 7.5); doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 8); doc.text(`Ordine ${o.num} · Pagina ${p} di ${N}`, W - M, H - 8, { align: 'right' }); }
+      for (let p = 1; p <= N; p++) { doc.setPage(p); color(C.muted); font('normal', 7.5); doc.text(`${ORG.foot}`, M, H - 8); doc.text(`Ordine ${o.num} · Pagina ${p} di ${N}`, W - M, H - 8, { align: 'right' }); }
       doc.setProperties({ title: `Ordine Torental ${o.num}`, author: ORG.n, creator: 'Centro di Costo' });
       const sl = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
       doc.save(`Ordine_Torental_${o.num}${cl.nome ? '_' + sl(cl.nome) : ''}.pdf`);
@@ -6208,7 +6209,7 @@
         if (p > 1) { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.navy); font('bold', 9); doc.text('Listino kit adesivi Torental', M, 13); color(C.muted); font('normal', 8); doc.text(INT ? 'Uso interno · ' + dataIt : dataIt, W - M, 13, { align: 'right' }); stroke(C.line); doc.setLineWidth(.3); doc.line(M, 16, W - M, 16); }
         stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12);
         color(C.muted); font('normal', 7.5);
-        doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5);
+        doc.text(`${ORG.foot}`, M, H - 7.5);
         doc.text(`Listino Torental · ${meseIt}`, W / 2, H - 7.5, { align: 'center' });
         doc.text(`Pagina ${p} di ${N}`, W - M, H - 7.5, { align: 'right' });
       }
@@ -6358,7 +6359,7 @@
       const stripe = (x, y, sw, sh, c, a) => { fill(c); alpha(a); doc.lines([[sw, -sw * .25], [0, sh], [-sw, sw * .25]], x, y + sh, [1, 1], 'F', true); alpha(1); };
       stripe(150, 32, 70, 7.5, C.orange, .95); stripe(160, 43, 60, 7.5, [217, 221, 228], .85); stripe(170, 54, 50, 7.5, C.white, .18);
       if (logo) { fill(C.white); doc.roundedRect(M, 12, 12, 12, 2.6, 2.6, 'F'); doc.addImage(logo, 'PNG', M + .6, 12.6, 10.8, 10.8); }
-      color(C.white); font('bold', 9.5); doc.text(ORG.N, M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text(ORG.sede + ' · Centro di costo', M + (logo ? 16 : 0), 21.5); alpha(1);
+      color(C.white); font('bold', 9.5); doc.text(ORG.N, M + (logo ? 16 : 0), 17); font('normal', 8); alpha(.8); doc.text((ORG.sede ? ORG.sede + ' · ' : '') + 'Centro di costo', M + (logo ? 16 : 0), 21.5); alpha(1);
       font('bold', 8); doc.text(R.title.toUpperCase(), W - M, 17, { align: 'right' });
       font('normal', 8); alpha(.8); doc.text(`Creato il ${oggi}`, W - M, 21.5, { align: 'right' }); alpha(1);
       fit(placeName, 'bold', 25, CW - 40, 16); doc.text(placeName, M, 41);
@@ -6524,7 +6525,7 @@
         if (p > 1) { fill(C.navy); doc.rect(0, 0, W, 3, 'F'); color(C.navy); font('bold', 9); doc.text(`${R.short} · ${placeName}`, M, 13); color(C.muted); font('normal', 8); doc.text(`${perT} · ${ivaT}`, W - M, 13, { align: 'right' }); stroke(C.line); doc.setLineWidth(.3); doc.line(M, 16, W - M, 16); }
         stroke(C.line); doc.setLineWidth(.3); doc.line(M, H - 12, W - M, H - 12);
         color(C.muted); font('normal', 7.5);
-        doc.text(`${ORG.n} · ${ORG.sede}`, M, H - 7.5);
+        doc.text(`${ORG.foot}`, M, H - 7.5);
         doc.text(`${R.title} · creato il ${oggi}`, W / 2, H - 7.5, { align: 'center' });
         doc.text(`Pagina ${p} di ${N}`, W - M, H - 7.5, { align: 'right' });
       }

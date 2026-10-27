@@ -48,7 +48,7 @@
     for (let i = 0; i < 360; i++) {
       const a = pick(ART), d = daysAgo(int(0, 360)), q = a[1] === 'PZ' && a[2] > 100 ? int(1, 2) : int(1, 20);
       movimenti.push({ id: 'dm' + uid(), data: ds(d), ndoc: 'DDT ' + int(1000, 9999), codice: 'ART' + int(10000, 99999), descrizione: a[0].toUpperCase(), um: a[1], quantita: q, prezzo: r2(a[2] * (0.9 + rnd() * 0.2)), iva: 0.22,
-        centro: pick(CENTRI), societa: 'Soluzione Veicolare', categoria: cat(a[0]), fornitore: a[3], note: '', creato: ds(d) });
+        centro: pick(CENTRI), societa: '', categoria: cat(a[0]), fornitore: a[3], note: '', creato: ds(d) });
     }
     // ---------- spedizioni GLS ----------
     const DEST = [['Ricambi Rossi S.r.l.', 'Milano', 'MI', 'Lombardia'], ['Officina Bianchi', 'Torino', 'TO', 'Piemonte'], ['Autoservice Verdi', 'Bologna', 'BO', 'Emilia-Romagna'], ['Logistica Nord', 'Verona', 'VR', 'Veneto'],
