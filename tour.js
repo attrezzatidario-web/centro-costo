@@ -158,6 +158,56 @@
     ['E se mi serve una funzione che non c\'è?', 'Me lo dici e la aggiungo: il gestionale cresce insieme alla tua attività.']];
   function faq() { return `<section class="tr-sec tr-faq" id="tr-faq"><div class="tr-h rv"><h2>Domande frequenti</h2></div><div class="fq rv">${FAQ.map(([q, a], i) => `<details${i ? '' : ' open'}><summary>${esc(q)}<i></i></summary><p>${esc(a)}</p></details>`).join('')}</div></section>`; }
 
+
+  /* ===== v107: altre sezioni con esempi ===== */
+  // 1. dal telefono: tre schermate che si alternano
+  function phoneSec(s, ex) {
+    return `<section class="tr-sec tr-phone" id="tr-phone"><div class="pho-l rv"><span class="tr-eye">Anche dal telefono</span><h2>Il gestionale in tasca</h2><p class="tr-sub">Tutto quello che fai dal computer lo fai anche dal telefono, quando sei in giro o sul posto.</p>
+        <ul class="pho-pts">${[['cam', 'Fotografi le fatture', 'Inquadri il foglio: righe, importi e categorie si compilano da soli.'], ['sig', 'DDT firmati sul posto', 'Il cliente firma col dito sullo schermo, il PDF parte subito.'], ['bel', 'Sempre aggiornato', 'Incassi, utile e scadenze a portata di mano, ovunque sei.']].map(([k, t, d], i) => `<li data-ph="${i}" class="${i ? '' : 'on'}"><span class="pi">${i + 1}</span><div><b>${t}</b><p>${d}</p></div></li>`).join('')}</ul></div>
+      <div class="pho-r rv"><div class="phone"><i class="notch"></i><div class="ph-scr">
+        <div class="ph-s s0 on"><div class="ph-h">Nuova fattura</div><div class="ph-cam"><div class="ph-doc">${[80, 55, 90, 65, 85, 50, 70].map(w => `<span style="--w:${w}%"></span>`).join('')}</div><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><i class="ph-scan"></i></div><div class="ph-res"><b>✓ Fattura letta</b><span>${esc(ex[0][0])}</span><em>${esc(ex[0][1])}</em></div></div>
+        <div class="ph-s s1"><div class="ph-h">DDT n. 49 · firma</div><div class="ph-sig"><svg viewBox="0 0 200 80"><path d="M10 55 C 30 10, 45 70, 60 40 S 85 20, 95 45 S 120 70, 135 30 S 160 25, 190 50" pathLength="1"/></svg><span>Firma del cliente</span></div><div class="ph-btn">Salva e invia PDF</div></div>
+        <div class="ph-s s2"><div class="ph-h">Oggi</div><div class="ph-kpi"><small>Utile del mese</small><b>€ 17.130</b><em>▲ 38%</em></div><div class="ph-bars">${[40, 55, 48, 62, 70, 86].map((h, i) => `<i style="--h:${h}%;--i:${i}"></i>`).join('')}</div><div class="ph-al"><span>⚠</span>Fattura Rossi in scadenza tra 3 giorni</div></div>
+      </div></div></div></section>`;
+  }
+  // 2. analisi con l'intelligenza artificiale (chat)
+  function aiSec(s, cats) {
+    const c0 = cats[0] || 'Materie prime', c1 = cats[1] || 'Utenze', sd = (s.sede || ['Sede', 'Sedi'])[0];
+    return `<section class="tr-sec tr-ai"><div class="ai-wrap rv"><div class="ai-l"><span class="tr-eye">Analisi con l'IA</span><h2>Chiedi, e il gestionale ti risponde</h2><p class="tr-sub">L'intelligenza artificiale legge i tuoi numeri e ti dice dove intervenire, in parole semplici.</p>
+        <div class="ai-q">${['Dove posso risparmiare?', 'Come va rispetto all\'anno scorso?', 'Quale fornitore mi costa di più?'].map(q => `<span>${q}</span>`).join('')}</div></div>
+      <div class="ai-chat"><div class="m u">Dove posso risparmiare questo mese?</div><div class="m t"><i></i><i></i><i></i></div>
+        <div class="m a"><b>Ecco cosa vedo a ottobre:</b><ul><li><em class="bad">▲ 18%</em> la spesa per <b>${esc(c0)}</b> è salita rispetto a settembre: due fornitori hanno alzato i prezzi.</li><li><em class="ok">−€ 240</em> raggruppando gli ordini di <b>${esc(c1)}</b> in uno solo al mese risparmi sul trasporto.</li><li><em class="warn">!</em> ${esc(sd)} Milano costa il 22% in più delle altre: controlla le ultime 5 fatture.</li></ul></div></div></div></section>`;
+  }
+  // 3. il PDF che riceve il cliente
+  function pdfSec(s, ex) {
+    const rows = ex.slice(0, 3).map(([t], i) => [t, [4, 1, 10][i], [PRZ[0], PRZ[1], PRZ[2]][i] * 1.3]);
+    const imp = rows.reduce((a, r) => a + r[1] * r[2], 0);
+    return `<section class="tr-sec tr-pdf"><div class="pdf-l rv"><span class="tr-eye">Esempio reale</span><h2>Il preventivo che riceve il tuo cliente</h2><p class="tr-sub">Con il tuo logo, le foto dei prodotti e i totali già calcolati. Pronto in pochi minuti, da mandare su WhatsApp o per email.</p>
+        <ul class="tr-pts"><li><b>Foto e codici</b> presi dai cataloghi dei fornitori</li><li><b>Ricarico e sconti</b> per ogni cliente, senza calcolatrice</li><li><b>Stesso stile</b> anche per DDT e fatture</li></ul></div>
+      <div class="pdf-r rv"><div class="slot"></div><div class="paper"><div class="pd-h"><div class="pd-logo"><img src="logo.svg" alt="" width="28" height="28"><b>La tua azienda S.r.l.</b></div><div class="pd-n"><small>PREVENTIVO</small><b>n. 87 / 2026</b><span>27/10/2026</span></div></div>
+        <div class="pd-c"><small>Spett.le</small><b>Bianchi S.r.l.</b><span>Via Roma 12 · 00184 Roma</span></div>
+        <div class="pd-t"><div class="pd-r th"><span></span><span>Articolo</span><span>Q.tà</span><span>Prezzo</span><span>Totale</span></div>${rows.map(([t, q, p], i) => `<div class="pd-r" style="--i:${i}"><i class="ph p${i}"></i><span>${esc(t)}</span><span>${q}</span><span>${eu(p)}</span><span>${eu(p * q)}</span></div>`).join('')}</div>
+        <div class="pd-tot"><div><span>Imponibile</span><b>${eu(imp)}</b></div><div><span>IVA 22%</span><b>${eu(imp * .22)}</b></div><div class="g"><span>Totale</span><b>${eu(imp * 1.22)}</b></div></div>
+        <div class="pd-f">Validità 30 giorni · Pagamento: bonifico 30 gg d.f.f.m.</div></div></div></section>`;
+  }
+  // 4. dati che entrano e che escono
+  function flowSec() {
+    const IC2 = { cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', pdf: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>', xls: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/>', xml: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13 6l-2 12"/>', bk: '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3v6h-6"/><path d="M12 8v4l3 2"/>' };
+    const IN = [['cam', 'Foto delle fatture'], ['pdf', 'PDF dei fornitori'], ['xls', 'File Excel'], ['xml', 'Fatture XML']], OUT = [['pdf', 'Preventivi in PDF'], ['xml', 'Fatture XML per lo SdI'], ['xls', 'Excel per il commercialista'], ['bk', 'Backup automatico']];
+    return `<section class="tr-sec tr-flow"><div class="tr-h rv"><span class="tr-eye">Entra di tutto, esce quello che ti serve</span><h2>Lavora con quello che hai già</h2><p class="tr-sub">Non serve cambiare abitudini: porti dentro i documenti che ricevi e tiri fuori quelli che devi mandare.</p></div>
+      <div class="flow rv">${IN.map(([ic, t], i) => `<div class="fl-n in" style="grid-row:${i + 1}"><span><svg viewBox="0 0 24 24">${IC2[ic]}</svg></span>${t}</div><div class="fl-w l" style="grid-row:${i + 1};--i:${i}"><i></i></div>`).join('')}
+        <div class="fl-hub"><img src="logo.svg" alt="" width="54" height="54"><b>Centro di Costo</b><span>legge, classifica e archivia</span><i class="r1"></i><i class="r2"></i></div>
+        ${OUT.map(([ic, t], i) => `<div class="fl-w r" style="grid-row:${i + 1};--i:${i}"><i></i></div><div class="fl-n out" style="grid-row:${i + 1}"><span><svg viewBox="0 0 24 24">${IC2[ic]}</svg></span>${t}</div>`).join('')}</div></section>`;
+  }
+  // 5. chi può fare cosa
+  function rolesSec(s) {
+    const acq = s.acq || 'Acquisti';
+    const R = [['Titolare', 'Tu', 'Vede e modifica tutto', [1, 1, 1, 1, 1], 'ok'], ['Collaboratore', 'In ufficio o in negozio', 'Modifica solo le sue sezioni', [1, 1, 0, 1, 0], 'acc'], ['Commercialista', 'Consulente esterno', 'Vede tutto, non modifica nulla', [1, 1, 1, 0, 1], 'ro']];
+    const SEC = ['Dashboard', acq, 'Incassi e utile', 'Magazzino', 'Fatture fornitori'];
+    return `<section class="tr-sec tr-roles"><div class="tr-h rv"><span class="tr-eye">Accessi e permessi</span><h2>Ognuno vede solo quello che deve</h2><p class="tr-sub">Ogni persona entra con il suo account. Decidi tu chi può modificare, chi può solo consultare e quali sezioni vede.</p></div>
+      <div class="roles">${R.map(([t, w, d, on, k], i) => `<article class="role rv" style="--d:${i * 110}ms"><div class="rh"><span class="ra k-${k}">${t[0]}</span><div><b>${t}</b><small>${w}</small></div></div><span class="rp k-${k}">${d}</span><ul>${SEC.map((x, j) => `<li class="${on[j] ? 'y' : 'n'}" style="--j:${j}"><span>${esc(x)}</span><i></i></li>`).join('')}</ul></article>`).join('')}</div></section>`;
+  }
+
   let root = null, opts = {}, sel = 'veicoli', obs = null, timers = [];
   const SET = () => window.CDC_SETTORI || { list: [], get: () => null };
 
@@ -238,7 +288,7 @@
     sxCtx = [s, cats, ex];
     root.innerHTML = `<div class="tr-scroll">
       <header class="tr-bar"><i class="tr-prog" id="tr-prog"></i><div class="tr-brand"><img src="logo.svg" alt="" width="30" height="30"><b>Centro di Costo</b></div>
-        <nav class="tr-nav"><a href="#tr-show" data-go>Come funziona</a><a href="#tr-funz" data-go>Funzioni</a><a href="#tr-how" data-go>Su misura</a><a href="#tr-faq" data-go>Domande</a></nav><div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
+        <nav class="tr-nav"><a href="#tr-show" data-go>Come funziona</a><a href="#tr-phone" data-go>Telefono</a><a href="#tr-funz" data-go>Funzioni</a><a href="#tr-how" data-go>Su misura</a><a href="#tr-faq" data-go>Domande</a></nav><div class="tr-bar-r"><a class="tr-btn ghost sm" href="${esc(mail)}">Contattami</a><button type="button" class="tr-x" data-tr="close" aria-label="Chiudi">✕</button></div></header>
 
       <section class="tr-hero">
         <div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="grid"></i></div>
@@ -256,10 +306,13 @@
         <div class="tr-chips">${S.list.map(x => `<button type="button" class="tr-chip${x.id === sel ? ' on' : ''}" data-trset="${x.id}"><svg viewBox="0 0 24 24">${x.ic}</svg>${esc(x.s || x.n)}</button>`).join('')}</div></div></section>
 
 ${showcase(s, cats, ex)}
+      ${phoneSec(s, ex)}
       <section class="tr-sec" id="tr-funz"><div class="tr-h rv"><h2>Tutto quello che serve, in un posto solo</h2><p class="tr-sub">Ogni funzione si accende o si spegne: tieni solo quello che usi.</p></div>
         <div class="tr-grid">${FEAT.map(([k, t, d], i) => `<article class="tr-f rv" style="--d:${(i % 3) * 90}ms"><span class="tr-fn">${String(i + 1).padStart(2, '0')}</span><div class="tr-ill">${ILL[k]}</div><h3>${t}${SOON.has(k) ? '<span class="tr-soon">in arrivo</span>' : ''}</h3><p>${d}</p></article>`).join('')}</div></section>
 
-${dayline(s, ex)}
+${aiSec(s, cats)}
+      ${pdfSec(s, ex)}
+      ${dayline(s, ex)}
       <section class="tr-sec tr-fit"><div class="tr-fit-l rv"><span class="tr-eye">Per ${esc(word)}</span><h2>Parla la lingua della tua attività</h2>
           <ul class="tr-pts"><li><b>${esc(s.sede ? s.sede[1] : 'Sedi')}</b> al posto di sedi generiche: confronti le spese tra ${s.sede && s.sede[2] ? 'le tue' : 'i tuoi'} ${esc((s.sede ? s.sede[1] : 'sedi').toLowerCase())}</li><li><b>${cats.length} categorie di spesa</b> già pronte e modificabili</li><li><b>Ogni riga riconosciuta da sola</b>: scrivi o importi, la categoria si assegna in automatico</li></ul>
           <div class="tr-cats">${cats.map((c, i) => `<span style="--i:${i}">${esc(c)}</span>`).join('')}</div></div>
@@ -268,7 +321,9 @@ ${dayline(s, ex)}
 
       <section class="tr-sec tr-num rv"><div class="th-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="grid"></i></div>${[[17, '', 'fornitori con catalogo'], [25000, '+', 'codici prodotto con foto'], [11, '', 'attività già pronte'], [24, '/7', 'da PC e telefono']].map(([n, u, l]) => `<div><b data-cnt="${n}" data-u="${u}">0</b><span>${l}</span></div>`).join('')}</section>
 
-${beforeAfter()}
+${flowSec()}
+      ${beforeAfter()}
+      ${rolesSec(s)}
       <section class="tr-sec tr-how" id="tr-how"><div class="tr-h rv"><h2>Su misura, davvero</h2><p class="tr-sub">Non un programma uguale per tutti: il tuo gestionale lo preparo io, insieme a te.</p></div>
         <ol class="tr-steps">${STEPS.map(([t, d], i) => `<li class="rv" style="--d:${i * 120}ms"><span class="n">${i + 1}</span><b>${t}</b><p>${d}</p></li>`).join('')}</ol>
         <div class="tr-wish rv"><h3>Pensi a qualcosa che non c'è? Lo aggiungo.</h3><div class="tr-wl">${WISH.map((w, i) => `<span style="--i:${i}">${esc(w)}</span>`).join('')}</div><p class="tr-wish-p">…e tutto quello che ti serve: scrivimelo.</p></div></section>
@@ -315,6 +370,10 @@ ${faq()}
       timers.push(setInterval(() => { if (!document.hidden) toastNext(); }, 3400));
       timers.push(setInterval(() => { if (!document.hidden) aiCycle(); }, 5200));
     }
+    // telefono: le tre schermate si alternano
+    let phI = 0; const phGo = i => { phI = i; $$('.ph-s', root).forEach((x, k) => x.classList.toggle('on', k === i)); $$('.pho-pts [data-ph]', root).forEach((x, k) => x.classList.toggle('on', k === i)); };
+    if (!reduced()) timers.push(setInterval(() => { if (!document.hidden && root) phGo((phI + 1) % 3); }, 3800));
+    $$('.pho-pts [data-ph]', root).forEach(li => { li.onclick = () => phGo(+li.dataset.ph); });
     // schermate di esempio e calcolatore
     clearTimeout(sxT); sxShow(sxK, true); calcUpd();
     // movimento con il mouse, luce sulle card, barra di avanzamento
