@@ -3062,8 +3062,10 @@ body.solo-pv main { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
 .scan-ib { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: var(--accent); cursor: pointer; transition: background .2s, transform .2s; }
 .scan-ib:hover { background: var(--accent-soft, rgba(51, 98, 171, .1)); }
 .scan-ib:active { transform: translateY(-50%) scale(.92); }
-.gx-search .scan-ib { margin-right: -6px; flex: none; }
-.gx-search .scan-ib:active { transform: scale(.92); }
+.gx-search .scan-ib { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; }
+.gx-search .scan-ib:active { transform: translateY(-50%) scale(.92); }
+.gx-search .scan-ib svg { position: static; transform: none; width: 18px; height: 18px; stroke: var(--accent); stroke-width: 1.8; }
+.gx-search:has(.scan-ib) input { padding-right: 40px; }
 .scan-ib svg, .dx-adds svg, .pv-addb svg, .scan-lk svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .dx-adds { display: flex; gap: 8px; flex-wrap: wrap; }
 .dx-adds .btn svg, .pv-addb .btn svg { width: 16px; height: 16px; margin-right: 4px; vertical-align: -3px; }
