@@ -55,7 +55,8 @@
     // numeri grandi nei KPI
     $$('.gx-k b, .st-stat b', V).forEach((b, k) => countUp(b, 120 + k * 60));
     // righe delle tabelle
-    $$('.gx-list tbody tr, .st-card .st-row', V).forEach((tr, k) => {
+    // v118: solo le prime 40 righe (prima le guardava tutte: con migliaia di righe bloccava la pagina quasi un secondo)
+    $$('.gx-list tbody tr, .st-card .st-row', V).slice(0, 40).forEach((tr, k) => {
       if (!inView(tr)) return reveal(tr, true);
       anim(tr, [{ opacity: 0, transform: 'translateX(-8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 180 + Math.min(k, 14) * 28 });
     });
@@ -66,15 +67,21 @@
     $$('tbody tr', V).slice(0, 40).forEach(tr => { if (!inView(tr)) reveal(tr, true); });
   }
   // barre (larghezza o altezza in percentuale) che crescono
+  // v118: prima legge tutte le misure e poi anima (prima alternava lettura e scrittura: il browser ricalcolava la pagina a ogni barra)
   function bars(root, delay) {
-    $$('[style*="width:"], [style*="height:"], [style*="--h:"], [style*="--w:"]', root).forEach((el, k) => {
-      if (el.closest('.cc-anim') || el.tagName === 'IMG' || el.tagName === 'svg' || el.tagName === 'INPUT') return;
+    const L = [];
+    for (const el of $$('[style*="width:"], [style*="height:"], [style*="--h:"], [style*="--w:"]', root)) {
+      if (L.length >= 80) break;
+      if (el.closest('.cc-anim') || el.tagName === 'IMG' || el.tagName === 'svg' || el.tagName === 'INPUT') continue;
       const st = el.getAttribute('style') || '';
       const hBar = /(^|;)\s*(height|--h)\s*:\s*[\d.]+%/.test(st), wBar = /(^|;)\s*(width|--w)\s*:\s*[\d.]+%/.test(st);
-      if (!hBar && !wBar) return;
-      const r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
-      if (hBar && r.width > 60) return; if (wBar && r.height > 16) return; // solo barre sottili, non contenitori
-      if (!inView(el)) return;
+      if (!hBar && !wBar) continue;
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height) continue;
+      if (hBar && r.width > 60) continue; if (wBar && r.height > 16) continue; // solo barre sottili, non contenitori
+      if (!(r.bottom > 0 && r.top < innerHeight)) continue;
+      L.push([el, hBar]);
+    }
+    L.forEach(([el, hBar], k) => {
       el.style.transformOrigin = hBar ? '50% 100%' : '0 50%';
       anim(el, [{ transform: hBar ? 'scaleY(0)' : 'scaleX(0)' }, { transform: 'none' }], { duration: 800, delay: delay + Math.min(k, 40) * 14, easing: SPRING });
     });

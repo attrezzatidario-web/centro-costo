@@ -74,6 +74,8 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden && idbT) idbSave(); });
 
   /* ================= Utils ================= */
+  // v118: ricorda il risultato di funzioni pure su testi (chiavi dei nomi, date): con migliaia di righe le stesse si ripetono di continuo
+  const memo = f => { const m = new Map(); return s => { const k = s == null ? '' : String(s); let v = m.get(k); if (v === undefined) { if (m.size > 50000) m.clear(); v = f(k); m.set(k, v); } return v; }; };
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1956,7 +1958,9 @@
     if (bad.length && c1avg) { const ex = bad.reduce((s, r) => s + Math.max(0, num(r.totale) - c1avg), 0); A.push({ t: 'warn', h: 'Contratto non ottimale', d: `${bad.length} spedizioni leggere (sotto 30 kg tassabili) partite con il Contratto 2, che ha un nolo minimo più alto. Con il Contratto 1 costano in media ${gE(c1avg)}.`, v: `circa ${gE0(ex)} in più`, ids: bad.map(r => r.nsped) }); }
     const nr = s => String(s || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
     const dup = [...groupBy(rows.filter(r => nr(r.rif).length > 4), r => nr(r.rif) + '|' + String(r.destinatario).toUpperCase().trim())].filter(([, v]) => v.length > 1);
-    dup.forEach(([, v]) => A.push({ t: 'warn', h: 'Ordine spedito più volte', d: `Rif. ${esc(v[0].rif)} a ${esc(v[0].destinatario)} (${esc(v[0].citta)}) compare ${v.length} volte.`, v: gE(gTot(v)), ids: v.map(r => r.nsped) }));
+    // v118: oltre 3 casi un riquadro solo (con migliaia di spedizioni ne uscivano centinaia e la pagina diventava pesantissima)
+    if (dup.length > 3) A.push({ t: 'warn', h: 'Ordini spediti più volte', d: `${dup.length} riferimenti compaiono in più spedizioni, per esempio ${dup.slice(0, 3).map(([, v]) => `Rif. ${esc(v[0].rif)} a ${esc(v[0].destinatario)} (${v.length} volte)`).join(', ')}…`, v: gE(dup.reduce((t, [, v]) => t + gTot(v), 0)), ids: dup.flatMap(([, v]) => v.map(r => r.nsped)) });
+    else dup.forEach(([, v]) => A.push({ t: 'warn', h: 'Ordine spedito più volte', d: `Rif. ${esc(v[0].rif)} a ${esc(v[0].destinatario)} (${esc(v[0].citta)}) compare ${v.length} volte.`, v: gE(gTot(v)), ids: v.map(r => r.nsped) }));
     ['C1', 'C2'].forEach(c => { const v = rows.filter(r => r.contratto === c), kr = gSum(v, 'kgReali'), kt = gSum(v, 'kgTass'); if (kr && kt / kr > 1.3 && v.length > 3) { const w = v.reduce((m, r) => num(r.kgTass) / Math.max(.1, num(r.kgReali)) * Math.min(1, num(r.kgReali) / 50) > num(m.kgTass) / Math.max(.1, num(m.kgReali)) * Math.min(1, num(m.kgReali) / 50) ? r : m, v[0]); A.push({ t: 'info', h: `Peso volumetrico alto · ${CONTR[c] || c}`, d: `Si paga su ${fmtNum(kt, 0)} kg tassabili contro ${fmtNum(kr, 0)} kg reali (+${fmtNum((kt / kr - 1) * 100, 0)}%). Caso limite: ${esc(w.citta)}, ${fmtNum(num(w.kgReali), 0)} kg reali tassati ${fmtNum(num(w.kgTass), 0)} kg.`, v: 'rivedere imballi', ids: [w.nsped] }); } });
     const inb = rows.filter(r => /arrivo|da valutare/i.test(r.riaddebito + ' ' + r.cdcNome));
     if (inb.length) A.push({ t: 'warn', h: 'Spedizioni in arrivo a nostro carico', d: `${inb.length} spedizioni ricevute addebitate a noi: valutare il riaddebito al mittente.`, v: gE(gTot(inb)), ids: inb.map(r => r.nsped) });
@@ -1969,7 +1973,7 @@
   function renderGlsAnom(rows) {
     const A = glsChecks(rows);
     const I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
-    $('#gl-anom').innerHTML = `<div class="card-h"><h3>Anomalie e possibili risparmi</h3><span class="muted small">${A.length ? A.length + ' punti da controllare' : 'nessuna anomalia'}</span></div>` +
+    $('#gl-anom').innerHTML = `<div class="card-h"><h3>Anomalie e possibili risparmi</h3><span class="muted small">${A.length ? A.length + (A.length === 1 ? ' punto' : ' punti') + ' da controllare' : 'nessuna anomalia'}</span></div>` +
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span><small>${x.ids.slice(0, 6).map(esc).join(' · ')}${x.ids.length > 6 ? ' …' : ''}</small></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Tutto in ordine</div>');
   }
 
@@ -2596,7 +2600,7 @@
   function renderGasAnom(rows, V) {
     const A = gasChecks(rows, V);
     const I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
-    $('#ga-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` +
+    $('#ga-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + (A.length === 1 ? ' punto' : ' punti') + ' da verificare' : 'tutto in ordine'}</span></div>` +
       (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-gaq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia</div>');
   }
 
@@ -3261,7 +3265,7 @@
   const pvRefresh = p => { p.righe.forEach(l => { if (!l.man) { const v = pvPubFor(p, l.it, l.c); l.p = v; } }); return p; };
   /* ---------- v69: clienti dei preventivi (Config «pvClienti») con ricarico % personale ---------- */
   const pvCliList = () => { const c = cfg('pvClienti'); return Array.isArray(c) ? c.map(x => ({ ...x })) : []; };
-  const pvCliKey = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(s\.?\s?r\.?\s?l\.?s?|s\.?\s?p\.?\s?a\.?|s\.?\s?n\.?\s?c\.?|s\.?\s?a\.?\s?s\.?)(?=\s|$)/g, '').replace(/[^a-z0-9]/g, '');
+  const pvCliKey = memo(s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(s\.?\s?r\.?\s?l\.?s?|s\.?\s?p\.?\s?a\.?|s\.?\s?n\.?\s?c\.?|s\.?\s?a\.?\s?s\.?)(?=\s|$)/g, '').replace(/[^a-z0-9]/g, ''));
   const pvCliFind = (L, nome) => { const k = pvCliKey(nome); return k ? L.find(x => pvCliKey(x.nome) === k) : null; };
   const pvCliOf = p => { if (!p) return null; const L = pvCliList(), cl = p.cliente || {}; return (cl.nome && pvCliFind(L, cl.nome)) || (p.cliId && L.find(x => x.id === p.cliId)) || null; };
   const pvRicOk = v => v !== null && v !== undefined && v !== '' && !isNaN(Number(v));
@@ -5329,7 +5333,8 @@
     const badR = rows.filter(r => { const R = faRighe(r); if (!R.length || !num(r.imponibile)) return false; const s = R.reduce((a, x) => a + (num(x.totale) || num(x.quantita) * num(x.prezzo)), 0); return Math.abs(s - num(r.imponibile)) > Math.max(1, num(r.imponibile) * .01); });
     if (badR.length) A.push({ t: 'info', h: 'Righe diverse dall\'imponibile', d: `In ${badR.length} fatture la somma delle righe non coincide con l'imponibile (spese di trasporto, sconti o righe non lette).`, v: badR.length + '', ids: badR.map(r => r.id) });
     const dup = [...groupBy(rows.filter(r => r.numero), r => fornKey(r.fornitore) + '|' + normDoc(r.numero))].filter(([, v]) => v.length > 1);
-    dup.forEach(([, v]) => A.push({ t: 'warn', h: 'Fattura registrata due volte', d: `${esc(v[0].fornitore)} n. ${esc(v[0].numero)} compare ${v.length} volte.`, v: eur(num(v[0].totale)), ids: v.map(r => r.id) }));
+    if (dup.length > 3) A.push({ t: 'warn', h: 'Fatture registrate più volte', d: `${dup.length} fatture compaiono più volte, per esempio ${dup.slice(0, 3).map(([, v]) => `${esc(v[0].fornitore)} n. ${esc(v[0].numero)}`).join(', ')}…`, v: eur(dup.reduce((t, [, v]) => t + num(v[0].totale) * (v.length - 1), 0)), ids: dup.flatMap(([, v]) => v.map(r => r.id)) });
+    else dup.forEach(([, v]) => A.push({ t: 'warn', h: 'Fattura registrata due volte', d: `${esc(v[0].fornitore)} n. ${esc(v[0].numero)} compare ${v.length} volte.`, v: eur(num(v[0].totale)), ids: v.map(r => r.id) }));
     const L = rows.map(r => ({ r, l: faLink(r) }));
     const diff = L.filter(x => x.l.rows.length && !x.l.ok);
     if (diff.length) A.push({ t: 'warn', h: 'Fattura diversa dagli acquisti registrati', d: diff.slice(0, 3).map(x => `${esc(x.r.fornitore)} n. ${esc(x.r.numero)}: fattura ${eur(num(x.r.imponibile))}, acquisti ${eur(x.l.tot)}`).join(' · ') + (diff.length > 3 ? ' …' : ''), v: eur(diff.reduce((a, x) => a + Math.abs(x.l.diff), 0)), ids: diff.map(x => x.r.id) });
@@ -5386,7 +5391,7 @@
     $$('[data-fak]', body).forEach(el => { const i = +el.dataset.fak; el._v = 0; countTo(el, K[i][1], K[i][2]); });
     // anomalie
     const A = faChecks(rows), I = { warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>' };
-    $('#fa-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto in ordine'}</span></div>` + (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-faq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia</div>');
+    $('#fa-anom').innerHTML = `<div class="card-h"><h3>Controlli</h3><span class="muted small">${A.length ? A.length + (A.length === 1 ? ' punto' : ' punti') + ' da verificare' : 'tutto in ordine'}</span></div>` + (A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms" data-faq="${esc(x.ids.join(' '))}"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span></div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Nessuna anomalia</div>');
     // fornitori
     const byF = [...groupBy(rows, r => String(r.fornitore || '—').trim().toUpperCase())].map(([k, v]) => ({ k, v: faSum(v), n: v.length })).sort((a, b) => b.v - a.v), mf = Math.max(...byF.map(x => x.v), 1);
     $('#fa-forn').innerHTML = byF.slice(0, 10).map((x, i) => `<div class="bar-row gl-anim-row" style="--d:${200 + i * 50}ms" data-faforn="${esc(x.k)}"><div class="bar-top"><span>${esc(x.k)}<em>${x.n} ${x.n === 1 ? 'fattura' : 'fatture'}</em></span><span>${eur0(x.v)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(x.v / mf * 100).toFixed(2)}%"></div></div></div>`).join('');
@@ -5699,7 +5704,7 @@
         <span class="tk-l"><span><i style="background:${TR_COLS.mat}"></i>Materiale ${esc(trE0(c.mat))}</span><span><i style="background:${TR_COLS.ric}"></i>Ricarico ${esc(trE0(c.ric))}</span><span><i style="background:${TR_COLS.prep}"></i>Prep. ${esc(trE0(c.prep))}</span></span>
         <span class="tk-s"><span><small>Applicazione</small><b>${esc(trE0(c.app))}</b></span><span><small>Rimozione</small><b>${esc(trE0(c.rim))}</b></span><span><small>Pellicola</small><b>${trFmtQ(c.film)} m²</b></span></span>
       </button>`; }).join('')}<button type="button" class="tk tk-add" data-trnewkit style="--d:${120 + K.length * 60}ms"><span class="tk-plus">+</span><b>Nuovo kit</b><small>aggiungi un tipo di mezzo</small></button></div>
-      <div class="card" id="tr-anom"><div class="card-h"><h3>Controlli sul listino</h3><span class="muted small">${A.length ? A.length + ' punti da verificare' : 'tutto coerente'}</span></div>${A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span>${x.fix != null ? `<button type="button" class="tr-fixb" data-trfix="${x.fix}">Usa il prezzo calcolato</button>` : ''}</div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Quantità, prezzi e codici sono coerenti</div>'}</div>
+      <div class="card" id="tr-anom"><div class="card-h"><h3>Controlli sul listino</h3><span class="muted small">${A.length ? A.length + (A.length === 1 ? ' punto' : ' punti') + ' da verificare' : 'tutto coerente'}</span></div>${A.length ? `<div class="gl-an">${A.map((x, i) => `<div class="ga-row ${x.t}" style="--d:${i * 70}ms"><span class="ci-ic"><svg viewBox="0 0 24 24">${I[x.t]}</svg></span><div class="ga-m"><b>${x.h}</b><span>${x.d}</span>${x.fix != null ? `<button type="button" class="tr-fixb" data-trfix="${x.fix}">Usa il prezzo calcolato</button>` : ''}</div><b class="ga-v">${x.v}</b></div>`).join('')}</div>` : '<div class="empty">Quantità, prezzi e codici sono coerenti</div>'}</div>
       <div class="card"><div class="card-h"><h3>Confronto: intervento completo per mezzo</h3><span class="muted small">kit + applicazione · ${ivaLbl()}</span></div>
         <div class="tr-leg">${[['mat', 'Costo materiale'], ['ric', 'Ricarico'], ['prep', 'Preparazione kit'], ['app', 'Applicazione']].map(([k, l]) => `<span><i style="background:${TR_COLS[k]}"></i>${l}</span>`).join('')}</div>
         <div class="tr-cmp" id="tr-cmp"></div></div>
@@ -8001,7 +8006,7 @@
   }
   const dnum = d => `${d.numero}/${d.anno}`;
   const nextNum = (arr, anno) => arr.filter(x => String(x.anno) === String(anno)).reduce((m, x) => Math.max(m, parseInt(x.numero, 10) || 0), 0) + 1;
-  const dIt = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const dIt = memo(s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '');
   const PAG = ['Rimessa diretta', 'Bonifico vista fattura', 'Bonifico 30 gg d.f.f.m.', 'Bonifico 60 gg d.f.f.m.', 'Ri.Ba. 30 gg d.f.f.m.', 'Ri.Ba. 60 gg d.f.f.m.', 'Contanti'];
   const IVE = [22, 10, 5, 4, 0];
   function scadDi(data, pag) {
@@ -8073,8 +8078,8 @@
       ${gxKpi([['Clienti', fmtNum(L.length, 0), noFisc ? `${noFisc} senza dati fiscali` : 'con dati fiscali'], [`Fatturato ${y}`, eur0(sum('fat')), 'imponibile'], ['Da incassare', eur0(sum('open')), 'fatture non pagate', sum('open') > 0 ? 'warn' : ''], ['DDT da fatturare', fmtNum(sum('ddt'), 0), eur0(sum('ddtV')) + ' imponibile']])}
       ${!L.length ? gxEmpty(GIC.cli, 'Nessun cliente', 'Aggiungi i tuoi clienti con partita IVA, indirizzo e codice SDI: li ritrovi nei DDT, nelle fatture e nei preventivi.', '<button type="button" class="btn primary" data-gx="cli-new">+ Aggiungi il primo cliente</button>')
         : `<div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Cliente</th><th>P.IVA / CF</th><th>Città</th><th class="r">Fatturato ${y}</th><th class="r">Da incassare</th><th class="r">DDT aperti</th></tr></thead><tbody>
-        ${F.map(c => { const x = S.get(c.id) || {}; return `<tr data-cli="${esc(c.id)}"><td data-l="Cliente"><b>${esc(c.nome)}</b>${c.email ? `<small>${esc(c.email)}</small>` : ''}</td><td data-l="P.IVA / CF">${esc(c.piva || c.cf || '—')}${!c.sdi && !c.pec ? '' : `<small>${c.sdi ? 'SDI ' + esc(c.sdi) : 'PEC'}</small>`}</td><td data-l="Città">${esc([c.citta, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' ') || '—')}</td><td class="r" data-l="Fatturato">${x.fat ? eur(x.fat) : '—'}</td><td class="r" data-l="Da incassare">${x.open ? `<span class="chip late">${eur(x.open)}</span>` : '—'}</td><td class="r" data-l="DDT aperti">${x.ddt ? `<span class="chip soon">${x.ddt}</span>` : '—'}</td></tr>`; }).join('') || `<tr><td colspan="6" class="gx-none">Nessun cliente trovato</td></tr>`}
-        </tbody></table></div>`}`;
+        ${gxCut(F, 'cli').map(c => { const x = S.get(c.id) || {}; return `<tr data-cli="${esc(c.id)}"><td data-l="Cliente"><b>${esc(c.nome)}</b>${c.email ? `<small>${esc(c.email)}</small>` : ''}</td><td data-l="P.IVA / CF">${esc(c.piva || c.cf || '—')}${!c.sdi && !c.pec ? '' : `<small>${c.sdi ? 'SDI ' + esc(c.sdi) : 'PEC'}</small>`}</td><td data-l="Città">${esc([c.citta, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' ') || '—')}</td><td class="r" data-l="Fatturato">${x.fat ? eur(x.fat) : '—'}</td><td class="r" data-l="Da incassare">${x.open ? `<span class="chip late">${eur(x.open)}</span>` : '—'}</td><td class="r" data-l="DDT aperti">${x.ddt ? `<span class="chip soon">${x.ddt}</span>` : '—'}</td></tr>`; }).join('') || `<tr><td colspan="6" class="gx-none">Nessun cliente trovato</td></tr>`}
+        </tbody></table>${gxMore(F, 'cli')}</div>`}`;
     const qi = $('#cl-q'); if (qi) qi.oninput = () => { clQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderCli(); const x = $('#cl-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
   }
   function cliForm(c, done) {
@@ -8137,8 +8142,8 @@
       const M = GX.mov().map(m => ({ m, a: artOf(m.articolo) })).filter(x => !q || nh([x.a && x.a.codice, x.a && x.a.descrizione, x.m.causale].join(' ')).includes(q)).sort((x, y) => String(y.m.data).localeCompare(String(x.m.data)) || String(y.m.creato).localeCompare(String(x.m.creato)));
       const TP = { carico: ['Carico', 'paid'], scarico: ['Scarico', 'late'], rettifica: ['Inventario', 'soon'] };
       h += `<div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Data</th><th>Articolo</th><th>Tipo</th><th class="r">Quantità</th><th>Causale</th><th></th></tr></thead><tbody>
-      ${M.slice(0, 400).map(({ m, a }) => `<tr><td data-l="Data">${esc(dIt(m.data))}</td><td data-l="Articolo"><b>${esc(a ? a.descrizione : 'Articolo eliminato')}</b>${a && a.codice ? `<small>${esc(a.codice)}</small>` : ''}</td><td data-l="Tipo"><span class="chip ${(TP[m.tipo] || TP.rettifica)[1]}">${(TP[m.tipo] || TP.rettifica)[0]}</span></td><td class="r" data-l="Quantità"><b class="${num(m.quantita) < 0 ? 'gx-neg' : 'gx-pos'}">${num(m.quantita) > 0 ? '+' : ''}${fmtNum(num(m.quantita), num(m.quantita) % 1 ? 2 : 0)}</b></td><td data-l="Causale">${esc(m.causale || '—')}</td><td class="r gx-ra">${m.doc ? '' : `<button type="button" class="btn sm ghost" data-gx="mov-del" data-id="${esc(m.id)}" aria-label="Elimina movimento">✕</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="gx-none">Nessun movimento</td></tr>'}
-      </tbody></table></div>`;
+      ${gxCut(M, 'mov').map(({ m, a }) => `<tr><td data-l="Data">${esc(dIt(m.data))}</td><td data-l="Articolo"><b>${esc(a ? a.descrizione : 'Articolo eliminato')}</b>${a && a.codice ? `<small>${esc(a.codice)}</small>` : ''}</td><td data-l="Tipo"><span class="chip ${(TP[m.tipo] || TP.rettifica)[1]}">${(TP[m.tipo] || TP.rettifica)[0]}</span></td><td class="r" data-l="Quantità"><b class="${num(m.quantita) < 0 ? 'gx-neg' : 'gx-pos'}">${num(m.quantita) > 0 ? '+' : ''}${fmtNum(num(m.quantita), num(m.quantita) % 1 ? 2 : 0)}</b></td><td data-l="Causale">${esc(m.causale || '—')}</td><td class="r gx-ra">${m.doc ? '' : `<button type="button" class="btn sm ghost" data-gx="mov-del" data-id="${esc(m.id)}" aria-label="Elimina movimento">✕</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="gx-none">Nessun movimento</td></tr>'}
+      </tbody></table>${gxMore(M, 'mov')}</div>`;
     }
     el.innerHTML = h;
     const qi = $('#mg-q'); if (qi) qi.oninput = () => { mgQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderMag(); const x = $('#mg-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
@@ -8263,15 +8268,15 @@
       h += !D.length ? gxEmpty(GIC.doc, 'Nessun DDT', 'Fai i DDT durante il mese: a fine mese con un clic diventano le fatture dei tuoi clienti, con PDF e file XML.', '<button type="button" class="btn primary" data-gx="ddt-new">+ Crea il primo DDT</button>')
         : `<div class="gx-bar sm"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="vn-q" placeholder="Cerca numero o cliente…" value="${esc(vnQ)}"></label></div>
         <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>DDT</th><th>Cliente</th><th>Causale</th><th class="r">Imponibile</th><th>Stato</th><th></th></tr></thead><tbody>
-        ${L.map(d => { const T = docTot(jp(d.righe, [])), f = d.fattura && F.find(x => x.id === d.fattura); return `<tr data-ddt="${esc(d.id)}"><td data-l="DDT"><b>n. ${esc(dnum(d))}</b><small>${esc(dIt(d.data))}</small></td><td data-l="Cliente">${esc(cliName(d.cliente))}</td><td data-l="Causale">${esc(d.causale || '')}</td><td class="r" data-l="Imponibile">${eur(T.imp)}</td><td data-l="Stato">${f ? `<span class="chip paid">Fattura ${esc(dnum(f))}</span>` : '<span class="chip soon">Da fatturare</span>'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="ddt-pdf" data-id="${esc(d.id)}">PDF</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessun DDT nel periodo</td></tr>'}
-        </tbody></table></div>`;
+        ${gxCut(L, 'ddt').map(d => { const T = docTot(jp(d.righe, [])), f = d.fattura && F.find(x => x.id === d.fattura); return `<tr data-ddt="${esc(d.id)}"><td data-l="DDT"><b>n. ${esc(dnum(d))}</b><small>${esc(dIt(d.data))}</small></td><td data-l="Cliente">${esc(cliName(d.cliente))}</td><td data-l="Causale">${esc(d.causale || '')}</td><td class="r" data-l="Imponibile">${eur(T.imp)}</td><td data-l="Stato">${f ? `<span class="chip paid">Fattura ${esc(dnum(f))}</span>` : '<span class="chip soon">Da fatturare</span>'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="ddt-pdf" data-id="${esc(d.id)}">PDF</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessun DDT nel periodo</td></tr>'}
+        </tbody></table>${gxMore(L, 'ddt')}</div>`;
     } else {
       const L = F.filter(f => inP(f) && (!q || nh([dnum(f), cliName(f.cliente)].join(' ')).includes(q))).sort((a, b) => String(b.data).localeCompare(String(a.data)) || (parseInt(b.numero, 10) || 0) - (parseInt(a.numero, 10) || 0));
       h += !F.length ? gxEmpty(GIC.doc, 'Nessuna fattura', openD.length ? `Hai ${openD.length} DDT da fatturare: premi «Fatture di fine mese» e crea in un colpo le fatture di tutti i clienti.` : 'Crea le fatture di fine mese dai DDT, oppure una fattura immediata.', openD.length ? '<button type="button" class="btn primary" data-gx="fm">Fatture di fine mese</button>' : '<button type="button" class="btn primary" data-gx="fv-new">+ Fattura immediata</button>')
         : `<div class="gx-bar sm"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="vn-q" placeholder="Cerca numero o cliente…" value="${esc(vnQ)}"></label></div>
         <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Fattura</th><th>Cliente</th><th class="r">Totale</th><th>Scadenza</th><th>Stato</th><th></th></tr></thead><tbody>
-        ${L.map(f => { const nd = jp(f.ddt, []).length; return `<tr data-fv="${esc(f.id)}"><td data-l="Fattura"><b>n. ${esc(dnum(f))}</b><small>${esc(dIt(f.data))} · ${f.tipo === 'TD24' ? `differita, ${nd} DDT` : 'immediata'}</small></td><td data-l="Cliente">${esc(cliName(f.cliente))}</td><td class="r" data-l="Totale"><b>${eur(num(f.totale))}</b><small>imp. ${eur(num(f.imponibile))}</small></td><td data-l="Scadenza">${esc(dIt(f.scadenza) || '—')}<small>${esc(f.pagamento || '')}</small></td><td data-l="Stato">${f.stato === 'pagata' ? '<span class="chip paid">Pagata</span>' : fvLate(f) ? '<span class="chip late">Scaduta</span>' : '<span class="chip soon">Da incassare</span>'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="fv-pdf" data-id="${esc(f.id)}">PDF</button><button type="button" class="btn sm ghost" data-gx="fv-xml" data-id="${esc(f.id)}">XML</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessuna fattura nel periodo</td></tr>'}
-        </tbody></table></div>`;
+        ${gxCut(L, 'fv').map(f => { const nd = jp(f.ddt, []).length; return `<tr data-fv="${esc(f.id)}"><td data-l="Fattura"><b>n. ${esc(dnum(f))}</b><small>${esc(dIt(f.data))} · ${f.tipo === 'TD24' ? `differita, ${nd} DDT` : 'immediata'}</small></td><td data-l="Cliente">${esc(cliName(f.cliente))}</td><td class="r" data-l="Totale"><b>${eur(num(f.totale))}</b><small>imp. ${eur(num(f.imponibile))}</small></td><td data-l="Scadenza">${esc(dIt(f.scadenza) || '—')}<small>${esc(f.pagamento || '')}</small></td><td data-l="Stato">${f.stato === 'pagata' ? '<span class="chip paid">Pagata</span>' : fvLate(f) ? '<span class="chip late">Scaduta</span>' : '<span class="chip soon">Da incassare</span>'}</td><td class="r gx-ra"><button type="button" class="btn sm ghost" data-gx="fv-pdf" data-id="${esc(f.id)}">PDF</button><button type="button" class="btn sm ghost" data-gx="fv-xml" data-id="${esc(f.id)}">XML</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessuna fattura nel periodo</td></tr>'}
+        </tbody></table>${gxMore(L, 'fv')}</div>`;
     }
     el.innerHTML = h;
     const ps = $('#vn-per'); if (ps) ps.onchange = () => { vnP = ps.value; renderVen(); };
@@ -8581,6 +8586,10 @@
     toast(Object.keys(T.by).some(a2 => num(a2) === 0) ? 'XML scaricato · righe con IVA 0%: verifica la natura (N2.2) con il commercialista' : 'File XML scaricato: caricalo sul portale Fatture e Corrispettivi o mandalo al commercialista');
   }
 
+  // v118: gli elenchi lunghi mostrano le prime righe e «Mostra altri» (prima disegnavano migliaia di righe tutte insieme)
+  const GXL = {}, gxN = k => GXL[k] || 120;
+  const gxCut = (L, k) => L.slice(0, gxN(k));
+  const gxMore = (L, k) => L.length > gxN(k) ? `<div class="more-row"><button type="button" class="btn sm" data-gx="more" data-id="${k}">Mostra altri · ${fmtNum(L.length - gxN(k), 0)} rimanenti</button></div>` : '';
   // clic su clienti, magazzino e documenti
   function gxClick(e) {
     const t = e.target;
@@ -8589,6 +8598,7 @@
       const k = b.dataset.gx, id = b.dataset.id;
       if (b.disabled) return;
       e.preventDefault();
+      if (k === 'more') { GXL[id] = gxN(id) + 300; return render(); }
       if (k === 'az') return azForm(() => { render(); });
       if (k === 'inc-new') return incForm();
       if (k === 'forn-new') return fornForm();
@@ -8732,8 +8742,8 @@
           <div class="in-bars${incP ? ' days' : ''}">${bars.map((b, i) => `<div class="in-b${b.wk ? ' wk' : ''}" title="${esc(b.t)}: ${esc(eur(b.v))}" style="--d:${i * 18}ms"><i style="height:${(b.v / bm * 100).toFixed(1)}%"></i><span>${esc(b.k)}</span></div>`).join('')}</div></div>
         <div class="card"><div class="card-h"><h3>Per sede</h3><span class="muted small">${esc(incP ? mLabel(incP) : 'tutto il periodo')}</span></div><div class="bars">${barRows(sedi, lordo)}</div></div></div>
       <div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Data</th><th>Sede</th><th class="r">Contanti</th><th class="r">Carte / POS</th><th class="r">Altro</th><th class="r">Totale</th><th class="r">IVA</th></tr></thead><tbody>
-        ${L.slice(0, 400).map(r => `<tr data-inc="${esc(r.id)}"><td data-l="Data"><b>${esc(dIt(r.data))}</b>${r.tipo === 'altro' ? '<small>altra entrata</small>' : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</td><td data-l="Sede">${esc(r.sede || '—')}</td><td class="r" data-l="Contanti">${num(r.contanti) ? eur(num(r.contanti)) : '—'}</td><td class="r" data-l="Carte">${num(r.pos) ? eur(num(r.pos)) : '—'}</td><td class="r" data-l="Altro">${num(r.altro) ? eur(num(r.altro)) : '—'}</td><td class="r" data-l="Totale"><b>${eur(num(r.importo))}</b></td><td class="r" data-l="IVA">${num(r.iva)}%</td></tr>`).join('') || '<tr><td colspan="7" class="gx-none">Nessun incasso nel periodo</td></tr>'}
-      </tbody></table></div>`
+        ${gxCut(L, 'inc').map(r => `<tr data-inc="${esc(r.id)}"><td data-l="Data"><b>${esc(dIt(r.data))}</b>${r.tipo === 'altro' ? '<small>altra entrata</small>' : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</td><td data-l="Sede">${esc(r.sede || '—')}</td><td class="r" data-l="Contanti">${num(r.contanti) ? eur(num(r.contanti)) : '—'}</td><td class="r" data-l="Carte">${num(r.pos) ? eur(num(r.pos)) : '—'}</td><td class="r" data-l="Altro">${num(r.altro) ? eur(num(r.altro)) : '—'}</td><td class="r" data-l="Totale"><b>${eur(num(r.importo))}</b></td><td class="r" data-l="IVA">${num(r.iva)}%</td></tr>`).join('') || '<tr><td colspan="7" class="gx-none">Nessun incasso nel periodo</td></tr>'}
+      </tbody></table>${gxMore(L, 'inc')}</div>`
       : gxEmpty('<path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/>', 'Nessun incasso registrato', 'Ogni sera registra la chiusura di cassa (contanti e carte): in Dashboard vedi subito ricavi, costi e utile.', '<button type="button" class="btn primary" data-gx="inc-new">+ Registra il primo incasso</button>')}`;
     const ps = $('#in-per'); if (ps) ps.onchange = () => { incP = ps.value; renderInc(); };
   }
@@ -8840,12 +8850,13 @@
     };
     upd();
   }
-  const fKey = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?R\.?L\.?S?|S\.?P\.?A\.?|S\.?N\.?C\.?|S\.?A\.?S\.?|SRL|SPA|SNC|SAS|ITALIA)\b/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim();
-  const fMatch = (f, name) => { const a = fKey(f.nome), b = fKey(name); return !!a && !!b && (a === b || a.split(' ')[0] === b.split(' ')[0] && a.split(' ')[0].length >= 4); };
+  const fKey = memo(s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?R\.?L\.?S?|S\.?P\.?A\.?|S\.?N\.?C\.?|S\.?A\.?S\.?|SRL|SPA|SNC|SAS|ITALIA)\b/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim());
+  const fK1 = memo(s => fKey(s).split(' ')[0]);
+  const fMatch = (f, name) => { const a = fKey(f.nome), b = fKey(name); if (!a || !b) return false; if (a === b) return true; const x = fK1(f.nome); return x.length >= 4 && x === fK1(name); };
   const fCat = f => Object.entries(PV_SUP).find(([, v]) => fMatch({ nome: v.n }, f.nome));
   function fornStats() {
     const y = String(new Date().getFullYear()), L = FOR(), S = new Map(L.map(f => [f.id, { spesa: 0, righe: 0, ultimo: '', open: 0, late: 0, nf: 0 }]));
-    const find = name => { if (!name) return null; return L.find(f => fMatch(f, name)) || null; };
+    const FM = new Map(), find = name => { if (!name) return null; let f = FM.get(name); if (f === undefined) { f = L.find(x => fMatch(x, name)) || null; FM.set(name, f); } return f; };
     const keep = ivaOn; ivaOn = false;
     try { (db.movimenti || []).forEach(r => { const f = find(r.fornitore); if (!f) return; const x = S.get(f.id); if (String(r.data).slice(0, 4) === y) x.spesa += tot(r); x.righe++; if (String(r.data) > x.ultimo) x.ultimo = String(r.data); }); } finally { ivaOn = keep; }
     faRows().forEach(r => { const f = find(r.fornitore); if (!f) return; const x = S.get(f.id); x.nf++; if (!faPaid(r)) x.open += num(r.totale); if (faLate(r)) x.late += num(r.totale); if (String(r.data) > x.ultimo) x.ultimo = String(r.data); });
@@ -8854,7 +8865,7 @@
   // nomi di fornitori già usati negli acquisti e nelle fatture ma non ancora in anagrafica
   function fornNuovi() {
     const L = FOR(), M = new Map();
-    [...(db.movimenti || []).map(r => r.fornitore), ...faRows().map(r => r.fornitore)].forEach(n => { n = String(n || '').trim(); if (!n || L.some(f => fMatch(f, n))) return; const k = fKey(n); if (k && !M.has(k)) M.set(k, n); });
+    new Set([...(db.movimenti || []).map(r => r.fornitore), ...faRows().map(r => r.fornitore)]).forEach(n => { n = String(n || '').trim(); if (!n || L.some(f => fMatch(f, n))) return; const k = fKey(n); if (k && !M.has(k)) M.set(k, n); });
     return [...M.values()];
   }
   function renderForn() {
@@ -8871,8 +8882,8 @@
       ${gxKpi([['Fornitori', fmtNum(L.length, 0), nuovi.length ? `${nuovi.length} da aggiungere dagli acquisti` : 'in anagrafica'], [`Spesa ${y}`, eur0(sum('spesa')), 'acquisti IVA esclusa'], ['Da pagare', eur0(sum('open')), 'fatture non pagate', sum('open') > 0 ? 'warn' : ''], ['Scadute', eur0(sum('late')), sum('late') > 0 ? 'da saldare subito' : 'nessuna', sum('late') > 0 ? 'bad' : '']])}
       ${!L.length ? gxEmpty('<path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/>', 'Nessun fornitore in anagrafica', nuovi.length ? `Negli acquisti e nelle fatture ci sono già ${nuovi.length} fornitori: aggiungili con un clic e completa i dati.` : 'Aggiungi i fornitori con partita IVA, contatti, pagamento e IBAN: vedi quanto spendi con ognuno e cosa devi pagare.', `${nuovi.length ? `<button type="button" class="btn primary" data-gx="forn-imp">Aggiungi i ${nuovi.length} fornitori già usati</button> ` : ''}<button type="button" class="btn${nuovi.length ? '' : ' primary'}" data-gx="forn-new">+ Fornitore</button>`)
         : `<div class="card gx-list"><table class="gx-tbl"><thead><tr><th>Fornitore</th><th>Categoria</th><th>Contatti</th><th class="r">Spesa ${y}</th><th class="r">Da pagare</th><th>Ultimo</th></tr></thead><tbody>
-        ${F.map(f => { const x = S.get(f.id) || {}; return `<tr data-forn="${esc(f.id)}"><td data-l="Fornitore"><b>${esc(f.nome)}</b><small>${esc(f.piva ? 'P.IVA ' + f.piva : [f.citta, f.prov ? `(${f.prov})` : ''].filter(Boolean).join(' ') || '')}</small></td><td data-l="Categoria">${esc(f.categoria || '—')}${fCat(f) ? '<small>catalogo nei Preventivi</small>' : ''}</td><td data-l="Contatti">${esc(f.referente || f.tel || f.email || '—')}${f.referente && (f.tel || f.email) ? `<small>${esc(f.tel || f.email)}</small>` : ''}</td><td class="r" data-l="Spesa">${x.spesa ? eur(x.spesa) : '—'}</td><td class="r" data-l="Da pagare">${x.open ? `<span class="chip ${x.late ? 'late' : 'soon'}">${eur(x.open)}</span>` : '—'}</td><td data-l="Ultimo">${x.ultimo ? esc(dIt(x.ultimo)) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessun fornitore trovato</td></tr>'}
-        </tbody></table></div>`}`;
+        ${gxCut(F, 'forn').map(f => { const x = S.get(f.id) || {}; return `<tr data-forn="${esc(f.id)}"><td data-l="Fornitore"><b>${esc(f.nome)}</b><small>${esc(f.piva ? 'P.IVA ' + f.piva : [f.citta, f.prov ? `(${f.prov})` : ''].filter(Boolean).join(' ') || '')}</small></td><td data-l="Categoria">${esc(f.categoria || '—')}${fCat(f) ? '<small>catalogo nei Preventivi</small>' : ''}</td><td data-l="Contatti">${esc(f.referente || f.tel || f.email || '—')}${f.referente && (f.tel || f.email) ? `<small>${esc(f.tel || f.email)}</small>` : ''}</td><td class="r" data-l="Spesa">${x.spesa ? eur(x.spesa) : '—'}</td><td class="r" data-l="Da pagare">${x.open ? `<span class="chip ${x.late ? 'late' : 'soon'}">${eur(x.open)}</span>` : '—'}</td><td data-l="Ultimo">${x.ultimo ? esc(dIt(x.ultimo)) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="gx-none">Nessun fornitore trovato</td></tr>'}
+        </tbody></table>${gxMore(F, 'forn')}</div>`}`;
     const qi = $('#fo-q'); if (qi) qi.oninput = () => { foQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; renderForn(); const x = $('#fo-q'); x.focus(); try { x.setSelectionRange(p, p); } catch {} }, 160); };
   }
   function renderArch(el, ftabs, warn) {
