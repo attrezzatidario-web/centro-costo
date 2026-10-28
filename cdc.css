@@ -1919,7 +1919,7 @@ body.has-sel .fab { display: none; }
 .pv-lgba { display: flex; gap: 8px; flex-wrap: wrap; }
 .pv-lgtg { display: inline-flex; gap: 4px; }
 .pv-lgtg button { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .18s; white-space: nowrap; }
-.pv-lgtg button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pv-lgtg button:hover:not(:disabled):not(.on) { border-color: var(--accent); color: var(--accent); }
 .pv-lgtg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .pv-lgtg button:disabled { opacity: .35; cursor: not-allowed; }
 .pv-mk { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
