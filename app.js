@@ -607,7 +607,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi', fornitori: 'Fornitori' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi', fornitori: 'Fornitori', analisi: 'Analisi' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -633,8 +633,8 @@
     document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori', 'analisi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori', 'analisi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -664,10 +664,21 @@
   function render() {
     applySettore();
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn, analisi: renderAn }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
+  /* v121: Analisi — cerca, filtra, raggruppa ed esporta tutti i dati (analisi.js, caricato quando serve) */
+  async function renderAn() {
+    const el = $('#an-body'); if (!el) return;
+    if (!window.CDC_AN) { el.innerHTML = '<div class="card"><div class="empty">Carico l\'analisi…</div></div>'; try { await loadLib('analisi.js?v=121'); } catch { el.innerHTML = '<div class="card"><div class="empty">Analisi non disponibile: controlla la connessione e riprova</div></div>'; return; } if (view !== 'analisi') return; }
+    window.CDC_AN.render(el, {
+      db: () => db, num, esc, eur, eur0, fmtNum, dIt, toast, busy, sub, isMain, ivaRate,
+      modOn: k => modOn(k), lyName: c => lyName(c), pvList, pvTotals, pvFatt, giacMap, fMatch: (f, n) => fMatch(f, n),
+      loadXlsx, loadPdf, logoPng, loadFonts, orgName: () => ORG.n,
+      sedeWord: () => (settore().sede || ['Sede'])[0], acqWord: () => settore().acq || 'Acquisti'
+    });
+  }
 
   /* ================= HOME ================= */
   function socBar() {
