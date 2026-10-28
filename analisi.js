@@ -140,6 +140,8 @@
     C = ctx;
     if (root !== el) { root = el; bind(el); }
     const L = sources();
+    // v122: arrivo da una scheda (cliente, fornitore…): apre la fonte già filtrata
+    const pr = C.take && C.take(); if (pr && pr.src === '*') { S.src = '*'; S.q = pr.q || ''; S.per = 'all'; S.open = ''; } else if (pr && L.find(s => s.k === pr.src)) { const s0 = L.find(s => s.k === pr.src), F = {}; S.q = ''; Object.entries(pr.f || {}).forEach(([k, v]) => { const vals = new Set(s0.rows().map(r => String(r[k] ?? ''))); const hit = [...vals].find(x => norm(x) === norm(v)) || [...vals].find(x => norm(x).replace(/[^a-z0-9]/g, '').includes(norm(v).replace(/\b(srl|spa|snc|sas)\b/g, '').replace(/[^a-z0-9]/g, ''))); if (hit) F[k] = hit; else S.q = String(v); }); S.src = pr.src; S.f[pr.src] = F; S.per = 'all'; S.g = ''; S.open = ''; S.lim = 200 }
     if (S.src !== '*' && !L.find(s => s.k === S.src)) S.src = '*';
     C.sub(S.src === '*' ? 'Cerca, filtra ed esporta tutti i dati' : `${L.find(s => s.k === S.src).n} · cerca, filtra ed esporta`);
     el.innerHTML = S.src === '*' ? home(L) : table(L.find(s => s.k === S.src));
@@ -193,17 +195,20 @@
         <tfoot><tr><td>Totale</td><td class="r">${C.fmtNum(R.length, 0)}</td>${G.nums.map(c => `<td class="r">${C.eur(R.reduce((a, r) => a + (Number(r[c.k]) || 0), 0))}</td>`).join('')}${amtC ? '<td></td>' : ''}</tr></tfoot></table></div></div>` : ''}
       <div class="card ax-dc"><div class="card-h"><h3>Dettaglio</h3><span class="muted small">${R.length > shown.length ? `prime ${C.fmtNum(shown.length, 0)} di ${C.fmtNum(R.length, 0)} righe · l'export le contiene tutte` : `${C.fmtNum(R.length, 0)} ${R.length === 1 ? 'riga' : 'righe'}`}</span></div>
         ${R.length ? `<div class="ax-tw"><table class="ax-t"><thead><tr>${V.map(c => `<th class="${isNum(c) ? 'r' : ''}${c.main ? ' ax-m' : ''}"><button type="button" data-ansort="${c.k}">${e(c.l)}${so && so.k === c.k ? svg(so.d > 0 ? I.up : I.dn) : ''}</button></th>`).join('')}</tr></thead>
-        <tbody>${shown.map(r => `<tr>${V.map(c => `<td class="${isNum(c) ? 'r' : ''}${c.main ? ' ax-m' : ''}">${e(fmt(c, r[c.k]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-        <div class="ax-ml">${(() => { const mc = s.cols.find(c => c.main) || s.cols[0], dc = s.dk ? s.cols.find(c => c.k === s.dk) : null, ac = amtC, oth = V.filter(c => c !== mc && c !== dc && c !== ac).slice(0, 4); return shown.map(r => `<div class="ax-mr"><div class="ax-mt"><b>${e(fmt(mc, r[mc.k]))}</b>${ac ? `<strong>${e(fmt(ac, r[ac.k]))}</strong>` : ''}</div><small>${[dc ? fmt(dc, r[dc.k]) : '', ...oth.map(c => r[c.k] == null || r[c.k] === '' ? '' : (isNum(c) ? `${c.l} ${fmt(c, r[c.k])}` : fmt(c, r[c.k])))].filter(x => x && x !== '—').map(e).join(' · ')}</small></div>`).join(''); })()}</div>
+        <tbody>${shown.map(r => `<tr>${V.map(c => { const lk = lnkOf(s, c), v = fmt(c, r[c.k]); return `<td class="${isNum(c) ? 'r' : ''}${c.main ? ' ax-m' : ''}">${lk && v !== '—' ? `<button type="button" class="ax-lnk" data-axa="${lk}|${e(r[c.k])}">${e(v)}</button>` : e(v)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
+        <div class="ax-ml">${(() => { const mc = s.cols.find(c => c.main) || s.cols[0], dc = s.dk ? s.cols.find(c => c.k === s.dk) : null, ac = amtC, oth = V.filter(c => c !== mc && c !== dc && c !== ac).slice(0, 4); const lc = s.cols.find(c => lnkOf(s, c)); return shown.map(r => `<${lc && r[lc.k] ? `button type="button" data-axa="${lnkOf(s, lc)}|${e(r[lc.k])}"` : 'div'} class="ax-mr"><div class="ax-mt"><b>${e(fmt(mc, r[mc.k]))}</b>${ac ? `<strong>${e(fmt(ac, r[ac.k]))}</strong>` : ''}</div><small>${[dc ? fmt(dc, r[dc.k]) : '', ...oth.map(c => r[c.k] == null || r[c.k] === '' ? '' : (isNum(c) ? `${c.l} ${fmt(c, r[c.k])}` : fmt(c, r[c.k])))].filter(x => x && x !== '—').map(e).join(' · ')}</small></${lc && r[lc.k] ? 'button' : 'div'}>`).join(''); })()}</div>
         ${R.length > shown.length ? `<button type="button" class="db-more ax-more" data-an="more">Mostra altre ${C.fmtNum(Math.min(500, R.length - shown.length), 0)} righe</button>` : ''}` : `<div class="empty">Nessuna riga con questi filtri</div>`}</div>`;
   }
 
+  // v122: nomi di clienti e fornitori cliccabili: aprono la loro scheda
+  const lnkOf = (s, c) => c.k === 'cliente' || (s.k === 'clienti' && c.k === 'nome') ? 'cli' : c.k === 'fornitore' || (s.k === 'fornitori' && c.k === 'nome') ? 'forn' : '';
   /* ---------- eventi ---------- */
   let qT = 0;
   function bind(el) {
     const re = () => render(el, C);
     el.addEventListener('click', ev => {
       const t = ev.target;
+      const lk = t.closest('[data-axa]'); if (lk) { const v = lk.dataset.axa, i = v.indexOf('|'); if (v.slice(0, i) === 'cli') C.openCli(v.slice(i + 1)); else C.openForn(v.slice(i + 1)); return; }
       const src = t.closest('[data-ansrc]'); if (src) { S.src = src.dataset.ansrc; S.g = ''; S.lim = 200; S.open = ''; re(); window.scrollTo(0, 0); return; }
       const a = t.closest('[data-an]'); if (a) {
         const k = a.dataset.an;

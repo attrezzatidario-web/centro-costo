@@ -626,7 +626,7 @@
     if (view === 'lyreco') lyAnim = true;
     if (view === 'amazon') amAnim = true;
     if (view === 'piazzali') pzAnim = true;
-    if (view === 'preventivi') { pvAnim = true; if (prevView !== 'preventivi') { pvTab = 'cat'; pvSup = 'payper'; pvAll = true; pvFromAll = false; pvItem = ''; pvGroup = ''; pvQ = ''; pvCl = ''; pvEdit = ''; } }
+    if (view === 'preventivi') { pvAnim = true; if (prevView !== 'preventivi') { pvTab = 'cat'; pvSup = 'payper'; pvAll = true; pvFromAll = false; pvItem = ''; pvGroup = ''; pvQ = ''; pvCl = ''; pvEdit = ''; } if (pvGoto) { pvTab = 'prev'; pvEdit = pvGoto; pvItem = ''; pvGoto = ''; } }
     $$('.view').forEach(v => (v.hidden = v.dataset.v !== view));
     const navV = ['movimenti', 'articoli'].includes(view) ? 'attrezzatura' : view;
     $$('.nav a').forEach(x => x.classList.toggle('active', x.dataset.view === navV));
@@ -671,12 +671,13 @@
   /* v121: Analisi — cerca, filtra, raggruppa ed esporta tutti i dati (analisi.js, caricato quando serve) */
   async function renderAn() {
     const el = $('#an-body'); if (!el) return;
-    if (!window.CDC_AN) { el.innerHTML = '<div class="card"><div class="empty">Carico l\'analisi…</div></div>'; try { await loadLib('analisi.js?v=121'); } catch { el.innerHTML = '<div class="card"><div class="empty">Analisi non disponibile: controlla la connessione e riprova</div></div>'; return; } if (view !== 'analisi') return; }
+    if (!window.CDC_AN) { el.innerHTML = '<div class="card"><div class="empty">Carico l\'analisi…</div></div>'; try { await loadLib('analisi.js?v=122'); } catch { el.innerHTML = '<div class="card"><div class="empty">Analisi non disponibile: controlla la connessione e riprova</div></div>'; return; } if (view !== 'analisi') return; }
     window.CDC_AN.render(el, {
       db: () => db, num, esc, eur, eur0, fmtNum, dIt, toast, busy, sub, isMain, ivaRate,
       modOn: k => modOn(k), lyName: c => lyName(c), pvList, pvTotals, pvFatt, giacMap, fMatch: (f, n) => fMatch(f, n),
       loadXlsx, loadPdf, logoPng, loadFonts, orgName: () => ORG.n,
-      sedeWord: () => (settore().sede || ['Sede'])[0], acqWord: () => settore().acq || 'Acquisti'
+      sedeWord: () => (settore().sede || ['Sede'])[0], acqWord: () => settore().acq || 'Acquisti', take: () => { const x = anPreset; anPreset = null; return x; },
+      openCli: nome => { const c = GX.cli().find(x => pvCliKey(x.nome) === pvCliKey(nome)); if (c) cliForm(c); }, openForn: nome => { const fo = FOR().find(x => fMatch(x, nome)); if (fo) fornForm(fo); }
     });
   }
 
@@ -3285,13 +3286,45 @@
   // aggiunge o aggiorna il cliente del preventivo nell'elenco clienti (restituisce le operazioni da scrivere)
   function pvCliOps(p) {
     const cl = p && p.cliente || {}; const nome = String(cl.nome || '').trim(); if (!nome) return [];
+    // v122: il destinatario può essere un fornitore: finisce (se manca) nell'anagrafica Fornitori, non tra i clienti
+    if (pvDest(p) === 'forn') { if (!gxOk() || FOR().some(f => fMatch(f, nome))) return []; return [{ action: 'upsert', sheet: 'Fornitori', row: { id: uid(), nome, referente: cl.ref || '', email: cl.email || '', tel: cl.tel || '', indirizzo: cl.ind || '', pagamento: PAG[2], creato: today() } }]; }
+    // v122: ogni cliente dei preventivi è anche nell'anagrafica Clienti (una sola anagrafica per preventivi, DDT e fatture)
+    const cOps = gxOk() && !GX.cli().some(c => pvCliKey(c.nome) === pvCliKey(nome)) ? [{ action: 'upsert', sheet: 'Clienti', row: { id: uid(), nome, indirizzo: cl.ind || '', email: cl.email || '', tel: cl.tel || '', nazione: 'IT', pagamento: PAG[2], note: cl.ref ? `Referente: ${cl.ref}` : '', creato: today() } }] : [];
     const L = pvCliList(), before = JSON.stringify(L); let c = pvCliFind(L, nome);
     if (!c) { c = { id: uid(), nome, ref: '', email: '', tel: '', ind: '', ric: null, note: '', dal: today() }; L.push(c); }
     ['ref', 'email', 'tel', 'ind'].forEach(k => { const v = String(cl[k] || '').trim(); if (v) c[k] = v; });
     p.cliId = c.id;
     L.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-    return JSON.stringify(L) === before ? [] : [{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvClienti', valore: JSON.stringify(L) } }];
+    return [...cOps, ...(JSON.stringify(L) === before ? [] : [{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvClienti', valore: JSON.stringify(L) } }])];
   }
+  /* ---------- v122: anagrafiche collegate (clienti, fornitori, preventivi, DDT, fatture, acquisti, magazzino, analisi) ---------- */
+  const pvDest = p => p && p.dest === 'forn' ? 'forn' : 'cli';
+  const GIC_CARD = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16a3.4 3.4 0 0 1 6.4 0M14 10h4M14 14h3"/></svg>';
+  const anaInd = (a, b, c, d) => [a, [b, c].filter(Boolean).join(' '), d ? `(${d})` : ''].filter(Boolean).join(', ');
+  // un solo elenco clienti: anagrafica Clienti + clienti dei preventivi non ancora in anagrafica
+  function anaCli() {
+    const P = pvCliList(), out = GX.cli().map(c => ({ k: 'c', id: c.id, cid: c.id, nome: c.nome, ref: '', email: c.email || '', tel: c.tel || '', ind: anaInd(c.indirizzo, c.cap, c.citta, c.prov) }));
+    const by = new Map(out.map(x => [pvCliKey(x.nome), x]));
+    P.forEach(p => { const m = by.get(pvCliKey(p.nome)); if (m) { m.pid = p.id; m.ric = p.ric; ['ref', 'email', 'tel', 'ind'].forEach(k => { if (!m[k] && p[k]) m[k] = p[k]; }); } else out.push({ k: 'p', id: p.id, pid: p.id, nome: p.nome, ref: p.ref || '', email: p.email || '', tel: p.tel || '', ind: p.ind || '', ric: p.ric }); });
+    return out.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it'));
+  }
+  const anaForn = () => FOR().map(f => ({ k: 'f', id: f.id, nome: f.nome, ref: f.referente || '', email: f.email || '', tel: f.tel || '', ind: anaInd(f.indirizzo, f.cap, f.citta, f.prov) })).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it'));
+  const anaFind = (dest, nome) => { const k = pvCliKey(nome); if (!k) return null; return dest === 'forn' ? (anaForn().find(x => pvCliKey(x.nome) === k) || (() => { const f = FOR().find(z => fMatch(z, nome)); return f ? anaForn().find(x => x.id === f.id) : null; })()) : anaCli().find(x => pvCliKey(x.nome) === k) || null; };
+  const pvOfCli = nome => { const k = pvCliKey(nome); return k ? pvList().filter(p => pvDest(p) === 'cli' && pvCliKey(p.cliente && p.cliente.nome) === k) : []; };
+  const pvOfForn = f => pvList().filter(p => pvDest(p) === 'forn' && p.cliente && p.cliente.nome && fMatch(f, p.cliente.nome));
+  let pvGoto = '', anPreset = null;
+  // apre un preventivo da qualsiasi sezione
+  const pvOpen = id => { if (!$('#sheet').hidden) closeSheet(); pvGoto = id; if (location.hash === '#preventivi') { pvGoto = ''; pvTab = 'prev'; pvEdit = id; pvItem = ''; renderPv(); window.scrollTo(0, 0); } else location.hash = 'preventivi'; };
+  // nuovo preventivo già intestato a un cliente o a un fornitore
+  function pvNewFor(dest, a) {
+    const p = pvNew(); p.dest = dest; p.cliente = { nome: a.nome, ref: a.ref || '', email: a.email || '', tel: a.tel || '', ind: a.ind || '' }; pvSave(p); pvOpen(p.id);
+  }
+  const anOpen = (src, flt, q) => { if (!$('#sheet').hidden) closeSheet(); anPreset = { src, f: flt, q: q || '' }; if (location.hash === '#analisi') renderAn(); else location.hash = 'analisi'; };
+  // riquadro «Collegati» nelle schede di cliente e fornitore
+  const lkBox = (title, items, acts) => `<div class="lk-box"><div class="lk-h"><b>${esc(title)}</b><span>${items.length ? items.length + (items.length === 1 ? ' documento' : ' documenti') : 'nessun documento'}</span></div>
+    ${items.length ? `<div class="lk-l">${items.sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 12).map(x => `<button type="button" class="lk-r" ${x.at}><span class="lk-t">${esc(x.t)}</span><span class="lk-n"><b>${esc(x.n)}</b><small>${esc(dIt(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span>${x.c ? `<span class="chip ${x.c[0]}">${esc(x.c[1])}</span>` : '<span></span>'}<b class="lk-v">${x.v || ''}</b></button>`).join('')}</div>${items.length > 12 ? `<small class="lk-more">e altri ${items.length - 12}: li trovi tutti in Analisi</small>` : ''}` : ''}
+    <div class="lk-a">${acts.filter(Boolean).join('')}</div></div>`;
+  const lkPv = p => { const st = PV_ST[p.stato] || PV_ST.bozza; return { d: p.data, t: 'Preventivo', n: p.num, s: `${p.righe.length === 1 ? '1 riga' : p.righe.length + ' righe'}`, c: [st[1], st[0]], v: eur(pvTotals(p).imp), at: `data-lkpv="${esc(p.id)}"` }; };
 
   /* ---------- v72: barra sotto (dock) personalizzabile sul telefono ---------- */
   const DOCK_DEF = ['home', 'preventivi', 'attrezzatura', 'fatture'];
@@ -3700,7 +3733,7 @@
     if (!p.righe.length && !(p.pers || []).length) return toast('Il preventivo non ha righe');
     const cl = p.cliente || {}, nome = String(cl.nome || '').trim(); if (!nome) return toast('Scrivi prima il nome del cliente');
     let c = GX.cli().find(x => pvCliKey(x.nome) === pvCliKey(nome));
-    if (!c) { c = { id: uid(), nome, indirizzo: cl.ind || '', email: cl.email || '', tel: cl.tel || '', nazione: 'IT', pagamento: PAG[2], note: cl.ref ? `Referente: ${cl.ref}` : '', creato: today() }; write([{ action: 'upsert', sheet: 'Clienti', row: c }]); toast(`${nome} aggiunto ai Clienti: completa P.IVA e indirizzo`); }
+    if (!c) { const fo = pvDest(p) === 'forn' ? FOR().find(x => fMatch(x, nome)) : null; c = fo ? { id: uid(), nome: fo.nome, piva: fo.piva || '', cf: fo.cf || '', indirizzo: fo.indirizzo || '', cap: fo.cap || '', citta: fo.citta || '', prov: fo.prov || '', pec: fo.pec || '', email: fo.email || '', tel: fo.tel || '', nazione: 'IT', pagamento: fo.pagamento || PAG[2], note: 'Anche fornitore', creato: today() } : { id: uid(), nome, indirizzo: cl.ind || '', email: cl.email || '', tel: cl.tel || '', nazione: 'IT', pagamento: PAG[2], note: cl.ref ? `Referente: ${cl.ref}` : '', creato: today() }; write([{ action: 'upsert', sheet: 'Clienti', row: c }]); toast(fo ? `${nome} aggiunto anche ai Clienti con i dati del fornitore` : `${nome} aggiunto ai Clienti: completa P.IVA e indirizzo`); }
     const gsc = num(p.sconto), iva = p.iva !== '' && p.iva != null && IVE.includes(num(p.iva)) ? num(p.iva) : 22;
     const scTot = s0 => { const v = r2((1 - (1 - num(s0) / 100) * (1 - gsc / 100)) * 100); return v ? v : ''; };
     const R = [];
@@ -4003,16 +4036,20 @@
   }
   /* ---------- elenco e scheda del preventivo ---------- */
 
-  let pvCliQ = '';
+  let pvCliQ = '', pvCliT = 'cli';
   function pvClients(body) {
-    const L = pvCliList(), Q = pvList(), std = fmtNum((pvRic() - 1) * 100, 0);
-    const stat = c => { const qs = Q.filter(p => { const C = pvCliOf(p); return C && C.id === c.id; }); return { n: qs.length, acc: qs.filter(p => p.stato === 'accettato').reduce((s, p) => s + pvTotals(p).imp, 0), last: qs.map(p => p.data).sort().pop() || '' }; };
+    const forn = pvCliT === 'forn', Q = pvList(), std = fmtNum((pvRic() - 1) * 100, 0), PL = pvCliList();
+    const L = forn ? anaForn() : anaCli();
+    const qs = c => forn ? Q.filter(p => pvDest(p) === 'forn' && pvCliKey(p.cliente && p.cliente.nome) === pvCliKey(c.nome)) : Q.filter(p => pvDest(p) === 'cli' && pvCliKey(p.cliente && p.cliente.nome) === pvCliKey(c.nome));
+    const stat = c => { const X = qs(c); return { n: X.length, acc: X.filter(p => p.stato === 'accettato').reduce((s, p) => s + pvTotals(p).imp, 0) }; };
     const q = pvCliKey(pvCliQ), F = L.filter(c => !q || pvCliKey(`${c.nome} ${c.ref} ${c.email} ${c.tel}`).includes(q));
-    body.innerHTML = `<div class="card pv-clis"><div class="card-h"><div><h3>Clienti</h3><span class="muted small">${L.length} clienti · si salvano da soli quando scrivi il nome in un preventivo</span></div><button type="button" class="btn sm primary" id="pv-cliadd">+ Nuovo cliente</button></div>
-      ${L.length ? `<div class="pv-sb sm pv-clisb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-cliq" type="search" placeholder="Cerca un cliente…" value="${esc(pvCliQ)}" autocomplete="off"></div>
-      <div class="pv-cll">${F.map(c => { const s2 = stat(c); return `<div class="pv-clr"><button type="button" class="pv-clm" data-pvcliedit="${esc(c.id)}"><span class="pv-cla">${esc((c.nome.match(/[A-Za-zÀ-ÿ0-9]/g) || ['?']).slice(0, 2).join('').toUpperCase())}</span><span class="pv-cln"><b>${esc(c.nome)}</b><small>${esc([c.ref, c.tel, c.email].filter(Boolean).join(' · ') || 'nessun contatto')}</small></span></button>
-        <span class="pv-clk">${pvCli ? '' : `<span class="chip ${pvRicOk(c.ric) ? 'paid' : ''}" title="Ricarico sul prezzo d'acquisto">${pvRicOk(c.ric) ? `ricarico +${esc(fmtNum(num(c.ric), 1).replace(/,0$/, ''))}%` : `standard +${esc(std)}%`}</span>`}<small>${s2.n} ${s2.n === 1 ? 'preventivo' : 'preventivi'}${s2.acc ? ` · ${eur0(s2.acc)} accettati` : ''}</small></span>
-        <span class="pv-cla2"><button type="button" class="btn sm" data-pvclinew="${esc(c.id)}">+ Preventivo</button></span></div>`; }).join('') || '<div class="empty">Nessun cliente trovato</div>'}</div>` : '<div class="empty">Ancora nessun cliente. Scrivi il nome del cliente in un preventivo oppure premi «+ Nuovo cliente».</div>'}</div>`;
+    const ini = n => esc((String(n).match(/[A-Za-zÀ-ÿ0-9]/g) || ['?']).slice(0, 2).join('').toUpperCase());
+    body.innerHTML = `<div class="card pv-clis"><div class="card-h"><div class="seg pv-dseg pv-ctab" role="tablist"><button type="button" data-pvct="cli" class="${forn ? '' : 'on'}">Clienti <em>${anaCli().length}</em></button><button type="button" data-pvct="forn" class="${forn ? 'on' : ''}">Fornitori <em>${anaForn().length}</em></button></div><button type="button" class="btn sm primary" id="pv-cliadd">+ Nuovo ${forn ? 'fornitore' : 'cliente'}</button></div>
+      <p class="muted small pv-clinote">${forn ? 'Gli stessi fornitori della sezione Fornitori: puoi intestare un preventivo anche a loro.' : 'Gli stessi clienti della sezione Clienti, di DDT e fatture: chi scrivi in un preventivo entra da solo in anagrafica.'}</p>
+      ${L.length ? `<div class="pv-sb sm pv-clisb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="pv-cliq" type="search" placeholder="Cerca un ${forn ? 'fornitore' : 'cliente'}…" value="${esc(pvCliQ)}" autocomplete="off"></div>
+      <div class="pv-cll">${F.slice(0, 300).map(c => { const s2 = stat(c), P = forn ? null : pvCliFind(PL, c.nome), ric = P && pvRicOk(P.ric); return `<div class="pv-clr"><button type="button" class="pv-clm" data-pvana="${esc((forn ? 'forn' : 'cli') + '|' + c.k + '|' + c.id)}"><span class="pv-cla">${ini(c.nome)}</span><span class="pv-cln"><b>${esc(c.nome)}</b><small>${esc([c.ref, c.tel, c.email].filter(Boolean).join(' · ') || 'nessun contatto')}</small></span></button>
+        <span class="pv-clk">${forn || pvCli ? '' : `<span class="chip ${ric ? 'paid' : ''}" title="Ricarico sul prezzo d'acquisto">${ric ? `ricarico +${esc(fmtNum(num(P.ric), 1).replace(/,0$/, ''))}%` : `standard +${esc(std)}%`}</span>`}<small>${s2.n} ${s2.n === 1 ? 'preventivo' : 'preventivi'}${s2.acc ? ` · ${eur0(s2.acc)} accettati` : ''}</small></span>
+        <span class="pv-cla2"><button type="button" class="btn sm" data-pvanew="${esc((forn ? 'forn' : 'cli') + '|' + c.k + '|' + c.id)}">+ Preventivo</button></span></div>`; }).join('') || `<div class="empty">Nessun ${forn ? 'fornitore' : 'cliente'} trovato</div>`}</div>` : `<div class="empty">${forn ? 'Ancora nessun fornitore in anagrafica.' : 'Ancora nessun cliente. Scrivi il nome del cliente in un preventivo oppure premi «+ Nuovo cliente».'}</div>`}</div>`;
   }
   function pvCliForm(id) {
     const L = pvCliList(), c0 = L.find(x => x.id === id), c = c0 || { id: uid(), nome: '', ref: '', email: '', tel: '', ind: '', ric: null, note: '', dal: today() };
@@ -4035,7 +4072,9 @@
     }, c0 ? () => { if (!confirm(`Togliere «${c.nome}» dall'elenco clienti?\nI suoi preventivi restano.`)) return; write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvClienti', valore: JSON.stringify(L.filter(x => x.id !== c.id)) } }]); toast('Cliente tolto'); return true; } : null, c0 ? 'Salva' : 'Aggiungi');
   }
   function pvCliClick(t) {
-    if (t.closest('#pv-cliadd')) { pvCliForm(''); return true; }
+    if (t.closest('#pv-cliadd')) { if (pvCliT === 'forn') fornForm(); else if (gxOk()) cliForm(null); else pvCliForm(''); return true; }
+    const ct = t.closest('[data-pvct]'); if (ct) { pvCliT = ct.dataset.pvct; pvCliQ = ''; renderPv(); return true; }
+    const an = t.closest('[data-pvanew]'); if (an) { const [dst, k, id] = an.dataset.pvanew.split('|'), A = (dst === 'forn' ? anaForn() : anaCli()).find(x => x.k === k && x.id === id); if (A) pvNewFor(dst, A); return true; }
     const ed = t.closest('[data-pvcliedit]'); if (ed) { pvCliForm(ed.dataset.pvcliedit); return true; }
     const nw = t.closest('[data-pvclinew]'); if (nw) { const c = pvCliList().find(x => x.id === nw.dataset.pvclinew); if (!c) return true; const p = pvNew(); p.cliente = { nome: c.nome, ref: c.ref || '', email: c.email || '', tel: c.tel || '', ind: c.ind || '' }; p.cliId = c.id; pvSave(p); pvTab = 'prev'; pvEdit = p.id; pvTarget = p.id; renderPv(); window.scrollTo(0, 0); return true; }
     if (t.closest('#pv-close')) { const p = pvFromForm(); if (p) pvQuiet(p); pvTarget = ''; pvEdit = ''; pvTab = 'prev'; renderPv(); window.scrollTo(0, 0); toast(`Preventivo ${p ? p.num : ''} salvato e chiuso`); return true; }
@@ -4047,7 +4086,7 @@
     const tot = s => L.filter(p => !s || p.stato === s);
     body.innerHTML = `${L.length ? `<div class="pv-kpis">${[['', 'Preventivi', L.length], ['bozza', 'Bozze', tot('bozza').length], ['inviato', 'Inviati', tot('inviato').length], ['accettato', 'Accettati', tot('accettato').length]].map(([k, l, n]) => `<div class="card pv-k"><span>${l}</span><b>${n}</b><small>${eur0(tot(k).reduce((s, p) => s + pvTotals(p).imp, 0))}</small></div>`).join('')}</div>` : ''}
       <div class="card"><div class="card-h"><h3>Elenco preventivi</h3></div>
-      ${L.length ? `<div class="pv-ql"><div class="pv-qh" aria-hidden="true"><span>Preventivo</span><span>Cliente</span><span>Stato</span><span>Imponibile</span></div>${L.map(p => { const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza; return `<button type="button" class="pv-qr" data-pvopen="${esc(p.id)}"><span class="pv-qn"><b>${esc(p.num)}</b><small>${esc(shortDate(p.data))}</small></span><span class="pv-qc"><b>${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${p.righe.length === 1 ? '1 riga' : p.righe.length + ' righe'} · ${fmtNum(t.pz, 0)} ${t.pz === 1 ? 'pezzo' : 'pezzi'}${p.righe.length ? ' · ' + esc([...new Set(p.righe.map(l => l.n))].slice(0, 3).join(', ')) : ''}</small></span><span class="pv-qs"><span class="chip ${st[1]}">${st[0]}</span>${p.stato === 'accettato' || (p.docs && p.docs.length) || p.fatt ? pvFChip(p) : ''}</span><b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('')}</div>` : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun preventivo</h3><p>Crea un preventivo e aggiungi i prodotti dal catalogo Payper scegliendo taglie e colori.</p><button type="button" class="btn primary" id="pv-new3">+ Nuovo preventivo</button></div>`}</div>`;
+      ${L.length ? `<div class="pv-ql"><div class="pv-qh" aria-hidden="true"><span>Preventivo</span><span>Intestato a</span><span>Stato</span><span>Imponibile</span></div>${L.map(p => { const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza; return `<button type="button" class="pv-qr" data-pvopen="${esc(p.id)}"><span class="pv-qn"><b>${esc(p.num)}</b><small>${esc(shortDate(p.data))}</small></span><span class="pv-qc"><b>${pvDest(p) === 'forn' ? '<em class="pv-ftag">Fornitore</em>' : ''}${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${p.righe.length === 1 ? '1 riga' : p.righe.length + ' righe'} · ${fmtNum(t.pz, 0)} ${t.pz === 1 ? 'pezzo' : 'pezzi'}${p.righe.length ? ' · ' + esc([...new Set(p.righe.map(l => l.n))].slice(0, 3).join(', ')) : ''}</small></span><span class="pv-qs"><span class="chip ${st[1]}">${st[0]}</span>${p.stato === 'accettato' || (p.docs && p.docs.length) || p.fatt ? pvFChip(p) : ''}</span><b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('')}</div>` : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun preventivo</h3><p>Crea un preventivo e aggiungi i prodotti dal catalogo Payper scegliendo taglie e colori.</p><button type="button" class="btn primary" id="pv-new3">+ Nuovo preventivo</button></div>`}</div>`;
   }
   function pvEditor(body) {
     const p = pvGet(pvEdit); if (!p) { pvEdit = ''; return pvQuotes(body); }
@@ -4061,8 +4100,9 @@
         <div class="card pv-eh">
           <div class="pv-eht"><div><span class="pv-code">Preventivo</span><h2>${esc(p.num)}</h2></div>
             <div class="pv-ehb"><button type="button" class="btn sm" id="pv-work" title="Scheda di lavoro per la produzione (senza prezzi)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM7 5.5H5.5A1.5 1.5 0 0 0 4 7v12.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H17M8 12l2 2 4-4M8 17h8"/></svg><span>Scheda lavoro</span></button><button type="button" class="btn sm tr-pdfbtn" id="pv-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><span>PDF</span></button><button type="button" class="btn sm primary" id="pv-save">Salva</button></div></div>
+          ${(() => { const dst = pvDest(p), A = cl.nome ? anaFind(dst, cl.nome) : null; return `<div class="pv-dest"><span>Intestato a</span><div class="seg pv-dseg" role="radiogroup" aria-label="Destinatario"><button type="button" role="radio" data-pvdest="cli" class="${dst === 'cli' ? 'on' : ''}" aria-checked="${dst === 'cli'}">Cliente</button><button type="button" role="radio" data-pvdest="forn" class="${dst === 'forn' ? 'on' : ''}" aria-checked="${dst === 'forn'}">Fornitore</button></div><input type="hidden" data-pvf="dest" value="${dst}">${A ? `<button type="button" class="btn sm pv-ana" data-pvana="${esc(dst + '|' + A.k + '|' + A.id)}">${GIC_CARD}Scheda ${dst === 'forn' ? 'fornitore' : 'cliente'}</button>` : cl.nome ? `<small class="muted">Nuovo: lo aggiungo all'anagrafica ${dst === 'forn' ? 'Fornitori' : 'Clienti'} quando salvi</small>` : ''}</div>`; })()}
           <div class="pv-ef">
-            <label class="f"><span>Cliente / ragione sociale</span><input data-pvf="cliente.nome" list="pv-cli-dl" autocomplete="off" value="${esc(cl.nome || '')}" placeholder="Es. Rossi Trasporti S.r.l."><datalist id="pv-cli-dl">${pvCliList().map(c => `<option value="${esc(c.nome)}">`).join('')}</datalist></label>
+            <label class="f"><span>${pvDest(p) === 'forn' ? 'Fornitore' : 'Cliente'} / ragione sociale</span><input data-pvf="cliente.nome" list="pv-cli-dl" autocomplete="off" value="${esc(cl.nome || '')}" placeholder="${pvDest(p) === 'forn' ? 'Scegli o scrivi un fornitore' : 'Scegli o scrivi un cliente'}"><datalist id="pv-cli-dl">${(pvDest(p) === 'forn' ? anaForn() : anaCli()).map(c => `<option value="${esc(c.nome)}">`).join('')}</datalist></label>
             <label class="f"><span>Referente</span><input data-pvf="cliente.ref" value="${esc(cl.ref || '')}"></label>
             <label class="f"><span>Email</span><input data-pvf="cliente.email" type="email" value="${esc(cl.email || '')}"></label>
             <label class="f"><span>Telefono</span><input data-pvf="cliente.tel" value="${esc(cl.tel || '')}"></label>
@@ -4071,7 +4111,7 @@
             <label class="f"><span>Validità (giorni)</span><input data-pvf="valid" inputmode="numeric" value="${esc(String(p.valid || 30))}"></label>
             <label class="f"><span>Stato</span><select data-pvf="stato">${Object.entries(PV_ST).map(([k, v]) => `<option value="${k}"${k === p.stato ? ' selected' : ''}>${v[0]}</option>`).join('')}</select></label>
           </div>
-          ${pvCli ? '' : (() => { const C = pvCliOf(p); return `<div class="pv-cliric">${C ? `<label class="pv-rf"><span>Ricarico per ${esc(C.nome)}</span><span class="pv-ri"><input data-pvric="${esc(C.id)}" inputmode="decimal" value="${pvRicOk(C.ric) ? esc(fmtIn(C.ric)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label><small>${pvRicOk(C.ric) ? `Prezzo al pubblico = prezzo d'acquisto + ${esc(fmtNum(num(C.ric), 1).replace(/,0$/, ''))}%. Vale per le righe con prezzo d'acquisto; le altre usano il listino. I prezzi scritti a mano restano.` : `Vuoto = ricarico standard (+${esc(fmtNum((pvRic() - 1) * 100, 0))}%). Scrivi una percentuale per usare un ricarico solo per questo cliente.`}</small>` : `<small>Scrivi il nome del cliente: si salva da solo nella sezione <b>Clienti</b>, dove puoi dargli un ricarico personale.</small>`}</div>`; })()}
+          ${pvCli || pvDest(p) === 'forn' ? '' : (() => { const C = pvCliOf(p); return `<div class="pv-cliric">${C ? `<label class="pv-rf"><span>Ricarico per ${esc(C.nome)}</span><span class="pv-ri"><input data-pvric="${esc(C.id)}" inputmode="decimal" value="${pvRicOk(C.ric) ? esc(fmtIn(C.ric)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label><small>${pvRicOk(C.ric) ? `Prezzo al pubblico = prezzo d'acquisto + ${esc(fmtNum(num(C.ric), 1).replace(/,0$/, ''))}%. Vale per le righe con prezzo d'acquisto; le altre usano il listino. I prezzi scritti a mano restano.` : `Vuoto = ricarico standard (+${esc(fmtNum((pvRic() - 1) * 100, 0))}%). Scrivi una percentuale per usare un ricarico solo per questo cliente.`}</small>` : `<small>Scrivi il nome del cliente: si salva da solo nella sezione <b>Clienti</b>, dove puoi dargli un ricarico personale.</small>`}</div>`; })()}
         </div>
         <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><div class="pv-addb"><button type="button" class="btn sm" id="pv-srv" title="Aggiungi un servizio (manodopera, trasporto…)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>+ Servizio</span></button><button type="button" class="btn sm" id="pv-scan" title="Aggiungi prodotti leggendo il codice a barre">${SCAN_IC}<span>Scansiona</span></button><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th class="dr-th"></th><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
@@ -4906,7 +4946,7 @@
       let y = 48;
       // ---- cliente ----
       fill(C.soft); doc.roundedRect(M, y, CW, 22, 2, 2, 'F');
-      color(C.muted); font('bold', 6.8); doc.text('CLIENTE', M + 5, y + 6); doc.text('CONTATTI', M + CW / 2 + 2, y + 6);
+      color(C.muted); font('bold', 6.8); doc.text(pvDest(p) === 'forn' ? 'FORNITORE' : 'CLIENTE', M + 5, y + 6); doc.text('CONTATTI', M + CW / 2 + 2, y + 6);
       color(C.ink); font('bold', 11.5); doc.text(doc.splitTextToSize(cl.nome || '—', CW / 2 - 8)[0], M + 5, y + 12.5);
       color(C.ink2); font('normal', 8.4); doc.text(doc.splitTextToSize([cl.ind, cl.ref ? 'Ref. ' + cl.ref : ''].filter(Boolean).join(' · ') || '—', CW / 2 - 8).slice(0, 2), M + 5, y + 17.5);
       doc.text([cl.tel ? 'Tel. ' + cl.tel : '', cl.email].filter(Boolean).join('\n') || '—', M + CW / 2 + 2, y + 11.5);
@@ -5194,7 +5234,7 @@
       // cliente
       let y = HB + 10;
       fill(C.soft); doc.roundedRect(M, y, CW, 26, 2.5, 2.5, 'F');
-      color(C.muted); font('normal', 7.5); doc.text('CLIENTE', M + 6, y + 7);
+      color(C.muted); font('normal', 7.5); doc.text(pvDest(p) === 'forn' ? 'FORNITORE' : 'CLIENTE', M + 6, y + 7);
       color(C.ink); font('bold', 12); doc.text(cl.nome || '—', M + 6, y + 14);
       color(C.ink2); font('normal', 8.5); doc.text([cl.ref ? 'Alla c.a. di ' + cl.ref : '', cl.ind].filter(Boolean).join(' · ').slice(0, 95), M + 6, y + 20);
       doc.text([cl.email, cl.tel].filter(Boolean).join(' · '), W - M - 6, y + 20, { align: 'right' });
@@ -8084,6 +8124,8 @@
     const sum = k => [...S.values()].reduce((s, x) => s + x[k], 0);
     const pvMiss = (Array.isArray(cfg('pvClienti')) ? cfg('pvClienti') : []).filter(p => p && p.nome && !L.some(c => pvKey(c.nome) === pvKey(p.nome)));
     const noFisc = L.filter(c => !c.piva && !c.cf).length;
+    // v122: un'anagrafica sola — i clienti scritti nei preventivi entrano da soli tra i Clienti
+    if (pvMiss.length && gxOk() && !(me && me.ruolo === 'lettura') && !renderCli.busy) { renderCli.busy = true; setTimeout(() => { renderCli.busy = false; cliImport(true); }, 0); }
     el.innerHTML = gxWarn() + `<div class="gx-bar"><label class="gx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="cl-q" placeholder="Cerca nome, P.IVA, città…" value="${esc(clQ)}"></label>
       <div class="gx-act">${pvMiss.length ? `<button type="button" class="btn sm" data-gx="cli-imp">Importa dai preventivi (${pvMiss.length})</button>` : ''}<button type="button" class="btn sm primary" data-gx="cli-new">+ Cliente</button></div></div>
       ${gxKpi([['Clienti', fmtNum(L.length, 0), noFisc ? `${noFisc} senza dati fiscali` : 'con dati fiscali'], [`Fatturato ${y}`, eur0(sum('fat')), 'imponibile'], ['Da incassare', eur0(sum('open')), 'fatture non pagate', sum('open') > 0 ? 'warn' : ''], ['DDT da fatturare', fmtNum(sum('ddt'), 0), eur0(sum('ddtV')) + ' imponibile']])}
@@ -8096,7 +8138,9 @@
   function cliForm(c, done) {
     const n = !c; c = c ? { ...c } : { id: uid(), nazione: 'IT', pagamento: PAG[2], creato: today() };
     const f = (k, l, ph = '') => `<label class="f"><span>${l}</span><input name="${k}" value="${esc(c[k] || '')}" placeholder="${esc(ph)}"${k === 'nome' ? ' data-focus required' : ''}></label>`;
-    const D = n ? [] : GX.ddt().filter(d => d.cliente === c.id), FV = n ? [] : GX.fv().filter(x => x.cliente === c.id);
+    const D = n ? [] : GX.ddt().filter(d => d.cliente === c.id), FV = n ? [] : GX.fv().filter(x => x.cliente === c.id), PV = n ? [] : pvOfCli(c.nome), ric0 = n ? null : cliRic(c.nome);
+    const lk = n ? '' : lkBox('Collegati', [...PV.map(lkPv), ...D.map(d => ({ d: d.data, t: 'DDT', n: 'n. ' + dnum(d), s: d.causale || '', c: d.fattura ? ['paid', 'fatturato'] : ['soon', 'da fatturare'], v: eur(docTot(jp(d.righe, [])).imp), at: `data-pvdoc="ddt|${esc(d.id)}"` })), ...FV.map(x => ({ d: x.data, t: x.tipo === 'TD04' ? 'Nota di credito' : 'Fattura', n: 'n. ' + dnum(x), s: x.scadenza ? 'scade ' + dIt(x.scadenza) : '', c: x.stato === 'pagata' ? ['paid', 'incassata'] : fvLate(x) ? ['late', 'scaduta'] : ['soon', 'da incassare'], v: eur(num(x.totale)), at: `data-pvdoc="fv|${esc(x.id)}"` }))],
+      [`<button type="button" class="btn sm" data-lk="pv-cli" data-id="${esc(c.id)}">+ Preventivo</button>`, modOn('vendite') ? `<button type="button" class="btn sm" data-lk="ddt-cli" data-id="${esc(c.id)}">+ DDT</button><button type="button" class="btn sm" data-lk="fv-cli" data-id="${esc(c.id)}">+ Fattura</button>` : '', `<button type="button" class="btn sm" data-lk="an-cli" data-id="${esc(c.id)}">Analisi</button>`, c.email ? `<a class="btn sm" href="mailto:${esc(c.email)}">Scrivi</a>` : '', c.tel ? `<a class="btn sm" href="tel:${esc(String(c.tel).replace(/\s+/g, ''))}">Chiama</a>` : '']);
     openSheet(n ? 'Nuovo cliente' : c.nome, `${f('nome', 'Ragione sociale o nome', 'Es. Rossi S.r.l.')}
       <div class="f-row">${f('piva', 'Partita IVA', '11 cifre')}${f('cf', 'Codice fiscale', 'se diverso dalla P.IVA')}</div>
       ${f('indirizzo', 'Indirizzo', 'Via e numero civico')}
@@ -8105,7 +8149,8 @@
       <div class="f-row">${f('email', 'Email')}${f('tel', 'Telefono')}</div>
       <label class="f"><span>Pagamento</span><select name="pagamento">${PAG.map(p => `<option${p === c.pagamento ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
       <label class="f"><span>Note</span><textarea name="note" rows="2">${esc(c.note || '')}</textarea></label>
-      ${D.length || FV.length ? `<div class="gx-mini"><b>Documenti</b>${[...FV.map(x => [x.data, `Fattura ${dnum(x)}`, eur(num(x.totale)), x.stato === 'pagata' ? 'paid' : fvLate(x) ? 'late' : 'soon', x.stato === 'pagata' ? 'pagata' : fvLate(x) ? 'scaduta' : 'da incassare']), ...D.map(d => [d.data, `DDT ${dnum(d)}`, eur(docTot(jp(d.righe, [])).imp), d.fattura ? '' : 'soon', d.fattura ? 'fatturato' : 'da fatturare'])].sort((a, b) => String(b[0]).localeCompare(String(a[0]))).slice(0, 8).map(([dt, t, v, cl, st]) => `<div class="gx-mr"><span>${esc(t)}<small>${esc(dIt(dt))}</small></span><span class="chip ${cl}">${st}</span><b>${v}</b></div>`).join('')}</div>` : ''}`, fd => {
+      ${pvCli ? '' : `<label class="f"><span>Ricarico % sul prezzo d'acquisto nei preventivi e nei documenti (vuoto = standard +${esc(fmtNum((pvRic() - 1) * 100, 0))}%)</span><input name="ric" inputmode="decimal" value="${ric0 != null ? esc(fmtIn(ric0)) : ''}" placeholder="standard"></label>`}
+      ${lk}${false ? `<div class="gx-mini"><b>Documenti</b>${[...FV.map(x => [x.data, `Fattura ${dnum(x)}`, eur(num(x.totale)), x.stato === 'pagata' ? 'paid' : fvLate(x) ? 'late' : 'soon', x.stato === 'pagata' ? 'pagata' : fvLate(x) ? 'scaduta' : 'da incassare']), ...D.map(d => [d.data, `DDT ${dnum(d)}`, eur(docTot(jp(d.righe, [])).imp), d.fattura ? '' : 'soon', d.fattura ? 'fatturato' : 'da fatturare'])].sort((a, b) => String(b[0]).localeCompare(String(a[0]))).slice(0, 8).map(([dt, t, v, cl, st]) => `<div class="gx-mr"><span>${esc(t)}<small>${esc(dIt(dt))}</small></span><span class="chip ${cl}">${st}</span><b>${v}</b></div>`).join('')}</div>` : ''}`, fd => {
       const o = { ...c };
       ['nome', 'piva', 'cf', 'indirizzo', 'cap', 'citta', 'prov', 'sdi', 'pec', 'email', 'tel', 'pagamento', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
       if (o.nome.length < 2) { toast('Scrivi il nome del cliente'); return; }
@@ -8113,6 +8158,7 @@
       if (o.piva && !/^\d{11}$/.test(o.piva)) toast('Attenzione: la partita IVA italiana ha 11 cifre');
       if (o.sdi && o.sdi.length !== 7) toast('Attenzione: il codice SDI ha 7 caratteri');
       write([{ action: 'upsert', sheet: 'Clienti', row: o }]); toast(n ? 'Cliente aggiunto' : 'Cliente aggiornato');
+      if (fd.has('ric')) { const rv = String(fd.get('ric') || '').trim(), old = cliRic(c.nome); if ((rv === '' ? null : num(rv)) !== old || (!n && pvCliKey(o.nome) !== pvCliKey(c.nome))) cliRicSet(o.nome, rv); }
       if (done) setTimeout(() => done(o), 30); return true;
     }, n ? null : () => {
       if (D.length || FV.length) { toast('Il cliente ha DDT o fatture: non si può eliminare'); return; }
@@ -8121,11 +8167,11 @@
     }, n ? 'Aggiungi cliente' : 'Salva');
     $('#sheet-form').classList.add('wide');
   }
-  function cliImport() {
+  function cliImport(silent) {
     const L = GX.cli(), P = (cfg('pvClienti') || []).filter(p => p && p.nome && !L.some(c => pvKey(c.nome) === pvKey(p.nome)));
-    if (!P.length) return toast('Tutti i clienti dei preventivi sono già presenti');
+    if (!P.length) return silent ? null : toast('Tutti i clienti dei preventivi sono già presenti');
     write(P.map(p => ({ action: 'upsert', sheet: 'Clienti', row: { id: uid(), nome: p.nome, indirizzo: p.ind || '', email: p.email || '', tel: p.tel || '', nazione: 'IT', pagamento: PAG[2], note: p.ref ? `Referente: ${p.ref}` : '', creato: today() } })));
-    toast(`${P.length} clienti importati dai preventivi · completa P.IVA e indirizzo per le fatture`);
+    toast(`${P.length} ${P.length === 1 ? 'cliente dei preventivi aggiunto' : 'clienti dei preventivi aggiunti'} all'anagrafica · completa P.IVA e indirizzo per le fatture`);
   }
 
   /* ---------- MAGAZZINO ---------- */
@@ -8919,6 +8965,9 @@
     const x = n ? null : fornStats().get(f.id), cat = n ? null : fCat(f);
     const FA = n ? [] : faRows().filter(r => fMatch(f, r.fornitore)).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 6);
     const DD = n ? [] : GX.dfo().filter(r => fMatch(f, r.fornitore)).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
+    const PVF = n ? [] : pvOfForn(f), MV = n ? [] : (db.movimenti || []).filter(r => fMatch(f, r.fornitore)), AR = n || !modOn('magazzino') ? [] : GX.art().filter(a => a.fornitore && fMatch(f, a.fornitore));
+    const mvT = MV.reduce((s2, r) => s2 + num(r.quantita) * num(r.prezzo), 0);
+    const lkF = n ? '' : lkBox('Collegati', PVF.map(lkPv), [`<button type="button" class="btn sm" data-lk="pv-forn" data-id="${esc(f.id)}">+ Preventivo</button>`, MV.length ? `<button type="button" class="btn sm" data-lk="mv-forn" data-id="${esc(f.id)}">${fmtNum(MV.length, 0)} acquisti · ${eur0(mvT)}</button>` : '', AR.length ? `<button type="button" class="btn sm" data-lk="ar-forn" data-id="${esc(f.id)}">${fmtNum(AR.length, 0)} articoli in magazzino</button>` : '', `<button type="button" class="btn sm" data-lk="an-forn" data-id="${esc(f.id)}">Analisi</button>`]);
     openSheet(n ? 'Nuovo fornitore' : f.nome, `${!n && x ? `<div class="gx-kpis fo-k">${[['Spesa ' + new Date().getFullYear(), eur0(x.spesa), `${x.righe} righe di acquisto`], ['Da pagare', eur0(x.open), x.late ? `${eur0(x.late)} scaduti` : `${x.nf} fatture`]].map(([l, v, s2]) => `<div class="gx-k"><span>${l}</span><b>${v}</b><small>${s2}</small></div>`).join('')}</div>` : ''}
       ${fi('nome', 'Ragione sociale', 'Es. Molino del Sud S.r.l.')}
       <div class="f-row">${fi('piva', 'Partita IVA', '11 cifre')}${fi('cf', 'Codice fiscale', 'se diverso')}</div>
@@ -8931,6 +8980,7 @@
       <label class="f"><span>Note</span><textarea name="note" rows="2" placeholder="es. giorni di consegna, minimo d'ordine, sconti concordati">${esc(f.note || '')}</textarea></label>
       ${FA.length ? `<div class="gx-mini"><b>Ultime fatture</b>${FA.map(r => `<div class="gx-mr"><span>n. ${esc(r.numero || '—')}<small>${esc(dIt(r.data))}${r.scadenza ? ' · scade ' + esc(dIt(r.scadenza)) : ''}</small></span><span class="chip ${faPaid(r) ? 'paid' : faLate(r) ? 'late' : 'soon'}">${faPaid(r) ? 'pagata' : faLate(r) ? 'scaduta' : 'da pagare'}</span><b>${eur(num(r.totale))}</b>${r.pdf ? `<button type="button" class="btn sm" data-gx="doc-open" data-id="${esc(r.pdf)}">Apri</button>` : ''}</div>`).join('')}</div>` : ''}
       ${!n ? `<div class="gx-mini"><b>DDT e documenti</b>${DD.map(r => `<div class="gx-mr"><span>${esc((DF_T[r.tipo] || DF_T.altro)[0])}${r.numero ? ' n. ' + esc(r.numero) : ''}<small>${esc(dIt(r.data))}${r.note ? ' · ' + esc(r.note) : ''}</small></span>${r.file ? `<button type="button" class="btn sm" data-gx="doc-open" data-id="${esc(r.file)}">Apri</button>` : '<span class="chip soon">senza file</span>'}</div>`).join('') || '<div class="gx-mr"><span class="muted small">Nessun DDT archiviato</span></div>'}<button type="button" class="btn sm" data-gx="doc-new" data-id="${esc(f.nome)}">+ Carica documento</button></div>` : ''}
+      ${lkF}
       ${!n ? `<div class="gx-docact">${cat ? `<a class="btn sm" href="#preventivi" data-focat="${cat[0]}">Apri il catalogo ${esc(cat[1].n)}</a>` : ''}${f.email ? `<a class="btn sm" href="mailto:${esc(f.email)}">Scrivi un ordine</a>` : ''}${f.tel ? `<a class="btn sm" href="tel:${esc(String(f.tel).replace(/\s+/g, ''))}">Chiama</a>` : ''}</div>` : ''}`, fd => {
       const o = { ...f };
       ['nome', 'piva', 'cf', 'indirizzo', 'cap', 'citta', 'prov', 'referente', 'tel', 'email', 'pec', 'categoria', 'pagamento', 'iban', 'note'].forEach(k => { o[k] = String(fd.get(k) || '').trim(); });
@@ -9041,9 +9091,24 @@
       if (t.closest('#pv-add')) { pvAddToQuote(); return; }
       const pf = t.closest('[data-pvfatt]'); if (pf) { e.preventDefault(); e.stopPropagation(); const p = pf.closest('#pv-ed, .pv-back') && pvEdit ? pvFromForm() : pvGet(pf.dataset.pvfatt); if (!p) return; p.fatt = pvFatt(p) ? 'no' : 'si'; pvSave(p); toast(p.fatt === 'si' ? `Preventivo ${p.num} segnato fatturato` : `Preventivo ${p.num} da fatturare`); return; }
       const pcv = t.closest('[data-pvconv]'); if (pcv) { pvToDoc(pcv.dataset.pvconv); return; }
+      const lkp = t.closest('[data-lkpv]'); if (lkp) { pvOpen(lkp.dataset.lkpv); return; }
+      const lka = t.closest('[data-lk]'); if (lka) {
+        const k = lka.dataset.lk, id = lka.dataset.id, c = k.endsWith('-cli') ? cliOf(id) : null, fo = k.endsWith('-forn') ? FOR().find(x => x.id === id) : null;
+        if (k === 'pv-cli' && c) { const A = anaCli().find(x => x.cid === c.id) || { nome: c.nome }; pvNewFor('cli', A); }
+        else if (k === 'ddt-cli' && c) { closeSheet(); setTimeout(() => docForm('ddt', { cliente: c.id, causale: 'Vendita', trasporto: 'Mittente', aspetto: 'Scatole', prezzi: '' }, true), 60); }
+        else if (k === 'fv-cli' && c) { closeSheet(); setTimeout(() => docForm('fv', { tipo: 'TD01', cliente: c.id, pagamento: c.pagamento || '' }, true), 60); }
+        else if (k === 'an-cli' && c) anOpen('*', null, c.nome);
+        else if (k === 'pv-forn' && fo) pvNewFor('forn', anaForn().find(x => x.id === fo.id));
+        else if (k === 'mv-forn' && fo) { closeSheet(); Object.assign(f, { q: fo.nome, centro: '', cat: '', per: '' }); mLimit = 150; location.hash = 'movimenti'; }
+        else if (k === 'ar-forn' && fo) { closeSheet(); mgTab = 'art'; mgQ = fo.nome; location.hash = 'magazzino'; if (view === 'magazzino') renderMag(); }
+        else if (k === 'an-forn' && fo) anOpen('*', null, fo.nome);
+        return;
+      }
       const pdo = t.closest('[data-pvdoc]'); if (pdo) { const [k0, id0] = pdo.dataset.pvdoc.split('|'); const d0 = k0 === 'ddt' ? GX.ddt().find(x => x.id === id0) : GX.fv().find(x => x.id === id0); if (d0) docForm(k0, d0); return; }
       const pvop = t.closest('[data-pvopen]'); if (pvop) { pvTab = 'prev'; pvEdit = pvop.dataset.pvopen; pvItem = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-new') || t.closest('#pv-new2') || t.closest('#pv-new3')) { const p = pvNew(); pvTab = 'prev'; pvEdit = p.id; pvItem = ''; pvSave(p); window.scrollTo(0, 0); return; }
+      const pdst = t.closest('[data-pvdest]'); if (pdst && $('#pv-ed')) { const h = $('#pv-ed [data-pvf="dest"]'); if (h && h.value !== pdst.dataset.pvdest) { h.value = pdst.dataset.pvdest; const p = pvFromForm(); if (p) pvQuiet(p); renderPv(); } return; }
+      const pana = t.closest('[data-pvana]'); if (pana) { const [dst, k, id] = pana.dataset.pvana.split('|'); if (dst === 'forn') { const f = FOR().find(x => x.id === id); if (f) fornForm(f); } else if (k === 'c') { const c = cliOf(id); if (c) cliForm(c); } else pvCliForm(id); return; }
       if (t.closest('#pv-qback')) { pvQuiet(pvFromForm()); pvEdit = ''; renderPv(); return; }
       if (t.closest('#pv-save')) { pvQuiet(pvFromForm()); toast('Preventivo salvato'); return; }
       if (pvCliClick(t)) return;
@@ -9191,7 +9256,7 @@
       if (el.dataset && el.dataset.pvprcod != null) { const p = pvFromForm(); if (!p) return; const r = p.pers[+el.dataset.pvprcod], it = pvPersList().find(x => x.c === el.value); if (r) { r.cod = el.value; if (it) { r.d = pvPersDesc(it, r.slot); r.p = it.p; if (it.t === 'imp') { r.slot = ''; r.q = 1; } } } p.persAuto = false; pvSave(p); return; }
       if (el.dataset && el.dataset.pvpr) { const p = pvFromForm(); if (p) { p.persAuto = false; pvQuiet(p); if (el.dataset.pvpr.endsWith(':slot')) renderPv(); } return; }
       if (el.dataset && el.dataset.pvric != null) { const p = pvFromForm(); if (p) pvQuiet(p); const L = pvCliList(), c = L.find(x => x.id === el.dataset.pvric); if (c) { const v = String(el.value || '').trim(); c.ric = v === '' ? null : num(v); write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvClienti', valore: JSON.stringify(L) } }]); toast(v === '' ? `${c.nome}: ricarico standard` : `${c.nome}: ricarico +${v}% · prezzi aggiornati`); } return; }
-      if (el.dataset && el.dataset.pvf === 'cliente.nome') { const C = pvCliFind(pvCliList(), el.value), ed = $('#pv-ed'); if (C && ed) ['ref', 'email', 'tel', 'ind'].forEach(k => { const f = $(`[data-pvf="cliente.${k}"]`, ed); if (f && !f.value.trim() && C[k]) f.value = C[k]; }); const p = pvFromForm(); if (p) { pvQuiet(p); setTimeout(() => { const ae = document.activeElement, fk = ae && ae.closest && ae.closest('#pv-ed') && ae.dataset ? ae.dataset.pvf : null, pos = fk && ae.selectionStart != null ? ae.selectionStart : null; const p2 = pvFromForm(); if (p2) pvQuiet(p2); renderPv(); if (fk) { const f = $(`#pv-ed [data-pvf="${fk}"]`); if (f) { f.focus(); if (pos != null && f.setSelectionRange) try { f.setSelectionRange(pos, pos); } catch {} } } }, 0); } return; }
+      if (el.dataset && el.dataset.pvf === 'cliente.nome') { const ed = $('#pv-ed'), dst = ed && $('[data-pvf="dest"]', ed) ? $('[data-pvf="dest"]', ed).value : 'cli', C = anaFind(dst, el.value); if (C && ed) ['ref', 'email', 'tel', 'ind'].forEach(k => { const f = $(`[data-pvf="cliente.${k}"]`, ed); if (f && !f.value.trim() && C[k]) f.value = C[k]; }); const p = pvFromForm(); if (p) { pvQuiet(p); setTimeout(() => { const ae = document.activeElement, fk = ae && ae.closest && ae.closest('#pv-ed') && ae.dataset ? ae.dataset.pvf : null, pos = fk && ae.selectionStart != null ? ae.selectionStart : null; const p2 = pvFromForm(); if (p2) pvQuiet(p2); renderPv(); if (fk) { const f = $(`#pv-ed [data-pvf="${fk}"]`); if (f) { f.focus(); if (pos != null && f.setSelectionRange) try { f.setSelectionRange(pos, pos); } catch {} } } }, 0); } return; }
       if (el.closest && el.closest('#pv-ed')) { pvQuiet(pvFromForm()); if (el.dataset.pvf === 'stato') renderPv(); }
     });
     document.addEventListener('change', e => { if (e.target.id === 'pz-pick') { pzSel = e.target.value; pzAnim = true; renderPz(); } });
