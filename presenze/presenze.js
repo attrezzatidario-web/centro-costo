@@ -45,7 +45,7 @@
   /* ---------- demo: stessi calcoli, dati generati sul dispositivo ---------- */
   const loadJs = src => new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
   async function demoInit() {
-    if (!window.CDC_DEMO) { await loadJs('../settori.js?v=127'); await loadJs('../demo.js?v=127'); }
+    if (!window.CDC_DEMO) { await loadJs('../settori.js?v=128'); await loadJs('../demo.js?v=128'); }
     D0 = window.CDC_DEMO(LS.get('cdc_demo_set', '') || 'veicoli');
     const extra = LS.get('cdc_pz_demo', { p: [], a: [], del: [] });
     D0.presenze.push(...extra.p.filter(p => p.dip === 'dpd1')); D0.assenze.push(...extra.a); D0.assenze = D0.assenze.filter(a => !extra.del.includes(a.id));
@@ -104,7 +104,17 @@
     $('#pz-av').textContent = (String(m.dip.nome || '?')[0] + String(m.dip.cognome || '')[0]).toUpperCase();
     const n = m.assenze.filter(a => a.stato === 'attesa').length; $('#pz-badge').hidden = !n; $('#pz-badge').textContent = n;
     $('#pz-demo').hidden = !DEMO;
+    if (!DEMO && !m.stale && me) LS.set('cdc_pz_cache', { u: me.email, m });
   }
+  // v128: all'apertura mostra subito l'ultima copia salvata sul telefono, poi la aggiorna dal server in sottofondo
+  function fromCache() {
+    const c = LS.get('cdc_pz_cache', null); if (!c || !me || c.u !== me.email || !c.m || !c.m.dip) return false;
+    const n = new Date(), m = { ...c.m, oggi: ymd(n), ora: `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`, stale: true };
+    const T = (m.presenze || []).filter(p => String(p.data).slice(0, 10) === m.oggi).sort((a, b) => String(a.ora).localeCompare(String(b.ora))), last = T.length ? T[T.length - 1].tipo : '';
+    m.stato = last; m.next = NEXT[last] || ['in'];
+    setM(m); render(); return true;
+  }
+  const syncing = on => { const t = $('.pz-top'); if (t) t.classList.toggle('sync', !!on); };
   function render() {
     $$('.pz-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     $('#pz-main').innerHTML = tab === 'storico' ? vStorico() : tab === 'richieste' ? vRichieste() : vOggi();
@@ -176,7 +186,7 @@
         const luogo = set().geo && !DEMO ? await geo() : '';
         if (set().geo && !DEMO && !luogo) throw new Error('Per timbrare serve la posizione: consentila nelle impostazioni del browser e riprova');
         const r = await call('pzTimbra', { tipo: k, luogo, device: device() });
-        setM(r); closeSheet(); render(); toast(`${TIPI[k]} registrata alle ${String(r.fatto.ora).slice(0, 5)}`, true);
+        if (r.dip) setM(r); else { M.presenze = M.presenze.filter(p => p.id !== r.fatto.id).concat([r.fatto]); setM({ ...M, oggi: r.oggi, ora: r.ora, stato: r.stato, next: r.next, stale: false }); } closeSheet(); render(); toast(`${TIPI[k]} registrata alle ${String(r.fatto.ora).slice(0, 5)}`, true);
         if (navigator.vibrate) navigator.vibrate(30);
       } catch (e) { if (e instanceof AuthErr) return toLogin(e.message); closeSheet(); toast(netErr(e)); refresh(); }
     });
@@ -234,17 +244,18 @@
 
   /* ---------- avvio ---------- */
   async function refresh() {
-    try { setM(await call('pzMe')); render(); }
+    syncing(true);
+    try { setM(await call('pzMe')); if (!$('#pz-sheet').classList.contains('on')) render(); }
     catch (e) {
       if (e instanceof AuthErr) return toLogin(e.message);
       if (!M) { show('pz-app'); $('#pz-main').innerHTML = `<section class="pz-card pz-msg"><h3>Presenze non disponibile</h3><p>${esc(netErr(e))}</p>${me && (me.ruolo !== 'dipendente' || Object.values(me.sezioni || {}).some(Boolean)) ? '<a class="pz-btn" href="../">Vai al gestionale</a>' : ''}<button type="button" class="pz-btn primary" data-retry>Riprova</button><button type="button" class="pz-lnk" data-m2="out">Esci</button></section>`; $('.pz-tabs').hidden = true; }
       else toast(netErr(e));
-    }
+    } finally { syncing(false); }
   }
   async function start() {
     if (me && me.mustPw && !DEMO) { show('pz-pwset'); return; }
     show('pz-app'); $('.pz-tabs').hidden = false;
-    $('#pz-main').innerHTML = '<div class="pz-loading"><div class="pz-spin"></div></div>';
+    if (DEMO || !fromCache()) $('#pz-main').innerHTML = '<div class="pz-loading"><div class="pz-spin"></div></div>';
     if (DEMO) { try { await demoInit(); } catch { $('#pz-main').innerHTML = '<section class="pz-card pz-msg"><p>Demo non disponibile: controlla la connessione</p></section>'; return; } }
     await refresh();
   }
