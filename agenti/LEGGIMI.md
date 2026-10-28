@@ -4,7 +4,7 @@ Gli agenti sono **attività programmate di Claude**: partono, controllano, scriv
 «Centro di Costo - Team» (id 1aSwcajorld0_dj6--BdrvOtAoMp3Vea2) e si fermano. Non girano sul server del gestionale.
 
 - La Console (sezione **Team**, `console/console.js` → `vTeam`) legge i report tramite uno **script Google separato**
-  (`agenti/team.gs`, progetto Apps Script «Centro di Costo - Team», indirizzo in `TEAM_URL`).
+  (`agenti/team.gs`, progetto Apps Script «Centro di Costo - Team», indirizzo in `TEAM_URL`: https://script.google.com/macros/s/AKfycbzzTczF9lPzqEx57olsxpO6XHZK9lQSZsbX1cSwzXN-0DauWYYijZzKJpX4D3Lu2Qg/exec).
 - **Code.gs non contiene nulla del Team**: chi modifica Code.gs non deve aggiungere né togliere niente per gli agenti.
 - Il token della Console viene verificato da team.gs chiedendo allo script principale l'azione `me` (solo l'amministratore).
 

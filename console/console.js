@@ -457,7 +457,7 @@
     { k: 'marketing', n: 'Marketing', r: 'Idee per post, testi e confronto con la concorrenza', ic: '<path d="M4 10v4l11 5V5z"/><path d="M15 9a3 3 0 0 1 0 6M7 14l1 5h3"/>' },
     { k: 'grafico', n: 'Grafico', r: 'Schermate, animazioni e presentazione, su richiesta', ic: '<circle cx="12" cy="12" r="8.5"/><circle cx="8.5" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="15.5" cy="10" r="1.2"/><path d="M12 20.5c-1.5 0-2-1-2-2 0-1.3 1-2 2.2-2H14a3 3 0 0 0 3-3"/>' }
   ];
-  const TEAM_URL = ''; // script Google separato «Centro di Costo - Team» (team.gs): non dipende da Code.gs
+  const TEAM_URL = 'https://script.google.com/macros/s/AKfycbzzTczF9lPzqEx57olsxpO6XHZK9lQSZsbX1cSwzXN-0DauWYYijZzKJpX4D3Lu2Qg/exec'; // script Google separato «Centro di Costo - Team» (team.gs): non dipende da Code.gs
   const ST_T = { ok: 'Tutto ok', warn: 'Da controllare', bad: 'Problema' };
   let T = null, tErr = '', tBusy = false, tSel = 'guardiano';
   async function loadTeam(force) {
