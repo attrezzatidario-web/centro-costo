@@ -36,7 +36,7 @@
     alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/>', back: '<path d="M15 18l-6-6 6-6"/>', plus: '<path d="M12 5v14M5 12h14"/>', go: '<path d="M9 6l6 6-6 6"/>',
     key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>', phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>', xls: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8l8 8M16 8l-8 8"/>',
     pdf: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 14h6M9 17h4"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
-    check: '<path d="M5 12l5 5L20 7"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>', fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7z"/>'
+    check: '<path d="M5 12l5 5L20 7"/>', trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>', fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 7h5v4H7z"/>'
   };
   const svg = (k, cls = '') => `<svg viewBox="0 0 24 24" class="${cls}" aria-hidden="true">${IC[k] || ''}</svg>`;
 
@@ -160,7 +160,7 @@
         <td>${d.stato === 'cessato' ? '<span class="chip">Cessato</span>' : `<span class="chip ${n.c}">${esc(n.t)}</span>`}${sc.length ? `<span class="dp-warn" title="${esc(sc.map(x => x.l + ' ' + scadTxt(x.g)).join(' · '))}">${svg('alert')}</span>` : ''}</td>
         <td class="r num">${m.tot ? hm(m.tot) : '—'}</td>
         <td>${u ? `<span class="chip ${u.stato === 'attivo' ? 'paid' : 'late'}">${u.stato !== 'attivo' ? 'Sospeso' : u.ruolo === 'dipendente' ? (Object.values(u.sezioni || {}).some(Boolean) ? 'Gestionale + Presenze' : 'Solo Presenze') : u.ruolo === 'utente' ? 'Responsabile' : 'Sola lettura'}</span>` : '<span class="muted small">nessuno</span>'}</td>
-        <td class="dp-go">${svg('go')}</td></tr>`; }).join('') || `<tr><td colspan="7"><div class="empty">Nessun dipendente trovato</div></td></tr>`}
+        <td class="dp-go">${canW() ? `<button type="button" class="dp-rdel" data-dp="del:${esc(d.id)}" title="Elimina ${esc(nameOf(d))}" aria-label="Elimina">${svg('trash')}</button>` : ''}${svg('go')}</td></tr>`; }).join('') || `<tr><td colspan="7"><div class="empty">Nessun dipendente trovato</div></td></tr>`}
       </tbody></table></div></div>`;
   }
 
@@ -237,7 +237,7 @@
     return `<div class="dp-dh"><button type="button" class="btn sm" data-dp="back">${svg('back')}Dipendenti</button></div>
       <div class="card dp-hero"><span class="dp-av lg" style="--c:${nw ? '#94a3b8' : colOf(d)}">${nw ? svg('plus') : esc(ini(d))}</span><div class="dp-ht"><h2>${nw ? 'Nuovo dipendente' : esc(nameOf(d))}</h2><p>${nw ? 'Compila i dati e salva: poi potrai dargli l\'accesso al gestionale e all\'app Presenze' : esc([d.mansione, d.reparto, d.sede].filter(Boolean).join(' · ') || 'Mansione non indicata')}</p>
         ${nw ? '' : `<div class="dp-hc">${d.stato === 'cessato' ? '<span class="chip">Cessato</span>' : `<span class="chip ${n.c}">${esc(n.t)}</span>`}${d.contratto ? `<span class="chip">${esc(d.contratto)}</span>` : ''}${staffOf(d) ? `<span class="chip paid">${svg('key')}Accesso attivo</span>` : ''}</div>`}</div>
-        ${!nw && canW() ? `<div class="dp-ha"><button type="button" class="btn sm" data-dp="fix:${esc(d.id)}:${today()}">${svg('clock')}Timbratura a mano</button></div>` : ''}</div>
+        ${!nw && canW() ? `<div class="dp-ha"><button type="button" class="btn sm" data-dp="fix:${esc(d.id)}:${today()}">${svg('clock')}Timbratura a mano</button><button type="button" class="btn sm dp-del" data-dp="del:${esc(d.id)}" title="Elimina dipendente">${svg('trash')}<span class="dp-hm">Elimina</span></button></div>` : ''}</div>
       ${T.length > 1 ? `<div class="seg dp-tabs dp-dt" role="tablist">${T.map(([k, l]) => `<button type="button" role="tab" data-dp="dtab:${k}" class="${S.dtab === k ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       ${body}`;
   }
@@ -266,7 +266,7 @@
       <h4>Lavoro</h4><div class="dp-g">${fld(d, 'mansione', 'Mansione', { ph: 'Es. magazziniere, pizzaiolo, commessa' })}${fld(d, 'reparto', 'Reparto')}${fld(d, 'sede', C.sedeWord(), { sel: sedi })}${fld(d, 'contratto', 'Contratto', { sel: CONTR })}${fld(d, 'livello', 'Livello / CCNL')}${fld(d, 'ore', 'Ore settimanali', { im: 'decimal' })}${fld(d, 'assunzione', 'Data di assunzione', { t: 'date' })}${fld(d, 'fine', 'Fine contratto', { t: 'date' })}</div>
       <h4>Ferie, costi e scadenze</h4><div class="dp-g">${fld(d, 'ferie', 'Giorni di ferie all\'anno', { im: 'decimal' })}${fld(d, 'permessi', 'Ore di permesso all\'anno', { im: 'decimal' })}${owner() ? fld(d, 'costo', 'Costo orario aziendale €', { im: 'decimal', ph: 'Es. 18,50' }) + fld(d, 'iban', 'IBAN per lo stipendio') : ''}${fld(d, 'visita', 'Scadenza visita medica', { t: 'date' })}${fld(d, 'corso', 'Scadenza corso sicurezza', { t: 'date' })}</div>
       <h4>Altro</h4><div class="dp-g">${fld(d, 'stato', 'Stato', { sel: ['attivo', 'cessato'] })}<label class="f dp-w2"><span>Note</span><textarea name="note" rows="2">${esc(d.note || '')}</textarea></label></div>
-      ${ro ? '' : `<div class="dp-fa">${nw ? '' : '<button type="button" class="btn sm st-btn-d" data-dp="del">Elimina dipendente</button>'}<span></span><button type="submit" class="btn primary">${nw ? 'Aggiungi dipendente' : 'Salva modifiche'}</button></div>`}</form>`;
+      ${ro ? '' : `<div class="dp-fa">${nw ? '' : `<button type="button" class="btn sm st-btn-d" data-dp="del:${esc(d.id)}">Elimina dipendente</button>`}<span></span><button type="submit" class="btn primary">${nw ? 'Aggiungi dipendente' : 'Salva modifiche'}</button></div>`}</form>`;
   }
   function dPres(d) {
     const M = month(d, S.pvMon);
@@ -410,7 +410,7 @@
       else if (k === 'pzlink') pzLink();
       else if (k === 'copy') { const v = b.dataset.dp.slice(5); (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => C.toast('Copiato'), () => C.toast(v)); }
       else if (k === 'credok') { S.creds = null; re(); }
-      else if (k === 'del') { const d = dipOf(S.det); if (!d) return; if (!confirm(`Eliminare ${nameOf(d)}? Le sue timbrature restano nel foglio Presenze.\nSe ha smesso di lavorare puoi anche metterlo «cessato».`)) return; C.write([{ action: 'delete', sheet: 'Dipendenti', id: d.id }]); S.det = ''; C.toast('Dipendente eliminato'); }
+      else if (k === 'del') delDip(a1 || S.det);
       else if (k === 'gas') { C.goGas(String((dipOf(a1) || {}).cognome || '')); }
       else if (k === 'asave') accSave();
       else if (k === 'apw') accPw();
@@ -435,6 +435,26 @@
       C.toast(nw ? `${nameOf(o)} aggiunto` : 'Dati salvati');
       if (nw) { S.det = o.id; S.dtab = owner() ? 'acc' : 'riepilogo'; re(); window.scrollTo(0, 0); }
     });
+  }
+  // eliminazione: scheda, accesso e (se si vuole) timbrature e assenze
+  function delDip(id) {
+    const d = dipOf(id); if (!d) return;
+    const u = staffOf(d);
+    C.openSheet(`Eliminare ${nameOf(d)}?`, `<p class="muted small" style="margin:0 0 14px">La scheda viene tolta${u ? ' e il suo accesso al gestionale e all\'app Presenze smette subito di funzionare' : ''}. Non si può annullare.</p>
+      <label class="dp-chk dp-chkb"><input type="checkbox" name="tutto"><span><b>Elimina anche tutto lo storico</b><small>Timbrature, ferie, permessi e malattie. Se non lo spunti restano nei fogli e nei report.</small></span></label>
+      ${d.stato !== 'cessato' ? `<div class="dp-alt"><div><b>Ha solo smesso di lavorare?</b><small>Segnalo come cessato: sparisce dagli attivi ma resta tutto lo storico.</small></div><button type="button" class="btn sm" id="dp-cess">Segna cessato</button></div>` : ''}`, async fd => {
+      const tutto = !!fd.get('tutto'), mine = r => String(r.dip) === String(d.id);
+      const local = [{ action: 'delete', sheet: 'Dipendenti', id: d.id }, ...(tutto ? [...PRE().filter(mine).map(p => ({ action: 'delete', sheet: 'Presenze', id: p.id })), ...ASSE().filter(mine).map(a => ({ action: 'delete', sheet: 'Assenze', id: a.id }))] : [])];
+      if (C.DEMO()) { db().staff = STAFF().filter(x => x !== u); S.det = ''; C.write(local); C.toast(`${nameOf(d)} eliminato`); return true; }
+      if (!C.online()) { C.toast('Per eliminare un dipendente serve la connessione'); return; }
+      try {
+        C.busy('Elimino…'); const r = await C.api('dipDel', { id: d.id, tutto }); C.busy();
+        if (r.staff) db().staff = r.staff; S.det = ''; S.creds = null; C.applyLocal(local);
+        C.toast(`${nameOf(d)} eliminato${tutto && r.presenze + r.assenze ? ` con ${r.presenze} timbrature e ${r.assenze} assenze` : ''}`); return true;
+      } catch (e) { C.busy(); C.toast(/sconosciuta/i.test(e.message) ? 'Aggiorna lo script Google alla versione cdc-5.3 per eliminare i dipendenti' : e.message); }
+    }, null, 'Elimina');
+    const ok = $('#sheet-ok'); if (ok) ok.classList.add('dp-danger');
+    const c = $('#dp-cess'); if (c) c.onclick = () => { C.closeSheet(); C.write([{ action: 'upsert', sheet: 'Dipendenti', row: { ...d, stato: 'cessato', fine: d.fine || today() } }]); C.toast(`${nameOf(d)} segnato come cessato`); };
   }
   async function decide(id, stato) {
     const a = ASSE().find(x => String(x.id) === id); if (!a) return;
