@@ -3272,7 +3272,7 @@
   const pvLineQ = l => Object.values(l.q || {}).reduce((s, v) => s + num(v), 0);
   const pvLineUnit = l => l.man || l.p == null ? (l.p == null ? null : num(l.p)) : num(l.p);
   const pvLineTot = l => { const u = pvLineUnit(l); return u == null ? 0 : r2(u * pvLineQ(l) * (1 - num(l.sc) / 100)); };
-  const pvTotals = p => { const sub = r2(p.righe.reduce((s, l) => s + pvLineTot(l), 0) + (p.pers || []).reduce((s, r) => s + pvPersTot(p, r), 0)), sc = r2(sub * num(p.sconto) / 100), imp = r2(sub - sc), iva = r2(imp * (num(p.iva) || 0) / 100); const costo = r2(p.righe.reduce((s, l) => { const a = pvAcq(l.it, l.c); return a == null ? s : s + a * pvLineQ(l); }, 0)), noCost = p.righe.filter(l => pvAcq(l.it, l.c) == null).length; return { sub, sc, imp, iva, tot: r2(imp + iva), costo, noCost, marg: r2(imp - costo), pz: p.righe.reduce((s, l) => s + pvLineQ(l), 0) }; };
+  const pvTotals = p => { const sub = r2(p.righe.reduce((s, l) => s + pvLineTot(l), 0) + (p.pers || []).reduce((s, r) => s + pvPersTot(p, r), 0)), sc = r2(sub * num(p.sconto) / 100), imp = r2(sub - sc), iva = r2(imp * (num(p.iva) || 0) / 100); const costo = r2(p.righe.reduce((s, l) => { const a = pvAcq(l.it, l.c); return a == null ? s : s + a * pvLineQ(l); }, 0)), noCost = p.righe.filter(l => pvAcq(l.it, l.c) == null).length; return { sub, sc, imp, iva, tot: r2(imp + iva), costo, noCost, marg: r2(imp - costo), pz: p.solo ? num(p.spz) : p.righe.reduce((s, l) => s + pvLineQ(l), 0) }; };
   // aggiorna i prezzi non scritti a mano con il prezzo al pubblico attuale
   const pvRefresh = p => { p.righe.forEach(l => { if (!l.man) { const v = pvPubFor(p, l.it, l.c); l.p = v; } }); return p; };
   /* ---------- v69: clienti dei preventivi (Config «pvClienti») con ricarico % personale ---------- */
@@ -4086,7 +4086,7 @@
     const tot = s => L.filter(p => !s || p.stato === s);
     body.innerHTML = `${L.length ? `<div class="pv-kpis">${[['', 'Preventivi', L.length], ['bozza', 'Bozze', tot('bozza').length], ['inviato', 'Inviati', tot('inviato').length], ['accettato', 'Accettati', tot('accettato').length]].map(([k, l, n]) => `<div class="card pv-k"><span>${l}</span><b>${n}</b><small>${eur0(tot(k).reduce((s, p) => s + pvTotals(p).imp, 0))}</small></div>`).join('')}</div>` : ''}
       <div class="card"><div class="card-h"><h3>Elenco preventivi</h3></div>
-      ${L.length ? `<div class="pv-ql"><div class="pv-qh" aria-hidden="true"><span>Preventivo</span><span>Intestato a</span><span>Stato</span><span>Imponibile</span></div>${L.map(p => { const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza; return `<button type="button" class="pv-qr" data-pvopen="${esc(p.id)}"><span class="pv-qn"><b>${esc(p.num)}</b><small>${esc(shortDate(p.data))}</small></span><span class="pv-qc"><b>${pvDest(p) === 'forn' ? '<em class="pv-ftag">Fornitore</em>' : ''}${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${p.righe.length === 1 ? '1 riga' : p.righe.length + ' righe'} · ${fmtNum(t.pz, 0)} ${t.pz === 1 ? 'pezzo' : 'pezzi'}${p.righe.length ? ' · ' + esc([...new Set(p.righe.map(l => l.n))].slice(0, 3).join(', ')) : ''}</small></span><span class="pv-qs"><span class="chip ${st[1]}">${st[0]}</span>${p.stato === 'accettato' || (p.docs && p.docs.length) || p.fatt ? pvFChip(p) : ''}</span><b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('')}</div>` : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun preventivo</h3><p>Crea un preventivo e aggiungi i prodotti dal catalogo Payper scegliendo taglie e colori.</p><button type="button" class="btn primary" id="pv-new3">+ Nuovo preventivo</button></div>`}</div>`;
+      ${L.length ? `<div class="pv-ql"><div class="pv-qh" aria-hidden="true"><span>Preventivo</span><span>Intestato a</span><span>Stato</span><span>Imponibile</span></div>${L.map(p => { const t = pvTotals(p), st = PV_ST[p.stato] || PV_ST.bozza; return `<button type="button" class="pv-qr" data-pvopen="${esc(p.id)}"><span class="pv-qn"><b>${esc(p.num)}</b><small>${esc(shortDate(p.data))}</small></span><span class="pv-qc"><b>${pvDest(p) === 'forn' ? '<em class="pv-ftag">Fornitore</em>' : ''}${esc(p.cliente && p.cliente.nome || 'Cliente da indicare')}</b><small>${p.solo ? 'Solo stampa' : p.righe.length === 1 ? '1 riga' : p.righe.length + ' righe'} · ${fmtNum(t.pz, 0)} ${t.pz === 1 ? 'pezzo' : 'pezzi'}${p.righe.length ? ' · ' + esc([...new Set(p.righe.map(l => l.n))].slice(0, 3).join(', ')) : ''}</small></span><span class="pv-qs"><span class="chip ${st[1]}">${st[0]}</span>${p.stato === 'accettato' || (p.docs && p.docs.length) || p.fatt ? pvFChip(p) : ''}</span><b class="pv-qt">${eur(t.imp)}</b></button>`; }).join('')}</div>` : `<div class="pv-empty"><div class="pv-ei"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></div><h3>Nessun preventivo</h3><p>Crea un preventivo e aggiungi i prodotti dal catalogo Payper scegliendo taglie e colori.</p><button type="button" class="btn primary" id="pv-new3">+ Nuovo preventivo</button></div>`}</div>`;
   }
   function pvEditor(body) {
     const p = pvGet(pvEdit); if (!p) { pvEdit = ''; return pvQuotes(body); }
@@ -4111,13 +4111,15 @@
             <label class="f"><span>Validità (giorni)</span><input data-pvf="valid" inputmode="numeric" value="${esc(String(p.valid || 30))}"></label>
             <label class="f"><span>Stato</span><select data-pvf="stato">${Object.entries(PV_ST).map(([k, v]) => `<option value="${k}"${k === p.stato ? ' selected' : ''}>${v[0]}</option>`).join('')}</select></label>
           </div>
-          ${pvCli || pvDest(p) === 'forn' ? '' : (() => { const C = pvCliOf(p); return `<div class="pv-cliric">${C ? `<label class="pv-rf"><span>Ricarico per ${esc(C.nome)}</span><span class="pv-ri"><input data-pvric="${esc(C.id)}" inputmode="decimal" value="${pvRicOk(C.ric) ? esc(fmtIn(C.ric)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label><small>${pvRicOk(C.ric) ? `Prezzo al pubblico = prezzo d'acquisto + ${esc(fmtNum(num(C.ric), 1).replace(/,0$/, ''))}%. Vale per le righe con prezzo d'acquisto; le altre usano il listino. I prezzi scritti a mano restano.` : `Vuoto = ricarico standard (+${esc(fmtNum((pvRic() - 1) * 100, 0))}%). Scrivi una percentuale per usare un ricarico solo per questo cliente.`}</small>` : `<small>Scrivi il nome del cliente: si salva da solo nella sezione <b>Clienti</b>, dove puoi dargli un ricarico personale.</small>`}</div>`; })()}
+          ${pvCli || pvDest(p) === 'forn' || p.solo ? '' : (() => { const C = pvCliOf(p); return `<div class="pv-cliric">${C ? `<label class="pv-rf"><span>Ricarico per ${esc(C.nome)}</span><span class="pv-ri"><input data-pvric="${esc(C.id)}" inputmode="decimal" value="${pvRicOk(C.ric) ? esc(fmtIn(C.ric)) : ''}" placeholder="${esc(fmtNum((pvRic() - 1) * 100, 0))}"> %</span></label><small>${pvRicOk(C.ric) ? `Prezzo al pubblico = prezzo d'acquisto + ${esc(fmtNum(num(C.ric), 1).replace(/,0$/, ''))}%. Vale per le righe con prezzo d'acquisto; le altre usano il listino. I prezzi scritti a mano restano.` : `Vuoto = ricarico standard (+${esc(fmtNum((pvRic() - 1) * 100, 0))}%). Scrivi una percentuale per usare un ricarico solo per questo cliente.`}</small>` : `<small>Scrivi il nome del cliente: si salva da solo nella sezione <b>Clienti</b>, dove puoi dargli un ricarico personale.</small>`}</div>`; })()}
         </div>
-        <div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><div class="pv-addb"><button type="button" class="btn sm" id="pv-srv" title="Aggiungi un servizio (manodopera, trasporto…)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>+ Servizio</span></button><button type="button" class="btn sm" id="pv-scan" title="Aggiungi prodotti leggendo il codice a barre">${SCAN_IC}<span>Scansiona</span></button><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div></div>
+        ${p.solo ? `<div class="card pv-solo"><div class="card-h"><div><h3>Solo personalizzazione</h3><span class="muted small">i capi li porta il cliente: nel preventivo ci sono solo stampa, ricamo e impianto</span></div><button type="button" class="btn sm" data-pvsolo="0">Aggiungi prodotti</button></div>
+          <div class="pv-sof"><label class="f"><span>Pezzi da personalizzare</span><input data-pvf="spz" inputmode="numeric" value="${num(p.spz) ? esc(String(num(p.spz))) : ''}" placeholder="Es. 50"></label><label class="f pv-w2"><span>Capi del cliente</span><input data-pvf="capi" value="${esc(p.capi || '')}" placeholder="Es. 30 t-shirt cotone bianche, 20 felpe blu"></label></div></div>`
+          : `<div class="card"><div class="card-h pv-ph"><div><h3>Prodotti</h3><span class="muted small">${p.righe.length} righe · ${fmtNum(t.pz, 0)} pezzi · prezzi al pubblico IVA esclusa</span></div><div class="pv-addb"><button type="button" class="btn sm" id="pv-srv" title="Aggiungi un servizio (manodopera, trasporto…)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>+ Servizio</span></button><button type="button" class="btn sm" id="pv-scan" title="Aggiungi prodotti leggendo il codice a barre">${SCAN_IC}<span>Scansiona</span></button><button type="button" class="btn sm primary" id="pv-addp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi prodotti</button></div></div>
           ${p.righe.length ? `<div class="pv-tw"><table class="tbl pv-lt"><thead><tr><th class="dr-th"></th><th>Prodotto</th><th>Taglie</th><th class="r">Pezzi</th><th class="r">Prezzo cad. €</th><th class="r">Sconto %</th><th class="r">Totale</th>${hasLg ? '<th>Logo</th>' : ''}<th></th></tr></thead><tbody>
             ${p.righe.map((l, i) => `<tr data-pvl="${i}"><td class="dr-c">${DRAG_H}</td><td class="pv-c-n"><span class="pv-cr">${pvLineThumb(l)}<span><b>${esc(l.n)}</b><small>${l.tool ? esc((l.cn ? l.cn + ' · ' : '') + (l.c || l.it)) : `${esc(l.cn)} · ${esc(l.it)}`}</small></span></span></td><td class="pv-c-sz"><div class="pv-szs">${(l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `<span>${esc(s)}<b>${fmtNum(num(l.q[s]), 0)}</b></span>`).join('')}</div></td><td class="num pv-c-q" data-l="Pezzi">${fmtNum(pvLineQ(l), 0)}</td><td class="num pv-c-p" data-l="Prezzo cad. €"><input class="pv-li${l.man ? ' man' : ''}" data-pvlp="${i}" inputmode="decimal" value="${l.p != null ? esc(fmtIn(r2(l.p))) : ''}" placeholder="da inserire" title="${l.man ? 'Prezzo scritto a mano' : 'Prezzo al pubblico dal catalogo'}">${pvCli ? '' : `<small class="pv-lacq" data-pvla="${i}"></small>`}</td><td class="num pv-c-sc" data-l="Sconto %"><input class="pv-li sc" data-pvls="${i}" inputmode="decimal" value="${num(l.sc) ? esc(fmtIn(l.sc)) : ''}" placeholder="0"></td><td class="num amt pv-c-t" data-l="Totale riga" data-pvlt="${i}">${l.p != null ? eur(pvLineTot(l)) : '—'}</td>${hasLg ? (l.tool ? '<td class="pv-c-lg"><span class="muted small">—</span></td>' : `<td class="pv-c-lg" data-l="Logo"><div class="pv-lgtg"><button type="button" data-pvlogo="${i}:f" class="${l.lf && LG.f ? 'on' : ''}"${LG.f ? '' : ' disabled'} aria-pressed="${!!(l.lf && LG.f)}" title="${pvPosLong(l, 'f')}">${pvPos(l, 'f')}</button><button type="button" data-pvlogo="${i}:r" class="${l.lr && LG.r ? 'on' : ''}"${LG.r ? '' : ' disabled'} aria-pressed="${!!(l.lr && LG.r)}" title="${pvPosLong(l, 'r')}">${pvPos(l, 'r')}</button></div></td>`) : ''}<td class="pv-la"><button type="button" class="pv-lb" data-pvlrepl="${i}" title="Sostituisci con un altro prodotto"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></button><button type="button" class="pv-lb" data-pvsch="${esc(l.sup || 'payper')}|${esc(l.it)}" title="Scheda tecnica PDF"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></button><button type="button" class="pv-lb" data-pvledit="${i}" title="Modifica quantità"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="pv-lb d" data-pvldel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
-          </tbody></table></div>` : `<div class="empty">Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</div>`}
-        </div>
+          </tbody></table></div>` : `<div class="empty pv-empty2"><span>Nessun prodotto: premi «+ Aggiungi prodotti» e scegli dal catalogo.</span><button type="button" class="btn sm" data-pvsolo="1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Solo stampa sui capi del cliente</button></div>`}
+        </div>`}
         ${pvLogoCard(p)}
         ${pvPersCard(p)}
         <div class="pv-foot">
@@ -4132,7 +4134,7 @@
     const ed = $('#pv-ed'); if (!ed) return null;
     const p = pvGet(ed.dataset.id); if (!p) return null;
     pvRefresh(p);
-    $$('[data-pvf]', ed).forEach(el => { const k = el.dataset.pvf, v = el.value; if (k.startsWith('cliente.')) { p.cliente = p.cliente || {}; p.cliente[k.slice(8)] = v.trim(); } else if (k === 'valid' || k === 'sconto' || k === 'iva') p[k] = num(v); else p[k] = v; });
+    $$('[data-pvf]', ed).forEach(el => { const k = el.dataset.pvf, v = el.value; if (k.startsWith('cliente.')) { p.cliente = p.cliente || {}; p.cliente[k.slice(8)] = v.trim(); } else if (k === 'valid' || k === 'sconto' || k === 'iva' || k === 'spz') p[k] = num(v); else p[k] = v; });
     $$('[data-pvlp]', ed).forEach(el => { const l = p.righe[+el.dataset.pvlp]; if (!l) return; const v = String(el.value).trim(), auto = pvPubFor(p, l.it, l.c); if (v === '') { l.p = auto; l.man = false; } else { const n = num(v); l.man = auto == null || Math.abs(n - auto) > .004; l.p = n; } });
     $$('[data-pvls]', ed).forEach(el => { const l = p.righe[+el.dataset.pvls]; if (l) l.sc = Math.min(100, Math.max(0, num(el.value))); });
     $$('[data-pvpr]', ed).forEach(el => { const [i0, k] = el.dataset.pvpr.split(':'), r = (p.pers || [])[+i0]; if (!r) return; const v = String(el.value).trim(); if (k === 'd') { if (v !== r.d) { r.d = v; } } else if (k === 'q') { const nq = v === '' ? null : num(v); if (nq !== r.q) r.q = nq; } else if (k === 'p') r.p = num(v); else if (k === 'slot') r.slot = v; });
@@ -4146,7 +4148,7 @@
     const el = $('#pv-tots'); if (!el) return;
     const keepFocus = document.activeElement && document.activeElement.id === 'pv-gsc';
     if (keepFocus) { const set = (id, v) => { const x = $('#' + id); if (x) x.textContent = v; }; set('pv-t-sc', '− ' + eur(t.sc)); set('pv-t-imp', eur(t.imp)); set('pv-t-iva', eur(t.iva)); set('pv-t-tot', eur(t.tot)); return; }
-    el.innerHTML = `<div class="pv-tr"><span>Totale prodotti</span><b>${eur(t.sub)}</b></div>
+    el.innerHTML = `<div class="pv-tr"><span>${p.solo && !p.righe.length ? 'Totale lavorazioni' : 'Totale prodotti'}</span><b>${eur(t.sub)}</b></div>
       <div class="pv-tr"><span>Sconto sul totale</span><span class="pv-gs"><input id="pv-gsc" data-pvf="sconto" inputmode="decimal" value="${num(p.sconto) ? esc(fmtIn(p.sconto)) : ''}" placeholder="0"> %</span><b id="pv-t-sc">− ${eur(t.sc)}</b></div>
       <div class="pv-tr"><span>Imponibile</span><b id="pv-t-imp">${eur(t.imp)}</b></div>
       <div class="pv-tr"><span>IVA ${fmtNum(num(p.iva), 0)}%</span><b id="pv-t-iva">${eur(t.iva)}</b></div>
@@ -4444,6 +4446,7 @@
   }
   function pvPdfAsk() {
     const p = pvFromForm(); if (!p) return;
+    if (!p.righe.length && (p.pers || []).length) return pvPdf({ foto: false, scheda: false }); // v124: sola stampa, niente da scegliere
     if (!p.righe.length) return toast('Il preventivo non ha prodotti');
     pvQuiet(p);
     let o = { foto: true, scheda: false }; try { o = { ...o, ...JSON.parse(localStorage.getItem('cdc_pvpdf') || '{}') }; } catch {}
@@ -4825,7 +4828,7 @@
   ];
   const pvPersList = () => { const c = cfg('persList'); return Array.isArray(c) && c.length ? c : PERS_DEF; };
   const pvPersDesc = (it, slot) => it.t === 'imp' ? it.d : `${it.d}${slot === 'r' ? ' · retro' : slot === 'f' ? ' · fronte lato cuore' : ''}`;
-  function pvPersQ(p, r) { if (r.q != null && r.q !== '') return num(r.q); if (!r.slot) return 1; const k = r.slot === 'f' ? 'lf' : 'lr'; return p.righe.filter(l => l[k]).reduce((s, l) => s + pvLineQ(l), 0); }
+  function pvPersQ(p, r) { if (r.q != null && r.q !== '') return num(r.q); if (!r.slot) return 1; if (p.solo) return num(p.spz) || 0; const k = r.slot === 'f' ? 'lf' : 'lr'; return p.righe.filter(l => l[k]).reduce((s, l) => s + pvLineQ(l), 0); }
   function pvPersTot(p, r) { return r2(num(r.p) * pvPersQ(p, r)); }
   const pvPersPosTxt = r => r.slot === 'f' ? 'Fronte' : r.slot === 'r' ? 'Retro' : '—';
   // conta i colori del logo (i bordi sfumati non contano) e riconosce sfumature / foto
@@ -4849,8 +4852,8 @@
   // righe proposte: una per posizione usata + impianto se i pezzi sono pochi
   function pvPersSuggest(p) {
     const L = p.loghi || {}, list = pvPersList(), out = [];
-    ['f', 'r'].forEach(s0 => { const lg = L[s0]; if (!lg) return; const k = s0 === 'f' ? 'lf' : 'lr'; if (!p.righe.some(l => l[k])) return; const it = list.find(x => x.c === pvPersPick(lg.an, s0)) || list.find(x => x.t === 'st') || list[0]; out.push({ id: uid(), slot: s0, cod: it.c, d: pvPersDesc(it, s0), p: it.p, q: null }); });
-    if (out.length) { const pz = p.righe.filter(l => l.lf || l.lr).reduce((s, l) => s + pvLineQ(l), 0), imp = list.find(x => x.c === 'imp_st'); if (imp && pz < (imp.min || 50)) out.push({ id: uid(), slot: '', cod: imp.c, d: imp.d, p: imp.p, q: 1 }); }
+    ['f', 'r'].forEach(s0 => { const lg = L[s0]; if (!lg) return; const k = s0 === 'f' ? 'lf' : 'lr'; if (!p.solo && !p.righe.some(l => l[k])) return; const it = list.find(x => x.c === pvPersPick(lg.an, s0)) || list.find(x => x.t === 'st') || list[0]; out.push({ id: uid(), slot: s0, cod: it.c, d: pvPersDesc(it, s0), p: it.p, q: null }); });
+    if (out.length) { const pz = p.solo ? num(p.spz) : p.righe.filter(l => l.lf || l.lr).reduce((s, l) => s + pvLineQ(l), 0), imp = list.find(x => x.c === 'imp_st'); if (imp && pz < (imp.min || 50)) out.push({ id: uid(), slot: '', cod: imp.c, d: imp.d, p: imp.p, q: 1 }); }
     return out;
   }
   async function pvPersRecalc() {
@@ -4862,7 +4865,7 @@
   // aggiorna i totali delle righe senza ridisegnare la pagina
   function pvPersUpd(p) { (p.pers || []).forEach((r, i) => { const td = $(`[data-pvprt="${i}"]`); if (td) td.textContent = eur(pvPersTot(p, r)); const qi = $(`[data-pvpr="${i}:q"]`); if (qi) qi.placeholder = fmtNum(pvPersQ(p, r) || 0, 0); }); const st = $('#pv-prsum'); if (st) st.textContent = eur((p.pers || []).reduce((s, r) => s + pvPersTot(p, r), 0)); }
   function pvPersCard(p) {
-    const L = p.loghi || {}, R0 = p.pers || []; if (!L.f && !L.r && !R0.length) return '';
+    const L = p.loghi || {}, R0 = p.pers || []; if (!p.solo && !L.f && !L.r && !R0.length) return '';
     const list = pvPersList(), tot = R0.reduce((s, r) => s + pvPersTot(p, r), 0);
     const an = ['f', 'r'].filter(s0 => L[s0] && L[s0].an).map(s0 => `${s0 === 'f' ? 'fronte' : 'retro'}: ${pvAnTxt(L[s0].an)}`).join(' · ');
     return `<div class="card pv-pr"><div class="card-h"><h3>Prezzo della personalizzazione</h3><span class="muted small">${p.persAuto !== false && R0.length ? 'proposto in automatico dal listino guardando il logo' : 'righe in fondo al preventivo'}${an ? ' · ' + esc(an) : ''}</span></div>
@@ -4873,8 +4876,8 @@
           <td class="num"><input class="pv-li" data-pvpr="${i}:p" inputmode="decimal" value="${esc(fmtIn(r2(num(r.p))))}"></td>
           <td class="num amt" data-pvprt="${i}">${eur(pvPersTot(p, r))}</td>
           <td class="pv-la"><button type="button" class="pv-lb d" data-pvprdel="${i}" title="Togli"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`).join('')}
-      </tbody></table></div>` : '<div class="empty">Nessuna riga: premi «Calcola dal logo» oppure «+ Riga».</div>'}
-      <div class="pv-lgb"><span class="muted small">Totale personalizzazione <b id="pv-prsum">${eur(tot)}</b> · se i pezzi sono vuoti li conto io dai capi con il logo</span><span class="pv-lgba"><button type="button" class="btn sm" id="pv-prlist">Listino</button><button type="button" class="btn sm" id="pv-pradd">+ Riga</button><button type="button" class="btn sm primary" id="pv-prauto">Calcola dal logo</button></span></div></div>`;
+      </tbody></table></div>` : `<div class="empty">${p.solo ? 'Aggiungi la lavorazione con «+ Riga» (stampa, ricamo, impianto) oppure carica il logo e premi «Calcola dal logo».' : 'Nessuna riga: premi «Calcola dal logo» oppure «+ Riga».'}</div>`}
+      <div class="pv-lgb"><span class="muted small">Totale personalizzazione <b id="pv-prsum">${eur(tot)}</b> · ${p.solo ? 'se i pezzi sono vuoti uso i pezzi da personalizzare' : 'se i pezzi sono vuoti li conto io dai capi con il logo'}</span><span class="pv-lgba"><button type="button" class="btn sm" id="pv-prlist">Listino</button><button type="button" class="btn sm" id="pv-pradd">+ Riga</button><button type="button" class="btn sm primary" id="pv-prauto">Calcola dal logo</button></span></div></div>`;
   }
   function pvPersListEdit() {
     const L = pvPersList();
@@ -4893,7 +4896,7 @@
         ${o ? `<div class="pv-lgx"><img data-lgimg="${s}" alt="Logo ${s === 'f' ? 'fronte' : 'retro'}"></div><div class="pv-lgn"><small title="${esc(o.nome || '')}">${esc(o.nome || 'logo')}</small><span><button type="button" class="link" data-pvlgset="${s}">Cambia</button><button type="button" class="link d" data-pvlgdel="${s}">Togli</button></span></div>`
           : `<button type="button" class="pv-lgup" data-pvlgset="${s}"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg><b>Carica il logo</b><small>PDF, PNG, JPG o SVG</small></button>${s === 'r' && L.f ? '<button type="button" class="link" data-pvlgsame>Usa lo stesso logo del fronte</button>' : ''}`}
       </div>`; };
-    return `<div class="card pv-lg"><div class="card-h"><h3>Logo del cliente</h3><span class="muted small">${L.f || L.r ? `sul petto ${nf} ${nf === 1 ? 'capo' : 'capi'} · sulla schiena ${nr} · scegli i capi nella tabella` : 'caricalo e scegli su quali capi va: nel PDF l\'IA lo posiziona sui capi'}</span></div>
+    return `<div class="card pv-lg"><div class="card-h"><h3>Logo del cliente</h3><span class="muted small">${p.solo ? 'va sui capi portati dal cliente: nel PDF compare il logo da applicare' : L.f || L.r ? `sul petto ${nf} ${nf === 1 ? 'capo' : 'capi'} · sulla schiena ${nr} · scegli i capi nella tabella` : 'caricalo e scegli su quali capi va: nel PDF l\'IA lo posiziona sui capi'}</span></div>
       <div class="pv-lgs">${slot('f')}${slot('r')}</div>
       ${(L.f || L.r) && p.righe.length ? `<div class="pv-lgb"><span class="muted small">Nella tabella scegli cosa personalizzare: <b>Cuore / Fronte</b> e <b>Schiena / Retro</b> su ogni riga, anche pantaloni e cappellini.</span><span class="pv-lgba"><button type="button" class="btn sm" data-pvlgall="1">Su tutti i capi</button><button type="button" class="btn sm primary" id="pv-lgprev">Anteprima sui capi</button></span></div>` : ''}
     </div>`;
@@ -4903,7 +4906,7 @@
   const pvSzSort = list => [...new Set(list)].sort((a, b) => { const ia = PV_SZ.indexOf(String(a).toUpperCase()), ib = PV_SZ.indexOf(String(b).toUpperCase()); if (ia >= 0 && ib >= 0) return ia - ib; const na = parseFloat(a), nb = parseFloat(b); if (!isNaN(na) && !isNaN(nb)) return na - nb; if (ia >= 0) return -1; if (ib >= 0) return 1; return String(a).localeCompare(String(b)); });
   async function pvWorkPdf() {
     const p = pvFromForm() || pvGet(pvEdit); if (!p) return;
-    if (!p.righe.length) return toast('Il preventivo non ha prodotti');
+    if (!p.righe.length) return toast(p.solo ? 'La scheda lavoro serve per i capi del catalogo: per la sola stampa usa il PDF del preventivo' : 'Il preventivo non ha prodotti');
     pvQuiet(p);
     try {
       busy('Preparo la scheda di lavoro…');
@@ -5190,7 +5193,9 @@
   /* ---------- PDF del preventivo (per il cliente) ---------- */
   async function pvPdf(opt = { foto: true, scheda: false }) {
     const p = pvFromForm() || pvGet(pvEdit); if (!p) return;
-    if (!p.righe.length) return toast('Il preventivo non ha prodotti');
+    const SOLO = !p.righe.length && (p.pers || []).length; // v124: preventivo di sola stampa sui capi del cliente
+    if (!p.righe.length && !SOLO) return toast('Il preventivo non ha prodotti');
+    if (SOLO) opt = { ...opt, foto: false, scheda: false };
     pvQuiet(p);
     try {
       busy('Preparo il PDF…');
@@ -5243,13 +5248,13 @@
       const body = p.righe.map(l => { const sz = l.tool ? (l.cn || '') : (l.sz || Object.keys(l.q)).filter(s => num(l.q[s]) > 0).map(s => `${s}×${fmtNum(num(l.q[s]), 0)}`).join('  '); const lt = lgTxt(l); return [`${l.n}\n${l.tool ? l.c || l.it : l.it}${lt ? '\nLogo: ' + lt : ''}`, l.tool ? '' : l.cn, sz, fmtNum(pvLineQ(l), 0), l.p != null ? eur(l.p) : '—', num(l.sc) ? fmtNum(num(l.sc), 1).replace(/,0$/, '') + '%' : '', l.p != null ? eur(pvLineTot(l)) : '—']; });
       const FOTO = opt.foto;
       if (FOTO) body.forEach(r => r.unshift(''));
-      const head = ['Prodotto', 'Colore', 'Taglie', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale']; if (FOTO) head.unshift('');
+      const head = SOLO ? ['Lavorazione', 'Posizione', 'Capi', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale'] : ['Prodotto', 'Colore', 'Taglie', 'Pezzi', 'Prezzo cad.', 'Sconto', 'Totale']; if (FOTO) head.unshift('');
       const o0 = FOTO ? 1 : 0;
       const colSt = { [o0]: { fontStyle: 'bold', cellWidth: FOTO ? 38 : 44 }, [o0 + 1]: { cellWidth: FOTO ? 26 : 30, textColor: C.ink2 }, [o0 + 2]: { cellWidth: 'auto', textColor: C.ink2, fontSize: 7.6 }, [o0 + 3]: { halign: 'right', cellWidth: 'wrap' }, [o0 + 4]: { halign: 'right', cellWidth: 'wrap' }, [o0 + 5]: { halign: 'right', cellWidth: 'wrap' }, [o0 + 6]: { halign: 'right', fontStyle: 'bold', cellWidth: 'wrap' } };
       if (FOTO) colSt[0] = { cellWidth: 30, minCellHeight: 32 };
       // righe della personalizzazione (stampa / ricamo / impianto) in fondo alla tabella
       const PR = (p.pers || []).filter(r => pvPersQ(p, r) > 0 || num(r.p));
-      PR.forEach(r => { const row = [String(r.d || 'Personalizzazione').replace(/ · (fronte lato cuore|retro)$/, ''), r.slot === 'f' ? 'Fronte (lato cuore)' : r.slot === 'r' ? 'Retro' : '', '', fmtNum(pvPersQ(p, r), 0), eur(num(r.p)), '', eur(pvPersTot(p, r))]; if (FOTO) row.unshift(''); body.push(row); });
+      PR.forEach((r, ri) => { const row = [String(r.d || 'Personalizzazione').replace(/ · (fronte lato cuore|retro)$/, ''), r.slot === 'f' ? 'Fronte (lato cuore)' : r.slot === 'r' ? 'Retro' : '', SOLO && ri === 0 && p.capi ? String(p.capi) : '', fmtNum(pvPersQ(p, r), 0), eur(num(r.p)), '', eur(pvPersTot(p, r))]; if (FOTO) row.unshift(''); body.push(row); });
       const nProd = p.righe.length;
       doc.autoTable({
         startY: y, head: [head], body, margin: { left: M, right: M, top: 20, bottom: 18 }, theme: 'plain', rowPageBreak: 'avoid',
@@ -5263,14 +5268,27 @@
       y = doc.lastAutoTable.finalY + 6;
       if (y + 50 > H - 20) { doc.addPage(); y = 24; }
       // totali
-      const tw = 78, tx = W - M - tw, rows = [['Totale prodotti', eur(t.sub)], ...(t.sc ? [[`Sconto ${fmtNum(num(p.sconto), 1).replace(/,0$/, '')}%`, '− ' + eur(t.sc)]] : []), ['Imponibile', eur(t.imp)], [`IVA ${fmtNum(num(p.iva), 0)}%`, eur(t.iva)]];
+      const tw = 78, tx = W - M - tw, rows = [[SOLO ? 'Totale lavorazioni' : 'Totale prodotti', eur(t.sub)], ...(t.sc ? [[`Sconto ${fmtNum(num(p.sconto), 1).replace(/,0$/, '')}%`, '− ' + eur(t.sc)]] : []), ['Imponibile', eur(t.imp)], [`IVA ${fmtNum(num(p.iva), 0)}%`, eur(t.iva)]];
       rows.forEach(([a, b], i) => { color(C.ink2); font('normal', 9); doc.text(a, tx, y + i * 6.5); color(C.ink); font('semibold', 9); doc.text(b, W - M, y + i * 6.5, { align: 'right' }); });
       const ty = y + rows.length * 6.5 + 1;
       fill(C.navy); doc.roundedRect(tx - 4, ty - 5, tw + 4, 11, 2, 2, 'F'); color(C.white); font('bold', 11); doc.text('Totale', tx, ty + 2); doc.text(eur(t.tot), W - M - 2, ty + 2, { align: 'right' });
       // note
-      const notes = [p.note, `Prezzi in euro IVA esclusa. Preventivo valido ${num(p.valid) || 30} giorni (fino al ${scad}).`].filter(Boolean);
+      const notes = [SOLO ? `Lavorazione sui capi forniti dal cliente${p.capi ? ': ' + p.capi : ''}${num(p.spz) ? ` (${fmtNum(num(p.spz), 0)} pezzi)` : ''}.` : '', p.note, `Prezzi in euro IVA esclusa. Preventivo valido ${num(p.valid) || 30} giorni (fino al ${scad}).`].filter(Boolean);
       color(C.navy); font('bold', 9); doc.text('Note', M, y + 1);
       color(C.ink2); font('normal', 8.3); let ny = y + 7; notes.forEach(n => { const ls = doc.splitTextToSize(n, CW - tw - 14); doc.text(ls, M, ny); ny += ls.length * 4 + 2; });
+      // v124: sola stampa → il logo da applicare, così il cliente vede cosa viene stampato
+      if (SOLO && (LG.f || LG.r)) {
+        const S2 = [['f', 'Fronte · lato cuore'], ['r', 'Retro · schiena']].filter(([k]) => LG[k]);
+        let ly = Math.max(ty + 14, ny + 4); if (ly + 62 > H - 20) { doc.addPage(); ly = 24; }
+        color(C.navy); font('bold', 9); doc.text('Logo da applicare', M, ly); ly += 4;
+        const bw = (CW - 6 * (S2.length - 1)) / S2.length, bh = 52;
+        for (let i = 0; i < S2.length; i++) {
+          const [k, lbl] = S2[i], x = M + i * (bw + 6), o = await pvLogoGet(LG[k]);
+          fill(C.soft); stroke(C.line); doc.setLineWidth(.25); doc.roundedRect(x, ly, bw, bh, 2.5, 2.5, 'FD');
+          if (o && o.im) { try { const cv = document.createElement('canvas'), kk = Math.min(1, 900 / Math.max(o.w, o.h)); cv.width = Math.max(1, Math.round(o.w * kk)); cv.height = Math.max(1, Math.round(o.h * kk)); cv.getContext('2d').drawImage(o.im, 0, 0, cv.width, cv.height); const iw = bw - 12, ih = bh - 16, z = Math.min(iw / cv.width, ih / cv.height); doc.addImage(cv.toDataURL('image/png'), 'PNG', x + (bw - cv.width * z) / 2, ly + 4 + (ih - cv.height * z) / 2, cv.width * z, cv.height * z); } catch {} }
+          color(C.ink2); font('semibold', 8); doc.text(lbl + (LG[k].an ? ' · ' + pvAnTxt(LG[k].an) : ''), x + bw / 2, ly + bh - 4, { align: 'center' });
+        }
+      }
       // ---- personalizzazione: logo del cliente sui capi ----
       const MC = p.righe.map((l, i) => [l, mocks[i]]).filter(([, m]) => m && (m.f || m.r));
       if (MOCK && MC.length) pvPersPages(doc, { FF, p, cards: MC, LGF, LGR, same: !!(LG.f && LG.r && LG.f.id === LG.r.id) });
@@ -9107,6 +9125,7 @@
       const pdo = t.closest('[data-pvdoc]'); if (pdo) { const [k0, id0] = pdo.dataset.pvdoc.split('|'); const d0 = k0 === 'ddt' ? GX.ddt().find(x => x.id === id0) : GX.fv().find(x => x.id === id0); if (d0) docForm(k0, d0); return; }
       const pvop = t.closest('[data-pvopen]'); if (pvop) { pvTab = 'prev'; pvEdit = pvop.dataset.pvopen; pvItem = ''; renderPv(); window.scrollTo(0, 0); return; }
       if (t.closest('#pv-new') || t.closest('#pv-new2') || t.closest('#pv-new3')) { const p = pvNew(); pvTab = 'prev'; pvEdit = p.id; pvItem = ''; pvSave(p); window.scrollTo(0, 0); return; }
+      const psolo = t.closest('[data-pvsolo]'); if (psolo && $('#pv-ed')) { const p = pvFromForm(); if (!p) return; p.solo = psolo.dataset.pvsolo === '1'; if (p.solo && !(p.pers || []).length) { const it = pvPersList().find(x => x.t === 'st') || pvPersList()[0]; p.pers = it ? [{ id: uid(), slot: 'f', cod: it.c, d: pvPersDesc(it, 'f'), p: it.p, q: null }] : []; p.persAuto = false; } pvSave(p); if (p.solo) toast('Preventivo solo stampa: scrivi i pezzi e la lavorazione'); return; }
       const pdst = t.closest('[data-pvdest]'); if (pdst && $('#pv-ed')) { const h = $('#pv-ed [data-pvf="dest"]'); if (h && h.value !== pdst.dataset.pvdest) { h.value = pdst.dataset.pvdest; const p = pvFromForm(); if (p) pvQuiet(p); renderPv(); } return; }
       const pana = t.closest('[data-pvana]'); if (pana) { const [dst, k, id] = pana.dataset.pvana.split('|'); if (dst === 'forn') { const f = FOR().find(x => x.id === id); if (f) fornForm(f); } else if (k === 'c') { const c = cliOf(id); if (c) cliForm(c); } else pvCliForm(id); return; }
       if (t.closest('#pv-qback')) { pvQuiet(pvFromForm()); pvEdit = ''; renderPv(); return; }
@@ -9257,7 +9276,7 @@
       if (el.dataset && el.dataset.pvpr) { const p = pvFromForm(); if (p) { p.persAuto = false; pvQuiet(p); if (el.dataset.pvpr.endsWith(':slot')) renderPv(); } return; }
       if (el.dataset && el.dataset.pvric != null) { const p = pvFromForm(); if (p) pvQuiet(p); const L = pvCliList(), c = L.find(x => x.id === el.dataset.pvric); if (c) { const v = String(el.value || '').trim(); c.ric = v === '' ? null : num(v); write([{ action: 'upsert', sheet: 'Config', row: { chiave: 'pvClienti', valore: JSON.stringify(L) } }]); toast(v === '' ? `${c.nome}: ricarico standard` : `${c.nome}: ricarico +${v}% · prezzi aggiornati`); } return; }
       if (el.dataset && el.dataset.pvf === 'cliente.nome') { const ed = $('#pv-ed'), dst = ed && $('[data-pvf="dest"]', ed) ? $('[data-pvf="dest"]', ed).value : 'cli', C = anaFind(dst, el.value); if (C && ed) ['ref', 'email', 'tel', 'ind'].forEach(k => { const f = $(`[data-pvf="cliente.${k}"]`, ed); if (f && !f.value.trim() && C[k]) f.value = C[k]; }); const p = pvFromForm(); if (p) { pvQuiet(p); setTimeout(() => { const ae = document.activeElement, fk = ae && ae.closest && ae.closest('#pv-ed') && ae.dataset ? ae.dataset.pvf : null, pos = fk && ae.selectionStart != null ? ae.selectionStart : null; const p2 = pvFromForm(); if (p2) pvQuiet(p2); renderPv(); if (fk) { const f = $(`#pv-ed [data-pvf="${fk}"]`); if (f) { f.focus(); if (pos != null && f.setSelectionRange) try { f.setSelectionRange(pos, pos); } catch {} } } }, 0); } return; }
-      if (el.closest && el.closest('#pv-ed')) { pvQuiet(pvFromForm()); if (el.dataset.pvf === 'stato') renderPv(); }
+      if (el.closest && el.closest('#pv-ed')) { pvQuiet(pvFromForm()); if (el.dataset.pvf === 'stato' || el.dataset.pvf === 'spz') renderPv(); }
     });
     document.addEventListener('change', e => { if (e.target.id === 'pz-pick') { pzSel = e.target.value; pzAnim = true; renderPz(); } });
     $('#am-per').onchange = e => { amP = e.target.value; amAnim = true; renderAm(); };

@@ -3375,3 +3375,10 @@ body.scn-on { overflow: hidden; }
 .db-hero .gh-big { white-space: nowrap; font-size: clamp(36px, 4.1vw, 60px); }
 @media (min-width: 980px) { .db-top { grid-template-columns: minmax(0, 1fr) minmax(340px, .9fr); } }
 @media (max-width: 899px) { #v-home { gap: 12px; } #v-home .gl-month { display: flex; width: 100%; } #v-home .gl-month select { flex: 1; text-align: center; text-align-last: center; } .db-hero .gh-big { font-size: clamp(34px, 10vw, 46px); } }
+
+/* v124: preventivo di sola stampa sui capi del cliente */
+.pv-empty2 { display: grid; justify-items: center; gap: 12px; padding: 22px 0 10px; }
+.pv-empty2 .btn, .pv-solo .btn { display: inline-flex; align-items: center; gap: 7px; }
+.pv-empty2 svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pv-sof { display: grid; gap: 12px; grid-template-columns: 200px minmax(0, 1fr); }
+@media (max-width: 640px) { .pv-sof { grid-template-columns: 1fr; } }
