@@ -103,11 +103,11 @@
     renderMe();
     if (!D) $('#view').innerHTML = skeleton();
     route();
-    try { await load(); if (sel) route(); if (fresh) toast(`Ciao ${String((me && me.nome) || '').split(' ')[0] || 'Dario'}`, 'ok'); } catch {}
+    try { await load(); loadTeam(); if (sel) route(); if (fresh) toast(`Ciao ${String((me && me.nome) || '').split(' ')[0] || 'Dario'}`, 'ok'); } catch {}
   }
 
   /* ================= navigazione ================= */
-  const TITLES = { panoramica: ['Panoramica', ''], clienti: ['Clienti', 'Gestionali delle aziende che usano il Centro di Costo'], utenti: ['Utenti e permessi', 'Chi entra, in quale gestionale e cosa può fare'], incassi: ['Abbonamenti', 'Pagamenti, rinnovi e scadenze'], accessi: ['Accessi', 'Dispositivi collegati e tentativi di accesso'], registro: ['Registro attività', 'Tutto quello che succede, in ordine di tempo'], impostazioni: ['Impostazioni', 'Il tuo account e la Console'] };
+  const TITLES = { panoramica: ['Panoramica', ''], clienti: ['Clienti', 'Gestionali delle aziende che usano il Centro di Costo'], utenti: ['Utenti e permessi', 'Chi entra, in quale gestionale e cosa può fare'], incassi: ['Abbonamenti', 'Pagamenti, rinnovi e scadenze'], accessi: ['Accessi', 'Dispositivi collegati e tentativi di accesso'], registro: ['Registro attività', 'Tutto quello che succede, in ordine di tempo'], team: ['Team', 'Gli agenti che controllano e fanno crescere il Centro di Costo'], impostazioni: ['Impostazioni', 'Il tuo account e la Console'] };
   function route() {
     const h = decodeURIComponent(location.hash.slice(1)), [v, id] = h.split('/');
     const nv = TITLES[v] ? v : 'panoramica';
@@ -126,7 +126,7 @@
     if (!D) return;
     const el = $('#view'), y = el.scrollTop;
     el.classList.toggle('still', !anim || RM);
-    el.innerHTML = ({ panoramica: vHome, clienti: vClienti, utenti: vUtenti, incassi: vIncassi, accessi: vAccessi, registro: vRegistro, impostazioni: vImpost }[view])();
+    el.innerHTML = ({ panoramica: vHome, clienti: vClienti, utenti: vUtenti, incassi: vIncassi, accessi: vAccessi, registro: vRegistro, team: vTeam, impostazioni: vImpost }[view])();
     el.scrollTop = anim ? 0 : y;
     countUp(el);
     if (!$('#drawer').hidden) refreshDrawer();
@@ -136,6 +136,7 @@
     if (!D) return;
     const C = clients(), sc = C.filter(w => scadOf(w)).length, live = (D.sess || []).filter(s => !s.io).length;
     $('#nb-cli').textContent = C.length || ''; $('#nb-inc').textContent = sc || ''; $('#nb-live').textContent = live || '';
+    const tb = $('#nb-team'); if (tb && T) { const n = AGENTI.filter(a => { const r = tRep(a.k)[0]; return r && r.stato !== 'ok'; }).length; tb.textContent = n || ''; tb.className = n ? 'warn' : ''; }
   }
   function renderMe() {
     if (!me) return;
@@ -445,6 +446,50 @@
         <div class="card"><div class="card-h"><h3>Ultimi accessi</h3><a class="muted link" href="#registro" data-freg-go="accessi">registro</a></div>${timeline(R.slice(0, 14))}</div>
       </div>
       <p class="muted small foot">Una sessione dura 60 giorni dall'ultimo accesso con password. Dopo 5 password sbagliate l'account si blocca per 15 minuti.</p>`;
+  }
+
+  /* ================= TEAM (agenti) ================= */
+  // I report li scrivono gli agenti (attività programmate) nella cartella Drive «Centro di Costo - Team»; lo script li legge con adminTeam.
+  const AGENTI = [
+    { k: 'guardiano', n: 'Guardiano', r: 'Ogni mattina prova app, demo, Console e Presenze e controlla i backup', ic: '<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.2 2.2 4.4-4.4"/>' },
+    { k: 'informatico', n: 'Informatico', r: 'Ogni settimana rivede codice, sicurezza e velocità', ic: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>' },
+    { k: 'commerciale', n: 'Commerciale', r: 'Trova aziende adatte e prepara le email da mandare', ic: '<path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/>' },
+    { k: 'marketing', n: 'Marketing', r: 'Idee per post, testi e confronto con la concorrenza', ic: '<path d="M4 10v4l11 5V5z"/><path d="M15 9a3 3 0 0 1 0 6M7 14l1 5h3"/>' },
+    { k: 'grafico', n: 'Grafico', r: 'Schermate, animazioni e presentazione, su richiesta', ic: '<circle cx="12" cy="12" r="8.5"/><circle cx="8.5" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="15.5" cy="10" r="1.2"/><path d="M12 20.5c-1.5 0-2-1-2-2 0-1.3 1-2 2.2-2H14a3 3 0 0 0 3-3"/>' }
+  ];
+  const ST_T = { ok: 'Tutto ok', warn: 'Da controllare', bad: 'Problema' };
+  let T = null, tErr = '', tBusy = false, tSel = 'guardiano';
+  async function loadTeam(force) {
+    if (tBusy || (T && !force)) return; tBusy = true;
+    try { T = await post('adminTeam'); tErr = ''; }
+    catch (e) { if (e instanceof AuthError) return; tErr = e.message; T = T || { report: [] }; }
+    finally { tBusy = false; }
+    if (view === 'team') render(); else badges();
+  }
+  const tRep = k => ((T && T.report) || []).filter(r => r && r.agente === k).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  function vTeam() {
+    if (!T) { loadTeam(); return `<div class="card"><p class="muted small pad">Carico i report…</p></div>`; }
+    const agent = AGENTI.find(a => a.k === tSel) || AGENTI[0], L = tRep(agent.k), last = L[0];
+    const cards = AGENTI.map(a => {
+      const r = tRep(a.k)[0], on = !!r, st = on ? r.stato : 'off';
+      return `<button type="button" class="tm-a ${a.k === agent.k ? 'on' : ''} ${on ? '' : 'off'}" data-tm="${a.k}">
+        <span class="tm-ic st-${st}"><svg viewBox="0 0 24 24">${a.ic}</svg></span>
+        <span class="tm-t"><b>${a.n}</b><small>${on ? esc(ago(r.data)) : 'Da attivare'}</small></span>
+        <i class="tm-dot st-${st}" title="${on ? ST_T[st] || '' : 'Da attivare'}"></i></button>`;
+    }).join('');
+    const voci = last ? `<ul class="tm-v">${(last.voci || []).map(v => `<li class="st-${esc(v.stato)}"><i></i><div><b>${esc(v.testo)}</b>${v.dettaglio ? `<small>${esc(v.dettaglio)}</small>` : ''}</div></li>`).join('')}</ul>` : '';
+    const storia = L.length > 1 ? `<div class="card"><div class="card-h"><h3>Ultimi controlli</h3><span class="muted">${L.length}</span></div>
+        <div class="tm-strip">${L.slice(0, 30).reverse().map(r => `<i class="st-${esc(r.stato)}" title="${esc(when(r.data))} · ${esc(r.titolo || '')}"></i>`).join('')}</div>
+        <ul class="mini">${L.slice(1, 8).map(r => `<li class="${r.stato === 'bad' ? 'bad' : ''}"><span>${esc(r.titolo || ST_T[r.stato] || '')}</span><small>${esc(when(r.data))}</small></li>`).join('')}</ul></div>` : '';
+    const main = last
+      ? `<div class="card"><div class="card-h"><h3>${esc(last.titolo || ST_T[last.stato] || 'Report')}</h3><span class="pill ${esc(last.stato)}">${ST_T[last.stato] || ''}</span></div>
+          <p class="muted small tm-when">${esc(when(last.data))}${last.durata ? ` · ${last.durata} s` : ''}</p>${voci}</div>${storia}`
+      : `<div class="card">${empty(`${agent.n}: da attivare`, esc(agent.r) + '. Chiedi a Claude di attivarlo: qui vedrai i suoi report.')}</div>`;
+    return `${tErr ? `<div class="card flat tm-err"><b>Report non disponibili.</b> <span class="muted small">${esc(tErr)}</span></div>` : ''}
+      <div class="tm-grid">${cards}</div>
+      <div class="tm-head"><div><h3>${agent.n}</h3><p class="muted small">${esc(agent.r)}</p></div><button class="btn sm ghost" type="button" data-act="tmreload">Aggiorna</button></div>
+      ${main}
+      <p class="muted small foot">Gli agenti lavorano su Claude, non sul tuo server: non rallentano il gestionale. Leggono solo la demo e i file del sito, mai i dati dei clienti.</p>`;
   }
 
   /* ================= IMPOSTAZIONI ================= */
@@ -840,6 +885,7 @@
       const cp = t.closest('[data-copy]'); if (cp) { const v = cp.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast('Copiato', 'ok'), () => toast(v)); return; }
       const th = t.closest('[data-theme]'); if (th && th.tagName === 'BUTTON') { LS.set('cdcx_theme', th.dataset.theme); applyTheme(th.dataset.theme); render(); return; }
       const fc = t.closest('[data-fcli]'); if (fc) { F.cli = fc.dataset.fcli; LS.set('cdcx_fcli', F.cli); render(); return; }
+      const tm = t.closest('[data-tm]'); if (tm) { tSel = tm.dataset.tm; render(); return; }
       const fu = t.closest('[data-fut]'); if (fu) { F.ut = fu.dataset.fut; render(); return; }
       const fr = t.closest('[data-freg]'); if (fr) { F.reg = fr.dataset.freg; render(); return; }
       const frg = t.closest('[data-freg-go]'); if (frg) { F.reg = frg.dataset.fregGo; F.q = ''; }
@@ -874,6 +920,7 @@
       if (k === 'kick' && em) { const u = (D.users || []).find(x => x.email === em); if (await ask('Disconnettere?', `${esc(u ? u.nome : em)} dovrà rientrare con email e password su tutti i dispositivi.`, 'Disconnetti')) act('adminLogoutUser', { email: em }, 'Disconnesso da tutti i dispositivi'); return; }
       if (k === 'userdel' && em) { const u = (D.users || []).find(x => x.email === em); if (await ask('Eliminare l\'utente?', `L'account di <b>${esc(u ? u.nome : em)}</b> viene cancellato e non potrà più entrare. I dati del gestionale restano.`, 'Elimina', true)) { const r = await act('adminDelUser', { email: em }, 'Utente eliminato'); if (r) { closeDrawer(true); history.replaceState(null, '', '#utenti'); } } return; }
       if (k === 'sessdrop') { const id = a.closest('[data-sess]').dataset.sess; act('adminDropSession', { id }, 'Sessione chiusa', 'Chiudo la sessione…'); return; }
+      if (k === 'tmreload') { await loadTeam(true); toast('Report aggiornati', 'ok'); return; }
       if (k === 'kickall') { const S = (D.sess || []).filter(s => !s.io); if (!(await ask('Chiudere tutte le altre sessioni?', `${plural(S.length, 'dispositivo verrà disconnesso', 'dispositivi verranno disconnessi')}: tutti dovranno rientrare con la password.`, 'Chiudi tutte', true))) return; busy('Chiudo le sessioni…'); for (const s of S) { try { const r = await post('adminDropSession', { id: s.id }); if (r && r.users) D = r; } catch {} } busy(); render(); toast('Sessioni chiuse', 'ok'); return; }
     });
     // aggiornamento automatico: dispositivi collegati e registro restano freschi
