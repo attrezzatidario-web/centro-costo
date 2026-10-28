@@ -462,7 +462,7 @@
   async function loadTeam(force) {
     if (tBusy || (T && !force)) return; tBusy = true;
     try { T = await post('adminTeam'); tErr = ''; }
-    catch (e) { if (e instanceof AuthError) return; tErr = e.message; T = T || { report: [] }; }
+    catch (e) { if (e instanceof AuthError) return; tErr = /Aggiorna lo script/.test(e.message) ? 'Incolla in Apps Script il Code.gs cdc-5.1 per vedere i report.' : e.message; T = T || { report: [] }; }
     finally { tBusy = false; }
     if (view === 'team') render(); else badges();
   }
