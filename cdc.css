@@ -3366,3 +3366,12 @@ body.scn-on { overflow: hidden; }
 .ax-lnk { all: unset; cursor: pointer; color: var(--accent); font-weight: 600; } .ax-lnk:hover { text-decoration: underline; }
 @media (max-width: 640px) { .lk-r { grid-template-columns: minmax(0, 1fr) auto; } .lk-t { grid-column: 1 / -1; } .lk-r .chip { display: none; } }
 .pv-ftag { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 2px 6px; margin-right: 7px; vertical-align: 2px; }
+
+/* v123: Dashboard — barra del periodo staccata dal contenuto, cifra principale sempre su una riga */
+#v-home { gap: 16px; }
+#v-home > .gl-bar { padding: 0; }
+#v-home .gl-month { box-shadow: var(--shadow); border-color: transparent; padding: 4px; }
+#v-home .gl-month select { padding-left: 12px; }
+.db-hero .gh-big { white-space: nowrap; font-size: clamp(36px, 4.1vw, 60px); }
+@media (min-width: 980px) { .db-top { grid-template-columns: minmax(0, 1fr) minmax(340px, .9fr); } }
+@media (max-width: 899px) { #v-home { gap: 12px; } #v-home .gl-month { display: flex; width: 100%; } #v-home .gl-month select { flex: 1; text-align: center; text-align-last: center; } .db-hero .gh-big { font-size: clamp(34px, 10vw, 46px); } }
