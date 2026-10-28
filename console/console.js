@@ -449,7 +449,7 @@
   }
 
   /* ================= TEAM (agenti) ================= */
-  // I report li scrivono gli agenti (attività programmate) nella cartella Drive «Centro di Costo - Team»; lo script li legge con adminTeam.
+  // I report li scrivono gli agenti (attività programmate) nella cartella Drive «Centro di Costo - Team»; li legge lo script separato TEAM_URL (team.gs), indipendente da Code.gs.
   const AGENTI = [
     { k: 'guardiano', n: 'Guardiano', r: 'Ogni mattina prova app, demo, Console e Presenze e controlla i backup', ic: '<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.2 2.2 4.4-4.4"/>' },
     { k: 'informatico', n: 'Informatico', r: 'Ogni settimana rivede codice, sicurezza e velocità', ic: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>' },
@@ -457,12 +457,19 @@
     { k: 'marketing', n: 'Marketing', r: 'Idee per post, testi e confronto con la concorrenza', ic: '<path d="M4 10v4l11 5V5z"/><path d="M15 9a3 3 0 0 1 0 6M7 14l1 5h3"/>' },
     { k: 'grafico', n: 'Grafico', r: 'Schermate, animazioni e presentazione, su richiesta', ic: '<circle cx="12" cy="12" r="8.5"/><circle cx="8.5" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="15.5" cy="10" r="1.2"/><path d="M12 20.5c-1.5 0-2-1-2-2 0-1.3 1-2 2.2-2H14a3 3 0 0 0 3-3"/>' }
   ];
+  const TEAM_URL = ''; // script Google separato «Centro di Costo - Team» (team.gs): non dipende da Code.gs
   const ST_T = { ok: 'Tutto ok', warn: 'Da controllare', bad: 'Problema' };
   let T = null, tErr = '', tBusy = false, tSel = 'guardiano';
   async function loadTeam(force) {
     if (tBusy || (T && !force)) return; tBusy = true;
-    try { T = await post('adminTeam'); tErr = ''; }
-    catch (e) { if (e instanceof AuthError) return; tErr = /Aggiorna lo script/.test(e.message) ? 'Incolla in Apps Script il Code.gs cdc-5.1 per vedere i report.' : e.message; T = T || { report: [] }; }
+    try {
+      if (!TEAM_URL) throw new Error('Lo script del Team non è ancora collegato.');
+      let r; try { r = await fetch(TEAM_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'report', token: tok }), credentials: 'omit', referrerPolicy: 'no-referrer' }); } catch { throw new Error('Connessione assente'); }
+      const j = await r.json().catch(() => ({ ok: false, error: 'Risposta non valida dallo script del Team' }));
+      if (!j.ok) throw new Error(j.error || 'Errore');
+      T = j.result; tErr = '';
+    }
+    catch (e) { tErr = e.message; T = T || { report: [] }; }
     finally { tBusy = false; }
     if (view === 'team') render(); else badges();
   }
