@@ -45,7 +45,7 @@
   /* ---------- demo: stessi calcoli, dati generati sul dispositivo ---------- */
   const loadJs = src => new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
   async function demoInit() {
-    if (!window.CDC_DEMO) { await loadJs('../settori.js?v=128'); await loadJs('../demo.js?v=128'); }
+    if (!window.CDC_DEMO) { await loadJs('../settori.js?v=129'); await loadJs('../demo.js?v=129'); }
     D0 = window.CDC_DEMO(LS.get('cdc_demo_set', '') || 'veicoli');
     const extra = LS.get('cdc_pz_demo', { p: [], a: [], del: [] });
     D0.presenze.push(...extra.p.filter(p => p.dip === 'dpd1')); D0.assenze.push(...extra.a); D0.assenze = D0.assenze.filter(a => !extra.del.includes(a.id));
@@ -134,7 +134,7 @@
       </section>
       <section class="pz-actions">${nx.map((k, i) => `<button type="button" class="pz-big ${BTN[k][1]}${i ? ' alt' : ''}" data-timbra="${k}">${svg(BTN[k][1])}<span>${BTN[k][0]}</span></button>`).join('')}${set().geo ? `<p class="pz-geo">${svg('pin')}La timbratura salva la tua posizione</p>` : ''}</section>
       <section class="pz-card"><div class="pz-ch"><h3>Oggi</h3><span class="pz-live" id="pz-today">${hTxt(w.min)}</span></div>
-        ${w.L.length ? `<ol class="pz-tl">${w.L.map(p => `<li class="t-${esc(p.tipo)}"><b>${String(p.ora).slice(0, 5)}</b><span>${esc(TIPI[p.tipo] || p.tipo)}${p.fonte === 'manuale' ? ' <em>corretta dal titolare</em>' : ''}</span></li>`).join('')}${w.open ? '<li class="t-now"><b>adesso</b><span>in corso…</span></li>' : ''}</ol>` : '<p class="pz-empty">Nessuna timbratura oggi</p>'}
+        ${w.L.length ? `<ol class="pz-tl">${w.L.map(p => `<li class="t-${esc(p.tipo)}"><b>${String(p.ora).slice(0, 5)}</b><span>${esc(TIPI[p.tipo] || p.tipo)}${p.fonte === 'manuale' ? ' <em>corretta dal titolare</em>' : ''}${p.pending ? ' <em>invio…</em>' : ''}</span></li>`).join('')}${w.open ? '<li class="t-now"><b>adesso</b><span>in corso…</span></li>' : ''}</ol>` : '<p class="pz-empty">Nessuna timbratura oggi</p>'}
         ${w.pause >= 1 ? `<p class="pz-sub">Pausa: ${hTxt(w.pause)}</p>` : ''}</section>
       <section class="pz-card"><div class="pz-ch"><h3>Questa settimana</h3><span>${hTxt(wk)} su ${nf(target)} h</span></div><div class="pz-prog"><i style="width:${Math.min(100, wk / 60 / target * 100).toFixed(1)}%"></i></div></section>`;
   }
@@ -177,19 +177,32 @@
     const n = srvNow();
     sheet(BTN[k][0], `<div class="pz-conf ${BTN[k][1]}"><div class="pz-conf-t">${pad(n.getHours())}:${pad(n.getMinutes())}</div><p>${esc(TIPI[k])} di oggi, ${esc(dLong(today()))}</p></div>
       <button type="button" class="pz-big ${BTN[k][1]}" id="pz-ok">${svg(BTN[k][1])}<span>Conferma</span></button>`);
-    $('#pz-ok').onclick = e => timbra(k, e.currentTarget);
+    $('#pz-ok').onclick = () => timbra(k);
   }
   const geo = () => new Promise(ok => { if (!navigator.geolocation) return ok(''); navigator.geolocation.getCurrentPosition(p => ok(`${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)} ±${Math.round(p.coords.accuracy)}m`), () => ok(''), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }); });
-  async function timbra(k, btn) {
-    await busyB(btn, 'Registro…', async () => {
+  // v129: la timbratura compare subito sul telefono e parte verso il server in sottofondo; l'ora è quella del momento del tocco
+  let PEND = [];
+  const withPend = m => { if (PEND.length) m.presenze = m.presenze.filter(p => !PEND.some(q => q.id === p.id)).concat(PEND); return m; };
+  const nextOf = () => { const T = punches(today()), l = T.length ? T[T.length - 1].tipo : ''; return { stato: l, next: NEXT[l] || ['in'] }; };
+  async function timbra(k) {
+    const n = srvNow(), p = { id: 'tmp' + Date.now(), data: today(), ora: `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`, tipo: k, fonte: 'app', nota: '', pending: true };
+    PEND.push(p); M.presenze = M.presenze.concat([p]); Object.assign(M, nextOf());
+    closeSheet(); render(); toast(`${TIPI[k]} alle ${p.ora.slice(0, 5)}`, true); if (navigator.vibrate) navigator.vibrate(30);
+    const drop = () => { PEND = PEND.filter(q => q !== p); M.presenze = M.presenze.filter(q => q !== p); Object.assign(M, nextOf()); render(); };
+    for (let i = 0; i < 4; i++) {
       try {
         const luogo = set().geo && !DEMO ? await geo() : '';
         if (set().geo && !DEMO && !luogo) throw new Error('Per timbrare serve la posizione: consentila nelle impostazioni del browser e riprova');
-        const r = await call('pzTimbra', { tipo: k, luogo, device: device() });
-        if (r.dip) setM(r); else { M.presenze = M.presenze.filter(p => p.id !== r.fatto.id).concat([r.fatto]); setM({ ...M, oggi: r.oggi, ora: r.ora, stato: r.stato, next: r.next, stale: false }); } closeSheet(); render(); toast(`${TIPI[k]} registrata alle ${String(r.fatto.ora).slice(0, 5)}`, true);
-        if (navigator.vibrate) navigator.vibrate(30);
-      } catch (e) { if (e instanceof AuthErr) return toLogin(e.message); closeSheet(); toast(netErr(e)); refresh(); }
-    });
+        const r = await call('pzTimbra', { tipo: k, luogo, device: device(), tc: Date.now() + off });
+        PEND = PEND.filter(q => q !== p);
+        if (r.dip) { setM(withPend(r)); if (PEND.length) Object.assign(M, nextOf()); } else { M.presenze = M.presenze.filter(q => q !== p && q.id !== r.fatto.id).concat([r.fatto]); setM({ ...M, oggi: r.oggi, ora: r.ora, ...nextOf(), stale: false }); }
+        render(); return;
+      } catch (e) {
+        if (e instanceof AuthErr) { drop(); return toLogin(e.message); }
+        if (!(e instanceof TypeError) || i === 3) { drop(); toast(netErr(e).replace(/^Nessuna connessione.*/, 'Timbratura non inviata: nessuna connessione, riprova')); return refresh(); }
+        await new Promise(r => setTimeout(r, 2500 * (i + 1)));
+      }
+    }
   }
   function reqForm(tipo) {
     const t = today(), nx = workday(addD(t, 1)) ? addD(t, 1) : addD(t, 3);
@@ -245,7 +258,7 @@
   /* ---------- avvio ---------- */
   async function refresh() {
     syncing(true);
-    try { setM(await call('pzMe')); if (!$('#pz-sheet').classList.contains('on')) render(); }
+    try { setM(withPend(await call('pzMe'))); if (PEND.length) Object.assign(M, nextOf()); if (!$('#pz-sheet').classList.contains('on')) render(); }
     catch (e) {
       if (e instanceof AuthErr) return toLogin(e.message);
       if (!M) { show('pz-app'); $('#pz-main').innerHTML = `<section class="pz-card pz-msg"><h3>Presenze non disponibile</h3><p>${esc(netErr(e))}</p>${me && (me.ruolo !== 'dipendente' || Object.values(me.sezioni || {}).some(Boolean)) ? '<a class="pz-btn" href="../">Vai al gestionale</a>' : ''}<button type="button" class="pz-btn primary" data-retry>Riprova</button><button type="button" class="pz-lnk" data-m2="out">Esci</button></section>`; $('.pz-tabs').hidden = true; }

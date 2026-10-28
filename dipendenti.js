@@ -53,16 +53,27 @@
   const active = () => DIP().filter(d => d.stato !== 'cessato');
   const workday = s => { const g = parseD(s).getDay(); return set().giorni >= 6 ? g !== 0 : g !== 0 && g !== 6; };
   const dailyMin = d => (N(d.ore) || 40) / (set().giorni >= 6 ? 6 : 5) * 60;
-  const punches = (id, day) => PRE().filter(p => String(p.dip) === String(id) && String(p.data).slice(0, 10) === day).sort((a, b) => String(a.ora).localeCompare(String(b.ora)));
+  // v129: indici ricostruiti una volta per disegno — timbrature per dipendente e giorno, assenze per dipendente, ore già calcolate
+  let IX = null, AX = null, WK = new Map();
+  const reIndex = () => { IX = null; AX = null; WK = new Map(); };
+  function ix() {
+    if (IX) return IX; IX = new Map();
+    PRE().forEach(p => { const k = p.dip + '|' + String(p.data).slice(0, 10); let a = IX.get(k); if (!a) IX.set(k, a = []); a.push(p); });
+    IX.forEach(a => a.sort((x, y) => String(x.ora).localeCompare(String(y.ora)))); return IX;
+  }
+  const punches = (id, day) => ix().get(id + '|' + day) || [];
   // ore lavorate in un giorno: da entrata/rientro a pausa/uscita; se manca l'uscita e il giorno è oggi conta fino a adesso
   function work(id, day) {
+    const wk = id + '|' + day; if (day !== today() && WK.has(wk)) return WK.get(wk); const r = work0(id, day); if (day !== today()) WK.set(wk, r); return r;
+  }
+  function work0(id, day) {
     const L = punches(id, day); let m = 0, st = null, open = false, pause = 0, pst = null;
     L.forEach(p => { const t = tmin(p.ora); if (p.tipo === 'in' || p.tipo === 'rientro') { if (pst != null) { pause += t - pst; pst = null; } st = t; } else if (p.tipo === 'pausa' || p.tipo === 'out') { if (st != null) { m += t - st; st = null; } if (p.tipo === 'pausa') pst = t; } });
     if (st != null) { if (day === today()) { const n = new Date(); m += n.getHours() * 60 + n.getMinutes() - st; } open = true; }
     const last = L.length ? L[L.length - 1].tipo : '';
     return { min: Math.max(0, m), pause, L, last, open, anom: open && day < today(), first: L.find(p => p.tipo === 'in'), end: [...L].reverse().find(p => p.tipo === 'out') };
   }
-  const absOn = (id, day) => ASSE().find(a => String(a.dip) === String(id) && (a.stato === 'approvata' || a.stato === 'comunicata') && a.dal <= day && (a.al || a.dal) >= day);
+  const absOn = (id, day) => { if (!AX) { AX = new Map(); ASSE().forEach(a => { if (a.stato !== 'approvata' && a.stato !== 'comunicata') return; const k = String(a.dip); if (!AX.has(k)) AX.set(k, []); AX.get(k).push(a); }); } return (AX.get(String(id)) || []).find(a => a.dal <= day && (a.al || a.dal) >= day); };
   function now(d) {
     const w = work(d.id, today()), a = absOn(d.id, today());
     if (w.last === 'in' || w.last === 'rientro') return { k: 'in', t: `Presente dalle ${String((w.first || w.L[0]).ora).slice(0, 5)}`, c: 'paid' };
@@ -103,7 +114,7 @@
 
   /* ---------- disegno ---------- */
   function render(el, ctx) {
-    C = ctx;
+    C = ctx; reIndex();
     if (root !== el) { root = el; bind(el); }
     if (!S.day) S.day = today();
     if (!S.mon) S.mon = today().slice(0, 7);
@@ -430,7 +441,8 @@
     const risp = stato === 'rifiutata' ? prompt('Motivo del rifiuto (facoltativo, lo vede il dipendente):', '') : '';
     if (risp === null) return;
     const row = { ...a, stato, risposta: risp || '', deciso: new Date().toISOString() };
-    if (C.online()) { try { C.busy(stato === 'approvata' ? 'Approvo…' : 'Rifiuto…'); await C.api('pzDecidi', { id, stato, risposta: risp || '' }); C.busy(); C.applyLocal([{ action: 'upsert', sheet: 'Assenze', row }]); C.toast(stato === 'approvata' ? 'Richiesta approvata · avviso inviato' : 'Richiesta rifiutata'); } catch (e) { C.busy(); C.toast(e.message); } }
+    // v129: si aggiorna subito sullo schermo; il server salva e manda l'email in sottofondo
+    if (C.online()) { C.applyLocal([{ action: 'upsert', sheet: 'Assenze', row }]); C.toast(stato === 'approvata' ? 'Richiesta approvata' : 'Richiesta rifiutata'); C.api('pzDecidi', { id, stato, risposta: risp || '' }).catch(e => { C.applyLocal([{ action: 'upsert', sheet: 'Assenze', row: a }]); C.toast('Non salvata: ' + e.message); }); }
     else { C.write([{ action: 'upsert', sheet: 'Assenze', row }]); C.toast(stato === 'approvata' ? 'Richiesta approvata' : 'Richiesta rifiutata'); }
   }
   function pzLink() {
