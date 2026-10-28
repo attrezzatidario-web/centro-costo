@@ -322,7 +322,45 @@
     // v101: anagrafica fornitori dai nomi usati negli acquisti
     const FN = [...new Set([...D.movimenti.map(r => r.fornitore), ...D.fatture.map(f => f.fornitore)].filter(Boolean))].slice(0, 10);
     const fornitori = FN.map((nome, i) => ({ id: 'dfo' + (i + 1), nome, piva: String(10000000000 + int(1, 89999999999)).slice(0, 11), cf: '', indirizzo: `Via ${pick(['Roma', 'Garibaldi', 'Mazzini', 'dell\'Industria', 'Tiburtina'])} ${int(1, 200)}`, cap: String(int(10, 98)) + '100', citta: pick(['Roma', 'Milano', 'Napoli', 'Bologna', 'Torino', 'Firenze']), prov: '', email: `ordini@${nome.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')}.example`, pec: '', tel: '0' + int(2, 9) + ' ' + int(1000000, 9999999), referente: pick(['Marco', 'Giulia', 'Paolo', 'Sara', 'Luca']) + ' ' + pick(['Rossi', 'Bianchi', 'Verdi', 'Neri']), categoria: (D.movimenti.find(r => r.fornitore === nome) || {}).categoria || '', pagamento: pick(['Bonifico 30 gg d.f.f.m.', 'Ri.Ba. 60 gg d.f.f.m.', 'Bonifico vista fattura']), iban: '', note: '', creato: ds(daysAgo(300)) }));
+    addStaff(D);
     return Object.assign(D, { clienti, articoli, magmov, ddt, vendite, incassi, fornitori });
+  }
+  /* v127: dipendenti, timbrature degli ultimi due mesi e richieste di ferie e permessi */
+  function addStaff(D) {
+    seed = 4242;
+    const CEN = (D.config.centri || ['Sede']).slice(0, 3), y = now.getFullYear();
+    const P = [['Marco', 'Neri', 'Autista e montatore', 'Logistica', 0, 'Tempo indeterminato', 40, 17.8], ['Sara', 'Greco', 'Impiegata amministrativa', 'Ufficio', 0, 'Tempo indeterminato', 40, 19.5], ['Luca', 'Gallo', 'Magazziniere', 'Magazzino', 1, 'Tempo indeterminato', 40, 16.9],
+      ['Paolo', 'Riva', 'Responsabile operativo', 'Operativo', 0, 'Tempo indeterminato', 40, 24.3], ['Andrea', 'Fontana', 'Operaio', 'Produzione', 1, 'Tempo determinato', 40, 16.2], ['Giulia', 'Conti', 'Addetta vendite', 'Commerciale', 2 % CEN.length, 'Part-time', 24, 15.4], ['Elena', 'Marino', 'Apprendista', 'Produzione', 0, 'Apprendistato', 40, 12.6]];
+    const dipendenti = P.map(([nome, cognome, mansione, reparto, c, contratto, ore, costo], i) => {
+      const ass = ds(daysAgo(i === 6 ? 140 : int(500, 3200)));
+      return { id: 'dpd' + (i + 1), nome, cognome, cf: '', nascita: `${int(1968, 2003)}-${pad(int(1, 12))}-${pad(int(1, 28))}`, email: `${nome.toLowerCase()}.${cognome.toLowerCase()}@azienda-demo.example`, tel: `3${int(20, 49)} ${int(100, 999)} ${int(1000, 9999)}`, indirizzo: '', mansione, reparto, sede: CEN[c % CEN.length] || '', contratto, livello: pick(['CCNL Commercio 4°', 'CCNL Metalmeccanico C2', 'CCNL Commercio 5°', 'CCNL Metalmeccanico D1']), assunzione: ass,
+        fine: contratto === 'Tempo determinato' ? ds(daysAgo(-int(12, 40))) : contratto === 'Apprendistato' ? ds(daysAgo(-560)) : '', ore, costo, ferie: 26, permessi: 32, iban: '', stato: 'attivo', account: '', visita: ds(daysAgo(-int(-20, 300))), corso: ds(daysAgo(-int(15, 700))), colore: '', note: '', creato: ass };
+    });
+    const presenze = [], assenze = [], t = (h, m) => `${pad(h)}:${pad(Math.max(0, Math.min(59, m)))}:${pad(int(0, 59))}`;
+    const off = new Set(); // giorni di assenza approvata
+    const addA = (i, tipo, dal, al, stato, extra = {}) => { const a = { id: 'dsa' + uid(), dip: dipendenti[i].id, tipo, dal, al, ore: '', motivo: '', stato, risposta: '', chi: '', creato: ds(daysAgo(int(2, 20))) + 'T09:00:00.000Z', deciso: stato === 'attesa' || stato === 'comunicata' ? '' : ds(daysAgo(1)) + 'T10:00:00.000Z', ...extra }; assenze.push(a); if (stato === 'approvata' && tipo !== 'permesso' || stato === 'comunicata') for (let d = new Date(dal); ds(d) <= al; d.setDate(d.getDate() + 1)) off.add(a.dip + ds(d)); };
+    const wdBack = (n, len) => { let d = daysAgo(n); while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() - 1); const s0 = ds(d); let e = new Date(d), k = 1; while (k < len) { e.setDate(e.getDate() + 1); if (![0, 6].includes(e.getDay())) k++; } return [s0, ds(e)]; };
+    let r = wdBack(32, 5); addA(1, 'ferie', r[0], r[1], 'approvata', { motivo: 'Vacanza' });
+    r = wdBack(9, 2); addA(4, 'malattia', r[0], r[1], 'comunicata', { motivo: 'Certificato n. 2981' });
+    r = wdBack(18, 1); addA(2, 'permesso', r[0], r[0], 'approvata', { ore: 3, motivo: 'Visita medica' });
+    r = wdBack(-20, 5); addA(0, 'ferie', r[0], r[1], 'attesa', { motivo: 'Matrimonio di mio fratello' });
+    r = wdBack(-6, 1); addA(5, 'permesso', r[0], r[0], 'attesa', { ore: 2, motivo: 'Colloquio a scuola' });
+    r = wdBack(-35, 3); addA(3, 'ferie', r[0], r[1], 'approvata');
+    r = wdBack(26, 1); addA(6, 'ferie', r[0], r[0], 'rifiutata', { risposta: 'Giornata di inventario, scegli un altro giorno' });
+    const nowM = now.getHours() * 60 + now.getMinutes();
+    for (let g = 60; g >= 0; g--) {
+      const d = daysAgo(g), day = ds(d); if ([0, 6].includes(d.getDay())) continue;
+      dipendenti.forEach((p, i) => {
+        if (off.has(p.id + day)) return;
+        const pt = p.ore < 30, st = (pt ? 14 * 60 : 8 * 60) + int(-12, 14) + (i === 3 ? -20 : 0), pa = st + (pt ? 0 : 240 + int(-10, 15)), re = pa + int(55, 65), en = pt ? st + 4 * 60 + int(-5, 20) : re + 240 + int(-10, 45);
+        const seq = pt ? [['in', st], ['out', en]] : [['in', st], ['pausa', pa], ['rientro', re], ['out', en]];
+        seq.forEach(([tipo, m], k) => { if (g === 0 && m > nowM) return; if (g === 3 && i === 2 && tipo === 'out') return; presenze.push({ id: 'dpz' + uid(), dip: p.id, data: day, ora: t(Math.floor(m / 60), m % 60), tipo, sede: p.sede, fonte: g === 12 && i === 1 && k === 0 ? 'manuale' : 'app', luogo: '', disp: '', nota: g === 12 && i === 1 && k === 0 ? 'Dimenticata la timbratura' : '', chi: '', creato: day }); });
+      });
+    }
+    // oggi: Elena non ha ancora timbrato
+    const td = ds(now); for (let k = presenze.length - 1; k >= 0; k--) if (presenze[k].data === td && presenze[k].dip === 'dpd7') presenze.splice(k, 1);
+    D.config.pzSet = { giorni: 5, geo: false };
+    Object.assign(D, { dipendenti, presenze, assenze });
   }
   window.CDC_DEMO = id => addSales(PROF[id] ? sector(id) : vei(), PROF[id] ? id : 'veicoli');
 })();

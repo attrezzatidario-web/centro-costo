@@ -1,6 +1,6 @@
 /* Centro di Costo — service worker: app utilizzabile anche offline */
-const CACHE = 'centro-costo-v126';
-const SHELL = ['./', 'index.html', 'style.css', 'cdc.css', 'app.js', 'settori.js', 'auth-fx.js', 'motion.js', 'tour.js', 'analisi.js', 'tour.css', 'gls-geo.js', 'manifest.json', 'manifest-pv.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'logo.svg'];
+const CACHE = 'centro-costo-v127';
+const SHELL = ['./', 'index.html', 'style.css', 'cdc.css', 'app.js', 'settori.js', 'auth-fx.js', 'motion.js', 'tour.js', 'analisi.js', 'dipendenti.js', 'presenze/index.html', 'presenze/presenze.js', 'presenze/presenze.css', 'presenze/manifest.json', 'tour.css', 'gls-geo.js', 'manifest.json', 'manifest-pv.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'logo.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -16,6 +16,6 @@ self.addEventListener('fetch', e => {
       const copy = r.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return r;
-    }).catch(() => caches.match(e.request).then(r => r || (u.pathname.includes('/console/') ? caches.match('console/index.html') : caches.match('index.html'))))
+    }).catch(() => caches.match(e.request).then(r => r || (u.pathname.includes('/console/') ? caches.match('console/index.html') : u.pathname.includes('/presenze/') ? caches.match('presenze/index.html') : caches.match('index.html'))))
   );
 });

@@ -1,0 +1,18 @@
+{
+  "name": "Presenze — Centro di Costo",
+  "short_name": "Presenze",
+  "description": "Timbra entrata e uscita, chiedi ferie e permessi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#17366d",
+  "theme_color": "#17366d",
+  "lang": "it",
+  "icons": [
+    { "src": "../icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "../icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "../icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "id": "./presenze"
+}

@@ -1,0 +1,297 @@
+/* Centro di Costo — app Presenze (v127)
+   Il dipendente entra con le stesse credenziali del gestionale: timbra entrata, pausa e uscita (l'ora la decide il server)
+   e chiede ferie, permessi o comunica la malattia. Nella demo tutto resta sul dispositivo. */
+(() => {
+  'use strict';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxExGwxVNa08xHz1zp2BmoGkvT1LX7jj-yfdbzbWckqOBsMxPsISmDdKgDmx4uqwRiW/exec';
+  const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
+  const $ = (q, r = document) => r.querySelector(q), $$ = (q, r = document) => [...r.querySelectorAll(q)];
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parseD = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+  const addD = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return ymd(d); };
+  const dIt = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
+  const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  const GG = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const dLong = s => { const d = parseD(s); return `${GG[d.getDay()]} ${d.getDate()} ${MESI[d.getMonth()]}`; };
+  const hm = m => { m = Math.max(0, Math.round(m)); return `${Math.floor(m / 60)}:${pad(m % 60)}`; };
+  const hTxt = m => { m = Math.max(0, Math.round(m)); const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? ' ' + pad(r) : ''}` : `${r} min`; };
+  const tmin = t => { const [h, m, s] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) + (s || 0) / 60; };
+  const nf = n => (Math.round(n * 10) / 10).toLocaleString('it-IT');
+  const TIPI = { in: 'Entrata', pausa: 'Inizio pausa', rientro: 'Fine pausa', out: 'Uscita' };
+  const BTN = { in: ['Timbra l\'entrata', 'go'], pausa: ['Inizia la pausa', 'pause'], rientro: ['Torna dalla pausa', 'go'], out: ['Timbra l\'uscita', 'stop'] };
+  const ASS = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', altro: 'Altra assenza' };
+  const AST = { attesa: ['wait', 'In attesa'], approvata: ['ok', 'Approvata'], rifiutata: ['no', 'Rifiutata'], comunicata: ['info', 'Comunicata'] };
+  const IC = { go: '<path d="M5 12h12M13 6l6 6-6 6"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>', pause: '<path d="M9 6v12M15 6v12"/>', plus: '<path d="M12 5v14M5 12h14"/>', out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>', key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/>', grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/>', pin: '<path d="M12 21s-7-5.6-7-11.2A7 7 0 0 1 19 9.8C19 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.6"/>', check: '<path d="M5 12l5 5L20 7"/>' };
+  const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k] || ''}</svg>`;
+
+  let url = LS.get('cdc_url', '') || SCRIPT_URL; if (url === 'local') url = SCRIPT_URL;
+  let tok = LS.get('cdc_tok', ''), me = LS.get('cdc_me', null), M = null, DEMO = false, tab = 'oggi', mon = '', off = 0, clockT = 0, D0 = null;
+
+  /* ---------- rete ---------- */
+  class AuthErr extends Error {}
+  const device = () => ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '') + (matchMedia('(max-width: 640px)').matches ? ' · telefono' : '') + ' · Presenze';
+  async function post(action, extra = {}) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: tok, ...extra }), credentials: 'omit', referrerPolicy: 'no-referrer' });
+    const j = await r.json();
+    if (!j.ok && j.auth) throw new AuthErr(j.error || 'Sessione scaduta: entra di nuovo');
+    if (!j.ok) throw new Error(/sconosciuta/i.test(j.error || '') ? 'Il gestionale va aggiornato alla versione cdc-5.0 per usare Presenze' : j.error || 'Operazione non riuscita');
+    return j.result;
+  }
+  const netErr = e => e instanceof TypeError ? 'Nessuna connessione: controlla internet e riprova' : e.message;
+
+  /* ---------- demo: stessi calcoli, dati generati sul dispositivo ---------- */
+  const loadJs = src => new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+  async function demoInit() {
+    if (!window.CDC_DEMO) { await loadJs('../settori.js?v=127'); await loadJs('../demo.js?v=127'); }
+    D0 = window.CDC_DEMO(LS.get('cdc_demo_set', '') || 'veicoli');
+    const extra = LS.get('cdc_pz_demo', { p: [], a: [], del: [] });
+    D0.presenze.push(...extra.p.filter(p => p.dip === 'dpd1')); D0.assenze.push(...extra.a); D0.assenze = D0.assenze.filter(a => !extra.del.includes(a.id));
+  }
+  const demoSave = (k, v) => { const x = LS.get('cdc_pz_demo', { p: [], a: [], del: [] }); x[k].push(v); LS.set('cdc_pz_demo', x); };
+  const NEXT = { '': ['in'], out: ['in'], in: ['pausa', 'out'], rientro: ['pausa', 'out'], pausa: ['rientro', 'out'] };
+  function demoMe() {
+    const d = D0.dipendenti[0], n = new Date(), oggi = ymd(n), from = addD(oggi, -70);
+    const P = D0.presenze.filter(p => p.dip === d.id && p.data >= from), T = P.filter(p => p.data === oggi).sort((a, b) => String(a.ora).localeCompare(String(b.ora))), last = T.length ? T[T.length - 1].tipo : '';
+    return { dip: { id: d.id, nome: d.nome, cognome: d.cognome, mansione: d.mansione, sede: d.sede, ore: d.ore, ferie: d.ferie, permessi: d.permessi, assunzione: d.assunzione }, oggi, ora: `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`, stato: last, next: NEXT[last] || ['in'],
+      presenze: P, assenze: D0.assenze.filter(a => a.dip === d.id), set: D0.config.pzSet || {}, azienda: (D0.config.azienda && D0.config.azienda.nome) || 'Azienda demo', user: me };
+  }
+  async function call(action, extra = {}) {
+    if (!DEMO) return post(action, extra);
+    await new Promise(r => setTimeout(r, 250));
+    const d = D0.dipendenti[0];
+    if (action === 'pzTimbra') { const m = demoMe(); if (!m.next.includes(extra.tipo)) throw new Error('Timbratura non valida in questo momento'); const p = { id: 'dz' + Date.now(), dip: d.id, data: m.oggi, ora: m.ora, tipo: extra.tipo, fonte: 'app', nota: '' }; D0.presenze.push(p); demoSave('p', p); return Object.assign(demoMe(), { fatto: p }); }
+    if (action === 'pzRichiesta') { const a = { id: 'dza' + Date.now(), dip: d.id, tipo: extra.tipo, dal: extra.dal, al: extra.al, ore: extra.tipo === 'permesso' ? Number(extra.ore) || 0 : '', motivo: extra.motivo || '', stato: extra.tipo === 'malattia' ? 'comunicata' : 'attesa', risposta: '', creato: new Date().toISOString(), deciso: '' }; D0.assenze.push(a); demoSave('a', a); return demoMe(); }
+    if (action === 'pzAnnulla') { D0.assenze = D0.assenze.filter(a => a.id !== extra.id); demoSave('del', extra.id); return demoMe(); }
+    return demoMe();
+  }
+
+  /* ---------- calcoli ---------- */
+  const set = () => Object.assign({ giorni: 5, geo: false }, (M && M.set) || {});
+  const workday = s => { const g = parseD(s).getDay(); return set().giorni >= 6 ? g !== 0 : g !== 0 && g !== 6; };
+  const workDays = (a, b) => { let n = 0; for (let d = a; d <= b; d = addD(d, 1)) if (workday(d)) n++; return n; };
+  const srvNow = () => new Date(Date.now() + off);
+  const today = () => M ? M.oggi : ymd(new Date());
+  const punches = day => M.presenze.filter(p => String(p.data).slice(0, 10) === day).sort((a, b) => String(a.ora).localeCompare(String(b.ora)));
+  function work(day) {
+    const L = punches(day); let m = 0, st = null, pause = 0, pst = null;
+    L.forEach(p => { const t = tmin(p.ora); if (p.tipo === 'in' || p.tipo === 'rientro') { if (pst != null) { pause += t - pst; pst = null; } st = t; } else { if (st != null) { m += t - st; st = null; } if (p.tipo === 'pausa') pst = t; } });
+    const live = day === today(), n = srvNow(), nm = n.getHours() * 60 + n.getMinutes() + n.getSeconds() / 60;
+    if (st != null && live) m += nm - st;
+    if (pst != null && live) pause += nm - pst;
+    return { min: Math.max(0, m), pause, L, open: st != null, anom: st != null && !live };
+  }
+  const absOn = day => M.assenze.find(a => (a.stato === 'approvata' || a.stato === 'comunicata') && a.dal <= day && (a.al || a.dal) >= day);
+  function saldo() {
+    const d = M.dip, y = today().slice(0, 4), ass = d.assunzione && String(d.assunzione).slice(0, 4) === y ? parseD(d.assunzione) : null, k = ass ? (12 - ass.getMonth()) / 12 : 1;
+    const fs = Math.round((Number(d.ferie) || 26) * k * 10) / 10, ps = Math.round((Number(d.permessi) || 32) * k * 10) / 10, A = M.assenze.filter(a => String(a.dal).slice(0, 4) === y);
+    const fg = A.filter(a => a.tipo === 'ferie' && a.stato === 'approvata').reduce((s, a) => s + workDays(a.dal, a.al || a.dal), 0);
+    const fa = A.filter(a => a.tipo === 'ferie' && a.stato === 'attesa').reduce((s, a) => s + workDays(a.dal, a.al || a.dal), 0);
+    const pg = A.filter(a => a.tipo === 'permesso' && a.stato === 'approvata').reduce((s, a) => s + (Number(a.ore) || 0), 0);
+    return { fs, fg, fa, fr: fs - fg, ps, pg, pr: ps - pg };
+  }
+
+  /* ---------- schermate ---------- */
+  function show(id) { ['pz-login', 'pz-pwset', 'pz-app'].forEach(x => { $('#' + x).hidden = x !== id; }); $('#pz-boot').hidden = true; }
+  function setM(m) {
+    M = m; const [y, mo, d] = m.oggi.split('-').map(Number), [h, mi, s] = String(m.ora).split(':').map(Number);
+    off = new Date(y, mo - 1, d, h, mi, s || 0).getTime() - Date.now();
+    if (!mon) mon = m.oggi.slice(0, 7);
+    $('#pz-name').textContent = `${m.dip.nome || ''} ${m.dip.cognome || ''}`.trim();
+    $('#pz-org').textContent = [m.azienda, m.dip.mansione].filter(Boolean).join(' · ');
+    $('#pz-av').textContent = (String(m.dip.nome || '?')[0] + String(m.dip.cognome || '')[0]).toUpperCase();
+    const n = m.assenze.filter(a => a.stato === 'attesa').length; $('#pz-badge').hidden = !n; $('#pz-badge').textContent = n;
+    $('#pz-demo').hidden = !DEMO;
+  }
+  function render() {
+    $$('.pz-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    $('#pz-main').innerHTML = tab === 'storico' ? vStorico() : tab === 'richieste' ? vRichieste() : vOggi();
+    tick();
+  }
+  function vOggi() {
+    const w = work(today()), a = absOn(today()), last = w.L.length ? w.L[w.L.length - 1] : null;
+    const st = !last ? (a ? ['abs', ASS[a.tipo] || 'Assenza', 'Oggi risulti assente: buon riposo'] : workday(today()) ? ['idle', 'Non hai ancora timbrato', 'Quando arrivi al lavoro timbra l\'entrata'] : ['idle', 'Oggi è giorno di riposo', 'Se lavori comunque, timbra l\'entrata']) :
+      last.tipo === 'pausa' ? ['pause', 'Sei in pausa', `dalle ${String(last.ora).slice(0, 5)}`] : last.tipo === 'out' ? ['done', 'Giornata conclusa', `uscita alle ${String(last.ora).slice(0, 5)}`] : ['work', 'Sei al lavoro', `dalle ${String(w.L.find(p => p.tipo === 'in').ora).slice(0, 5)}`];
+    const nx = M.next.slice(); if (nx.length === 2 && nx[1] === 'out') nx.reverse();
+    const wk = (() => { const d = parseD(today()), s = addD(today(), -((d.getDay() + 6) % 7)); let t = 0; for (let x = s; x <= today(); x = addD(x, 1)) t += work(x).min; return t; })();
+    const target = (Number(M.dip.ore) || 40);
+    return `<section class="pz-hero st-${st[0]}">
+        <div class="pz-date">${esc(cap(dLong(today())))}</div>
+        <div class="pz-clock" id="pz-clock">--:--<small>:--</small></div>
+        <div class="pz-state"><i></i><b>${esc(st[1])}</b><span>${esc(st[2])}</span></div>
+      </section>
+      <section class="pz-actions">${nx.map((k, i) => `<button type="button" class="pz-big ${BTN[k][1]}${i ? ' alt' : ''}" data-timbra="${k}">${svg(BTN[k][1])}<span>${BTN[k][0]}</span></button>`).join('')}${set().geo ? `<p class="pz-geo">${svg('pin')}La timbratura salva la tua posizione</p>` : ''}</section>
+      <section class="pz-card"><div class="pz-ch"><h3>Oggi</h3><span class="pz-live" id="pz-today">${hTxt(w.min)}</span></div>
+        ${w.L.length ? `<ol class="pz-tl">${w.L.map(p => `<li class="t-${esc(p.tipo)}"><b>${String(p.ora).slice(0, 5)}</b><span>${esc(TIPI[p.tipo] || p.tipo)}${p.fonte === 'manuale' ? ' <em>corretta dal titolare</em>' : ''}</span></li>`).join('')}${w.open ? '<li class="t-now"><b>adesso</b><span>in corso…</span></li>' : ''}</ol>` : '<p class="pz-empty">Nessuna timbratura oggi</p>'}
+        ${w.pause >= 1 ? `<p class="pz-sub">Pausa: ${hTxt(w.pause)}</p>` : ''}</section>
+      <section class="pz-card"><div class="pz-ch"><h3>Questa settimana</h3><span>${hTxt(wk)} su ${nf(target)} h</span></div><div class="pz-prog"><i style="width:${Math.min(100, wk / 60 / target * 100).toFixed(1)}%"></i></div></section>`;
+  }
+  function vStorico() {
+    const [y, m] = mon.split('-').map(Number), last = new Date(y, m, 0).getDate(), days = [];
+    let tot = 0, gl = 0;
+    for (let i = last; i >= 1; i--) { const day = `${mon}-${pad(i)}`; if (day > today()) continue; const w = work(day), a = absOn(day); if (w.min) { tot += w.min; gl++; } days.push({ day, w, a }); }
+    const first = addD(today(), -69).slice(0, 7);
+    return `<div class="pz-mnav"><button type="button" class="pz-ib" data-mon="-1"${mon <= first ? ' disabled' : ''} aria-label="Mese precedente">‹</button><b>${esc(cap(MESI[m - 1]))} ${y}</b><button type="button" class="pz-ib" data-mon="1"${mon >= today().slice(0, 7) ? ' disabled' : ''} aria-label="Mese successivo">›</button></div>
+      <div class="pz-tiles"><div><span>Ore lavorate</span><b>${hm(tot)}</b></div><div><span>Giorni</span><b>${gl}</b></div><div><span>Media al giorno</span><b>${gl ? hm(tot / gl) : '—'}</b></div></div>
+      <section class="pz-card pz-days">${days.map(({ day, w, a }) => `<div class="pz-day${workday(day) ? '' : ' we'}${w.anom ? ' an' : ''}"><span class="pz-dd"><b>${parseD(day).getDate()}</b>${GG[parseD(day).getDay()].slice(0, 3)}</span>
+        <span class="pz-dl">${w.L.length ? w.L.map(p => `<em class="p-${esc(p.tipo)}">${String(p.ora).slice(0, 5)}</em>`).join('') : a ? `<em class="p-abs">${esc(ASS[a.tipo])}</em>` : `<small>${workday(day) ? 'nessuna timbratura' : 'riposo'}</small>`}${w.anom ? '<small class="pz-an">manca l\'uscita: avvisa il titolare</small>' : ''}</span>
+        <b class="pz-dh">${w.min ? hm(w.min) : ''}</b></div>`).join('') || '<p class="pz-empty">Nessun giorno</p>'}</section>
+      <p class="pz-foot">Le timbrature vengono registrate con l'ora del server. Per correggerne una chiedi al titolare.</p>`;
+  }
+  function vRichieste() {
+    const s = saldo(), L = M.assenze.slice().sort((a, b) => String(b.dal).localeCompare(String(a.dal)));
+    return `<div class="pz-tiles"><div><span>Ferie residue</span><b>${nf(s.fr)} <small>gg</small></b><em>${nf(s.fg)} godute${s.fa ? ` · ${nf(s.fa)} in attesa` : ''}</em></div><div><span>Permessi residui</span><b>${nf(s.pr)} <small>h</small></b><em>su ${nf(s.ps)} h</em></div></div>
+      <div class="pz-reqb"><button type="button" class="pz-btn primary" data-req="ferie">${svg('plus')}Chiedi ferie</button><button type="button" class="pz-btn" data-req="permesso">Permesso</button><button type="button" class="pz-btn" data-req="malattia">Malattia</button></div>
+      <section class="pz-card"><div class="pz-ch"><h3>Le tue richieste</h3></div>${L.length ? L.map(a => { const st = AST[a.stato] || AST.attesa, n = a.tipo === 'permesso' && Number(a.ore) ? `${nf(Number(a.ore))} ore` : `${workDays(a.dal, a.al || a.dal)} gg`; return `<div class="pz-req"><div><b>${esc(ASS[a.tipo] || a.tipo)} · ${n}</b><small>${a.dal === (a.al || a.dal) ? esc(cap(dLong(a.dal))) : `dal ${esc(dIt(a.dal))} al ${esc(dIt(a.al))}`}${a.motivo ? ' · ' + esc(a.motivo) : ''}</small>${a.risposta ? `<small class="pz-risp">Risposta: ${esc(a.risposta)}</small>` : ''}</div><span class="pz-st ${st[0]}">${st[1]}</span>${a.stato === 'attesa' ? `<button type="button" class="pz-lnk" data-annulla="${esc(a.id)}">Annulla</button>` : ''}</div>`; }).join('') : '<p class="pz-empty">Nessuna richiesta. Quando ne fai una, il titolare riceve un avviso.</p>'}</section>`;
+  }
+
+  /* ---------- orologio ---------- */
+  function tick() {
+    clearTimeout(clockT);
+    const c = $('#pz-clock'); if (c) { const n = srvNow(); c.innerHTML = `${pad(n.getHours())}:${pad(n.getMinutes())}<small>:${pad(n.getSeconds())}</small>`; }
+    const t = $('#pz-today'); if (t && M) t.textContent = hTxt(work(today()).min);
+    if (M && ymd(srvNow()) !== M.oggi && !document.hidden) { refresh(); return; }
+    clockT = setTimeout(tick, 1000 - (Date.now() % 1000) + 5);
+  }
+
+  /* ---------- fogli, avvisi ---------- */
+  let toastT = 0;
+  function toast(t, ok) { const e = $('#pz-toast'); e.innerHTML = `${ok ? svg('check') : ''}<span>${esc(t)}</span>`; e.className = 'pz-toast' + (ok ? ' ok' : ''); e.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { e.hidden = true; }, 3200); }
+  function sheet(title, html) { $('#pz-sh-t').textContent = title; $('#pz-sh-b').innerHTML = html; $('#pz-sheet').hidden = false; requestAnimationFrame(() => $('#pz-sheet').classList.add('on')); }
+  function closeSheet() { const s = $('#pz-sheet'); s.classList.remove('on'); setTimeout(() => { s.hidden = true; }, 200); }
+  const busyB = async (b, txt, fn) => { const h = b.innerHTML; b.disabled = true; b.innerHTML = `<span class="pz-spin sm"></span><span>${esc(txt)}</span>`; try { return await fn(); } finally { b.disabled = false; b.innerHTML = h; } };
+
+  function confirmTimbra(k) {
+    const n = srvNow();
+    sheet(BTN[k][0], `<div class="pz-conf ${BTN[k][1]}"><div class="pz-conf-t">${pad(n.getHours())}:${pad(n.getMinutes())}</div><p>${esc(TIPI[k])} di oggi, ${esc(dLong(today()))}</p></div>
+      <button type="button" class="pz-big ${BTN[k][1]}" id="pz-ok">${svg(BTN[k][1])}<span>Conferma</span></button>`);
+    $('#pz-ok').onclick = e => timbra(k, e.currentTarget);
+  }
+  const geo = () => new Promise(ok => { if (!navigator.geolocation) return ok(''); navigator.geolocation.getCurrentPosition(p => ok(`${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)} ±${Math.round(p.coords.accuracy)}m`), () => ok(''), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }); });
+  async function timbra(k, btn) {
+    await busyB(btn, 'Registro…', async () => {
+      try {
+        const luogo = set().geo && !DEMO ? await geo() : '';
+        if (set().geo && !DEMO && !luogo) throw new Error('Per timbrare serve la posizione: consentila nelle impostazioni del browser e riprova');
+        const r = await call('pzTimbra', { tipo: k, luogo, device: device() });
+        setM(r); closeSheet(); render(); toast(`${TIPI[k]} registrata alle ${String(r.fatto.ora).slice(0, 5)}`, true);
+        if (navigator.vibrate) navigator.vibrate(30);
+      } catch (e) { if (e instanceof AuthErr) return toLogin(e.message); closeSheet(); toast(netErr(e)); refresh(); }
+    });
+  }
+  function reqForm(tipo) {
+    const t = today(), nx = workday(addD(t, 1)) ? addD(t, 1) : addD(t, 3);
+    sheet(tipo === 'malattia' ? 'Comunica la malattia' : 'Nuova richiesta', `<form id="pz-rf" class="pz-form">
+      <div class="pz-seg">${Object.entries(ASS).map(([k, l]) => `<label><input type="radio" name="tipo" value="${k}"${k === tipo ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div>
+      <div class="pz-row"><label class="pz-f"><span>Dal</span><input type="date" name="dal" value="${tipo === 'malattia' ? t : nx}" min="${addD(t, -30)}" required></label><label class="pz-f" data-al><span>Al</span><input type="date" name="al" value="${tipo === 'malattia' ? t : nx}" required></label></div>
+      <div class="pz-row" data-ore hidden><label class="pz-f"><span>Dalle</span><input type="time" name="h1" value="09:00"></label><label class="pz-f"><span>Alle</span><input type="time" name="h2" value="11:00"></label></div>
+      <label class="pz-f"><span data-mot>Motivo (facoltativo)</span><input name="motivo" maxlength="200" placeholder="Es. visita medica, impegni familiari"></label>
+      <p class="pz-sub" id="pz-rinfo"></p><p class="pz-err" id="pz-rerr"></p>
+      <button type="submit" class="pz-btn primary wide">Invia</button></form>`);
+    const f = $('#pz-rf'), upd = () => {
+      const tp = f.tipo.value, perm = tp === 'permesso';
+      $('[data-ore]', f).hidden = !perm; $('[data-al]', f).hidden = perm;
+      $('[data-mot]', f).textContent = tp === 'malattia' ? 'Numero del certificato (protocollo)' : 'Motivo (facoltativo)';
+      if (perm) f.al.value = f.dal.value; else if (f.al.value < f.dal.value) f.al.value = f.dal.value;
+      const n = perm ? (tmin(f.h2.value) - tmin(f.h1.value)) / 60 : workDays(f.dal.value, f.al.value || f.dal.value);
+      $('#pz-rinfo').textContent = perm ? (n > 0 ? `${nf(n)} ore di permesso` : '') : `${n} ${n === 1 ? 'giorno lavorativo' : 'giorni lavorativi'}${tp === 'ferie' ? ` · ti restano ${nf(saldo().fr)} giorni` : ''}${tp === 'malattia' ? ' · il titolare riceve subito l\'avviso' : ''}`;
+    };
+    f.addEventListener('input', upd); f.addEventListener('change', upd); upd();
+    f.onsubmit = async ev => {
+      ev.preventDefault(); $('#pz-rerr').textContent = '';
+      const tp = f.tipo.value, perm = tp === 'permesso', ore = perm ? Math.round((tmin(f.h2.value) - tmin(f.h1.value)) / 60 * 100) / 100 : '';
+      if (perm && !(ore > 0)) return void ($('#pz-rerr').textContent = 'Controlla l\'orario del permesso');
+      if (!perm && f.al.value < f.dal.value) return void ($('#pz-rerr').textContent = 'La data di fine è prima di quella di inizio');
+      const motivo = [perm ? `dalle ${f.h1.value} alle ${f.h2.value}` : '', f.motivo.value.trim()].filter(Boolean).join(' · ');
+      await busyB(f.querySelector('[type=submit]'), 'Invio…', async () => {
+        try { const r = await call('pzRichiesta', { tipo: tp, dal: f.dal.value, al: perm ? f.dal.value : f.al.value, ore, motivo }); setM(r); closeSheet(); tab = 'richieste'; render(); toast(tp === 'malattia' ? 'Malattia comunicata al titolare' : 'Richiesta inviata al titolare', true); }
+        catch (e) { if (e instanceof AuthErr) return toLogin(e.message); $('#pz-rerr').textContent = netErr(e); }
+      });
+    };
+  }
+  function menu() {
+    const gest = me && (me.ruolo !== 'dipendente' || Object.values(me.sezioni || {}).some(Boolean));
+    sheet(`${me && me.nome || ''}`, `<p class="pz-sub" style="margin-top:-6px">${esc(me && me.email || '')}</p><div class="pz-menu">
+      ${gest ? `<a href="../" class="pz-mi">${svg('grid')}<span>Apri il gestionale</span></a>` : ''}
+      ${DEMO ? '' : `<button type="button" class="pz-mi" data-m="pw">${svg('key')}<span>Cambia password</span></button>`}
+      <button type="button" class="pz-mi" data-m="out">${svg('out')}<span>${DEMO ? 'Esci dalla demo' : 'Esci'}</span></button></div>
+      <p class="pz-foot">Per aggiungere Presenze alla schermata Home: menu del browser › «Aggiungi a schermata Home».</p>`);
+    $('#pz-sh-b').onclick = async e => { const b = e.target.closest('[data-m]'); if (!b) return; if (b.dataset.m === 'out') logout(); else { closeSheet(); setTimeout(() => pwSheet(), 220); } };
+  }
+  function pwSheet() {
+    sheet('Cambia password', `<form id="pz-cp" class="pz-form"><label class="pz-f"><span>Password attuale</span><input name="old" type="password" autocomplete="current-password" required></label><label class="pz-f"><span>Nuova password (almeno 8 caratteri)</span><input name="n1" type="password" autocomplete="new-password" minlength="8" required></label><label class="pz-f"><span>Ripeti la nuova password</span><input name="n2" type="password" autocomplete="new-password" minlength="8" required></label><p class="pz-err" id="pz-cperr"></p><button type="submit" class="pz-btn primary wide">Salva</button></form>`);
+    $('#pz-cp').onsubmit = async ev => { ev.preventDefault(); const f = ev.target; const err = m => { $('#pz-cperr').textContent = m; }; if (f.n1.value !== f.n2.value) return err('Le due password non coincidono'); await busyB(f.querySelector('[type=submit]'), 'Salvo…', async () => { try { const r = await post('changePw', { old: f.old.value, nuova: f.n1.value }); tok = r.token; LS.set('cdc_tok', tok); closeSheet(); toast('Password cambiata', true); } catch (e) { err(netErr(e)); } }); };
+  }
+  async function logout() {
+    closeSheet();
+    if (!DEMO && tok) { try { await post('logout'); } catch {} }
+    tok = ''; me = null; M = null; LS.set('cdc_tok', ''); LS.del('cdc_me'); if (DEMO) LS.del('cdc_pz_demo'); DEMO = false;
+    toLogin();
+  }
+  function toLogin(msg) { tok = ''; LS.set('cdc_tok', ''); show('pz-login'); $('#pz-lerr').textContent = msg || ''; clearTimeout(clockT); }
+
+  /* ---------- avvio ---------- */
+  async function refresh() {
+    try { setM(await call('pzMe')); render(); }
+    catch (e) {
+      if (e instanceof AuthErr) return toLogin(e.message);
+      if (!M) { show('pz-app'); $('#pz-main').innerHTML = `<section class="pz-card pz-msg"><h3>Presenze non disponibile</h3><p>${esc(netErr(e))}</p>${me && (me.ruolo !== 'dipendente' || Object.values(me.sezioni || {}).some(Boolean)) ? '<a class="pz-btn" href="../">Vai al gestionale</a>' : ''}<button type="button" class="pz-btn primary" data-retry>Riprova</button><button type="button" class="pz-lnk" data-m2="out">Esci</button></section>`; $('.pz-tabs').hidden = true; }
+      else toast(netErr(e));
+    }
+  }
+  async function start() {
+    if (me && me.mustPw && !DEMO) { show('pz-pwset'); return; }
+    show('pz-app'); $('.pz-tabs').hidden = false;
+    $('#pz-main').innerHTML = '<div class="pz-loading"><div class="pz-spin"></div></div>';
+    if (DEMO) { try { await demoInit(); } catch { $('#pz-main').innerHTML = '<section class="pz-card pz-msg"><p>Demo non disponibile: controlla la connessione</p></section>'; return; } }
+    await refresh();
+  }
+  async function boot() {
+    if (me && me.demo) { DEMO = true; return start(); }
+    if (!tok || !me) return toLogin();
+    start();
+  }
+
+  /* ---------- eventi ---------- */
+  $('#pz-lf').addEventListener('submit', async ev => {
+    ev.preventDefault(); $('#pz-lerr').textContent = '';
+    const u = $('#pz-user').value.trim(), p = $('#pz-pw').value;
+    if (!u || !p) return void ($('#pz-lerr').textContent = 'Scrivi accesso e password');
+    if (/^demo(2026)?$/i.test(u)) { me = { email: 'demo', nome: 'Ospite', ruolo: 'demo', demo: true, sezioni: {} }; LS.set('cdc_me', me); DEMO = true; return start(); }
+    await busyB($('#pz-lgo'), 'Verifico…', async () => {
+      try {
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'login', email: u, password: p, device: device() }), credentials: 'omit', referrerPolicy: 'no-referrer' }).then(x => x.json());
+        if (!r.ok) throw new Error(r.error || 'Accesso non riuscito');
+        tok = r.result.token; me = r.result.user; LS.set('cdc_tok', tok); LS.set('cdc_me', me); $('#pz-pw').value = ''; DEMO = false;
+        start();
+      } catch (e) { $('#pz-lerr').textContent = netErr(e).replace(/^Email o password/, 'Accesso o password'); }
+    });
+  });
+  $('#pz-pf').addEventListener('submit', async ev => {
+    ev.preventDefault(); const f = ev.target, err = m => { $('#pz-perr').textContent = m; };
+    if (f.n1.value.length < 8) return err('La nuova password deve avere almeno 8 caratteri');
+    if (f.n1.value !== f.n2.value) return err('Le due password non coincidono');
+    await busyB(f.querySelector('[type=submit]'), 'Salvo…', async () => {
+      try { const r = await post('changePw', { old: f.old.value, nuova: f.n1.value }); tok = r.token; LS.set('cdc_tok', tok); me = { ...me, mustPw: false }; LS.set('cdc_me', me); f.reset(); start(); toast('Password salvata', true); }
+      catch (e) { if (e instanceof AuthErr) return toLogin(e.message); err(netErr(e)); }
+    });
+  });
+  document.addEventListener('click', e => {
+    const t = e.target;
+    const tb = t.closest('.pz-tabs [data-tab]'); if (tb) { tab = tb.dataset.tab; render(); window.scrollTo(0, 0); return; }
+    const tm = t.closest('[data-timbra]'); if (tm && !tm.closest('#pz-sheet')) return confirmTimbra(tm.dataset.timbra);
+    if (t.closest('[data-close]')) return closeSheet();
+    const mn = t.closest('[data-mon]'); if (mn && !mn.disabled) { const [y, m] = mon.split('-').map(Number); mon = ymd(new Date(y, m - 1 + Number(mn.dataset.mon), 1)).slice(0, 7); render(); return; }
+    const rq = t.closest('[data-req]'); if (rq) return reqForm(rq.dataset.req);
+    const an = t.closest('[data-annulla]'); if (an) { if (!confirm('Annullare questa richiesta?')) return; busyB(an, '…', async () => { try { setM(await call('pzAnnulla', { id: an.dataset.annulla })); render(); toast('Richiesta annullata', true); } catch (er) { toast(netErr(er)); } }); return; }
+    if (t.closest('#pz-menu')) return menu();
+    if (t.closest('[data-retry]')) { $('#pz-main').innerHTML = '<div class="pz-loading"><div class="pz-spin"></div></div>'; return refresh(); }
+    if (t.closest('[data-m2="out"]')) return logout();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#pz-sheet').hidden) closeSheet(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && M) refresh(); });
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('../sw.js').catch(() => {});
+  boot();
+})();

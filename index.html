@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=126">
-  <link rel="stylesheet" href="cdc.css?v=126">
+  <link rel="stylesheet" href="style.css?v=127">
+  <link rel="stylesheet" href="cdc.css?v=127">
 </head>
 <body>
   <div id="splash" class="spx" aria-hidden="true">
@@ -84,7 +84,7 @@
       <div class="auth-card">
         <div class="auth-top"><img src="logo.svg" alt="Centro di Costo" width="52" height="52"><h1 id="auth-title">Accedi</h1><p class="muted" id="auth-sub">Entra con la tua email e la tua password.</p></div>
         <form id="login-form" class="auth-form" data-pane="login" autocomplete="on" novalidate>
-          <label class="f"><span>Email</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" required placeholder="nome@azienda.it"></label>
+          <label class="f"><span>Email o nome utente</span><input id="login-email" name="email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="nome@azienda.it"></label>
           <label class="f"><span>Password</span><span class="pw-w"><input id="login-pw" name="password" type="password" autocomplete="current-password" required placeholder="La tua password"><button type="button" class="pw-eye" data-pweye aria-label="Mostra password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
           <button id="login-go" class="btn primary block" type="submit">Entra</button>
           <button type="button" class="link auth-link" data-auth="forgot">Password dimenticata?</button>
@@ -142,6 +142,7 @@
       <a href="#lyreco" data-view="lyreco"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></svg><span>Lyreco</span></a>
       <a href="#amazon" data-view="amazon"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/><path d="M9 14c1.8 1.2 4.2 1.2 6 0"/></svg><span>Amazon</span></a>
       <a href="#preventivi" data-view="preventivi" class="nv-d"><svg viewBox="0 0 24 24"><path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg><span>Preventivi</span></a>
+      <a href="#dipendenti" data-view="dipendenti"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/></svg><span><span class="lbl-d">Dipendenti</span><span class="lbl-m">Personale</span></span></a>
       <a href="#analisi" data-view="analisi"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Analisi</span></a>
       <a href="#impostazioni" data-view="impostazioni" class="nv-d"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span><span class="lbl-d">Impostazioni</span><span class="lbl-m">Opzioni</span></span></a>
       <button type="button" id="nav-more" class="nv-m" aria-label="Tutte le sezioni"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/></svg><span>Altro</span></button>
@@ -378,6 +379,7 @@
       <section id="v-fornitori" class="view" data-v="fornitori" hidden><div id="fo-body"></div></section>
       <section id="v-magazzino" class="view" data-v="magazzino" hidden><div id="mg-body"></div></section>
 
+      <section id="v-dipendenti" class="view" data-v="dipendenti" hidden><div id="dp-body"></div></section>
       <section id="v-analisi" class="view" data-v="analisi" hidden><div id="an-body"></div></section>
       <section id="v-impostazioni" class="view" data-v="impostazioni" hidden>
         <div class="st-wrap">
@@ -476,6 +478,7 @@
                 <div class="st-row"><div class="st-l"><b>Modifica profilo</b><small>Nome, azienda e telefono.</small></div><button class="btn sm" id="s-me-edit">Modifica</button></div>
                 <div class="st-row"><div class="st-l"><b>Cambia password</b><small>Dopo il cambio gli altri dispositivi dovranno entrare di nuovo.</small></div><button class="btn sm" id="s-pw">Cambia</button></div>
                 <div class="st-row nv-admin" hidden><div class="st-l"><b>Console di amministrazione</b><small>Clienti, gestionali, utenti, permessi e abbonamenti: tutto in un'app separata.</small></div><a class="btn sm" href="console/" target="_blank" rel="noopener">Apri</a></div>
+                <div class="st-row" id="s-pz-row"><div class="st-l"><b>App Presenze</b><small>Timbra entrata e uscita e chiedi ferie e permessi dal telefono, con le stesse credenziali.</small></div><a class="btn sm" href="presenze/" target="_blank" rel="noopener">Apri</a></div>
                 <div class="st-row"><div class="st-l"><b>Aggiorna i dati</b><small>Ricarica tutto dal Foglio Google.</small></div><button class="btn sm" id="s-pull">Aggiorna</button></div>
                 <div class="st-row"><div class="st-l"><b>Esci da questo dispositivo</b><small>Per entrare di nuovo servono email e password.</small></div><button class="btn sm" id="s-logout">Esci</button></div>
                 <div class="st-row st-danger"><div class="st-l"><b>Esci da tutti i dispositivi</b><small>Disconnette il tuo account da telefoni e PC, compreso questo.</small></div><button class="btn sm st-btn-d" id="s-logout-all">Esci da tutti</button></div>
@@ -511,9 +514,9 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="gls-geo.js?v=2"></script>
-  <script src="settori.js?v=126"></script>
+  <script src="settori.js?v=127"></script>
   <script src="auth-fx.js?v=1"></script>
-  <script src="app.js?v=126"></script>
-  <script src="motion.js?v=126"></script>
+  <script src="app.js?v=127"></script>
+  <script src="motion.js?v=127"></script>
 </body>
 </html>

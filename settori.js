@@ -191,6 +191,7 @@
     { k: 'fornitori', t: () => 'Fornitori', d: () => 'Anagrafica dei fornitori con spesa, fatture da pagare e cataloghi' },
     { k: 'magazzino', t: () => 'Magazzino', d: () => 'Articoli, giacenze, carichi e scarichi, avviso sotto scorta' },
     { k: 'vendite', t: () => 'DDT e fatture ai clienti', d: () => 'DDT durante il mese e fatture di fine mese, con PDF e file XML per lo SdI' },
+    { k: 'dipendenti', t: () => 'Dipendenti e presenze', d: () => 'Anagrafica del personale, timbrature dall\'app Presenze, ferie, permessi, scadenze e accessi con permessi per sezione' },
     { k: 'torental', t: () => 'Torental', d: () => 'Listino, ordini e clienti Torental', only: 'veicoli' }
   ];
   const SEMPRE = ['Dashboard', 'Acquisti', 'Fatture fornitori', 'Preventivi e catalogo fornitori'];

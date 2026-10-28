@@ -176,7 +176,7 @@
   const budget = () => cfg('budget') || {};
 
   /* ================= Sync ================= */
-  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi', Fornitori: 'fornitori', DocForn: 'docforn' };
+  const KEY = { Movimenti: 'movimenti', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyfatture', Amazon: 'amazon', AmazonArticoli: 'amazonart', Clienti: 'clienti', Articoli: 'articoli', MagMov: 'magmov', DDT: 'ddt', Vendite: 'vendite', Incassi: 'incassi', Fornitori: 'fornitori', DocForn: 'docforn', Dipendenti: 'dipendenti', Presenze: 'presenze', Assenze: 'assenze' };
   function applyLocal(op) {
     if (op.sheet === 'Config') {
       if (op.action === 'delete') delete db.config[op.id];
@@ -203,6 +203,7 @@
   }
   function write(ops) {
     if (me && me.ruolo === 'lettura') { toast('Il tuo account è in sola lettura: le modifiche non vengono salvate'); return; }
+    if (isDip()) { const no = ops.filter(o => secPerm(opSec(o)) !== 'w'); if (no.length) { ops = ops.filter(o => !no.includes(o)); toast(ops.length ? 'Alcune modifiche non sono permesse dal tuo accesso e non sono state salvate' : 'Il tuo accesso non permette di modificare questi dati'); if (!ops.length) return; } }
     applyMany(ops);
     if (!isLocal()) queue.push(...ops);
     save(); render(); flush();
@@ -242,7 +243,21 @@
   /* ================= v95: settore di attività, moduli e nomi ================= */
   const SET = window.CDC_SETTORI || { list: [], moduli: [], sempre: [], piani: {}, get: () => null };
   const SET_DEF = { id: 'veicoli', n: 'Allestimento veicoli e attrezzature', sede: ['Piazzale', 'Piazzali'], acq: 'Attrezzatura', mod: {}, cat: null };
-  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'incassi', 'clienti', 'fornitori', 'magazzino', 'vendite'];
+  const MOD_K = ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'torental', 'incassi', 'clienti', 'fornitori', 'magazzino', 'vendite', 'dipendenti'];
+  /* v127: permessi per sezione — un dipendente vede solo le sezioni che il titolare gli ha dato ('r' vede, 'w' modifica) */
+  const isDip = () => !!(me && !DEMO && me.ruolo === 'dipendente');
+  const isOwnerU = () => !!(DEMO || !me || me.admin || me.ruolo === 'utente');
+  const VIEW_SEC = { movimenti: 'attrezzatura', articoli: 'attrezzatura' };
+  function secPerm(k) {
+    k = VIEW_SEC[k] || k;
+    if (!me || DEMO) return 'w';
+    if (me.ruolo === 'dipendente') { const v = (me.sezioni || {})[k]; return v === 'w' || v === true ? 'w' : v === 'r' ? 'r' : ''; }
+    if (me.ruolo === 'lettura') return 'r';
+    return 'w';
+  }
+  const SHEET_SEC = { Movimenti: 'attrezzatura', GLS: 'gls', Gasolio: 'gasolio', Fatture: 'fatture', Lyreco: 'lyreco', LyrecoFatture: 'lyreco', Amazon: 'amazon', AmazonArticoli: 'amazon', Clienti: 'clienti', Articoli: 'magazzino', MagMov: 'magazzino', DDT: 'vendite', Vendite: 'vendite', Incassi: 'incassi', Fornitori: 'fornitori', DocForn: 'fornitori', Dipendenti: 'dipendenti', Presenze: 'dipendenti', Assenze: 'dipendenti' };
+  const cfgSec = k => { k = String(k || ''); return /^pv:|^pvClienti$|^pvAcq|^pvLink|^pvList|^persList$|^servizi$|^pvRic/.test(k) ? 'preventivi' : /^tro:|^tr[A-Z]|^trClienti$|^torental/.test(k) ? 'torental' : 'impostazioni'; };
+  const opSec = op => op.sheet === 'Config' ? cfgSec(op.row ? op.row.chiave : op.id) : (SHEET_SEC[op.sheet] || 'impostazioni');
   const AREA_MOD = { gls: 'gls', gas: 'gasolio', ly: 'lyreco', am: 'amazon' };
   // la demo ricorda sul dispositivo il settore scelto; gli altri gestionali lo prendono dal registro «Gestionali»
   const settoreId = () => DEMO ? (LS.get('cdc_demo_set', '') || 'veicoli') : ((me && me.wsSettore) || (isMain() ? 'veicoli' : 'altro'));
@@ -254,6 +269,7 @@
     const c = cfg('moduli');
     if (c && typeof c === 'object' && k in c && !c[k]) return false;
     if (me && !me.admin && me.sezioni && me.sezioni[k] === false) return false; // v102: sezione nascosta a questo utente dalla Console
+    if (isDip() && !secPerm(k)) return false;
     if (c && typeof c === 'object' && k in c) return true;
     const d = settore().mod || {};
     return k in d ? !!d[k] : true;
@@ -268,7 +284,8 @@
     CAT_DEF = [...new Set(RULES.map(r => r[0])), 'Altro'];
     AREAS = AREAS_ALL.filter(a => areaOn(a.k));
     PZ_AREAS = PZ_AREAS_ALL.filter(a => areaOn(a.k));
-    $$('.nav a[data-view]').forEach(a => { if (MOD_K.includes(a.dataset.view)) a.hidden = !modOn(a.dataset.view); });
+    $$('.nav a[data-view]').forEach(a => { const v = a.dataset.view; if (MOD_K.includes(v)) a.hidden = !modOn(v); else if (v !== 'impostazioni') a.hidden = isDip() && !secPerm(v); });
+    document.body.classList.toggle('is-dip', isDip()); document.body.classList.toggle('dip-noset', isDip() && !secPerm('impostazioni'));
     document.body.dataset.settore = s.id;
     lexSet(s);
     dockApply();
@@ -541,7 +558,7 @@
   }
   function renderMe() {
     const el = $('#s-me'); if (!el || !me) return;
-    const R = { admin: 'Amministratore', utente: 'Utente', lettura: 'Sola lettura', demo: 'Demo' };
+    const R = { admin: 'Amministratore', utente: 'Titolare', lettura: 'Sola lettura', demo: 'Demo', dipendente: 'Dipendente' };
     const ini = String(me.nome || me.email || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
     el.innerHTML = `<span class="st-av">${esc(ini)}</span><div><b>${esc(me.nome || '')}</b><span>${esc(me.email || '')}</span><small>${esc(me.wsNome || me.ws || '')} · codice ${esc(me.ws || '')}</small></div><span class="st-pill ${me.admin ? 'on' : ''}">${esc(R[me.ruolo] || me.ruolo || '')}</span>`;
     $('#s-logout-all').closest('.st-row').hidden = DEMO;
@@ -607,7 +624,7 @@
   const rowsSoc = () => soc ? db.movimenti.filter(r => (r.societa || 'Soluzione Veicolare') === soc) : db.movimenti;
 
   /* ================= Router ================= */
-  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi', fornitori: 'Fornitori', analisi: 'Analisi' };
+  const TITLES = { home: 'Dashboard', piazzali: 'Piazzali', preventivi: 'Preventivi', attrezzatura: 'Attrezzatura', movimenti: 'Attrezzatura', articoli: 'Attrezzatura', gls: 'GLS Attrezzati', gasolio: 'Gasolio', fatture: 'Fatture', torental: 'Torental', lyreco: 'Lyreco', amazon: 'Amazon', impostazioni: 'Impostazioni', utenti: 'Utenti e gestionali', clienti: 'Clienti', magazzino: 'Magazzino', vendite: 'DDT e fatture', incassi: 'Incassi', fornitori: 'Fornitori', analisi: 'Analisi', dipendenti: 'Dipendenti' };
   let prevView = '', gKeep = false;
   function go() {
     prevView = view;
@@ -617,6 +634,8 @@
     if (view === 'utenti') { view = 'home'; history.replaceState(null, '', '#home'); }
     applySettore();
     if (MOD_K.includes(view) && !modOn(view)) { view = 'home'; if (location.hash && location.hash !== '#home') history.replaceState(null, '', '#home'); }
+    if (isDip() && view !== 'impostazioni' && !secPerm(view)) { const first = $$('.nav a[data-view]').map(a => a.dataset.view).find(v => v !== 'impostazioni' && (MOD_K.includes(v) ? modOn(v) : secPerm(v))); if (!first && !secPerm('impostazioni') && !sessionStorage.getItem('cdc_stay')) { location.replace('presenze/'); return; } view = first || 'impostazioni'; history.replaceState(null, '', '#' + view); }
+    document.body.classList.toggle('view-ro', secPerm(view) === 'r');
     if (view === 'attrezzatura') ccAnim = true;
     if (view === 'home') ovAnim = true;
     if (view === 'gls') { glsAnim = true; if (prevView !== 'gls' && !gKeep) gMonth = ALLM; gKeep = false; }
@@ -633,8 +652,8 @@
     document.body.dataset.view = navV; dockApply();
     $$('.sub-tabs a').forEach(x => x.classList.toggle('on', x.dataset.st === view));
     $('#title').textContent = TITLES[view];
-    $('#fab').hidden = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori', 'analisi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
-    $('#add-top').style.visibility = ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori', 'analisi'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
+    $('#fab').hidden = secPerm(view) !== 'w' || ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori', 'analisi', 'dipendenti'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'piazzali' || view === 'impostazioni' || view === 'gls' || view === 'home' || view === 'torental' || view === 'lyreco' || view === 'amazon';
+    $('#add-top').style.visibility = secPerm(view) !== 'w' || ['clienti', 'magazzino', 'vendite', 'incassi', 'fornitori', 'analisi', 'dipendenti'].includes(view) || view === 'preventivi' || view === 'utenti' || view === 'impostazioni' || view === 'piazzali' || view === 'gls' || view === 'gasolio' || view === 'home' || view === 'fatture' || view === 'torental' || view === 'lyreco' || view === 'amazon' ? 'hidden' : '';
     if (view !== 'movimenti') { sel.clear(); selMode = false; $('#selbar').hidden = true; document.body.classList.remove('has-sel'); }
     render();
     window.scrollTo(0, 0);
@@ -664,20 +683,35 @@
   function render() {
     applySettore();
     ivaUI();
-    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn, analisi: renderAn }[view];
+    const fn = { home: renderOverview, piazzali: renderPz, preventivi: renderPv, attrezzatura: renderHome, movimenti: renderMov, articoli: renderArt, gls: renderGls, gasolio: renderGas, fatture: renderFat, torental: renderTor, lyreco: renderLy, amazon: renderAm, impostazioni: renderSettings, clienti: renderCli, magazzino: renderMag, vendite: renderVen, incassi: renderInc, fornitori: renderForn, analisi: renderAn, dipendenti: renderDip }[view];
     fn && fn();
   }
   const sub = t => { $('#subtitle').textContent = t || ''; };
   /* v121: Analisi — cerca, filtra, raggruppa ed esporta tutti i dati (analisi.js, caricato quando serve) */
   async function renderAn() {
     const el = $('#an-body'); if (!el) return;
-    if (!window.CDC_AN) { el.innerHTML = '<div class="card"><div class="empty">Carico l\'analisi…</div></div>'; try { await loadLib('analisi.js?v=122'); } catch { el.innerHTML = '<div class="card"><div class="empty">Analisi non disponibile: controlla la connessione e riprova</div></div>'; return; } if (view !== 'analisi') return; }
+    if (!window.CDC_AN) { el.innerHTML = '<div class="card"><div class="empty">Carico l\'analisi…</div></div>'; try { await loadLib('analisi.js?v=127'); } catch { el.innerHTML = '<div class="card"><div class="empty">Analisi non disponibile: controlla la connessione e riprova</div></div>'; return; } if (view !== 'analisi') return; }
     window.CDC_AN.render(el, {
       db: () => db, num, esc, eur, eur0, fmtNum, dIt, toast, busy, sub, isMain, ivaRate,
       modOn: k => modOn(k), lyName: c => lyName(c), pvList, pvTotals, pvFatt, giacMap, fMatch: (f, n) => fMatch(f, n),
       loadXlsx, loadPdf, logoPng, loadFonts, orgName: () => ORG.n,
       sedeWord: () => (settore().sede || ['Sede'])[0], acqWord: () => settore().acq || 'Acquisti', take: () => { const x = anPreset; anPreset = null; return x; },
       openCli: nome => { const c = GX.cli().find(x => pvCliKey(x.nome) === pvCliKey(nome)); if (c) cliForm(c); }, openForn: nome => { const fo = FOR().find(x => fMatch(x, nome)); if (fo) fornForm(fo); }
+    });
+  }
+
+  /* v127: Dipendenti e presenze (dipendenti.js, caricato quando serve) */
+  const PERM_SEC = ['home', 'piazzali', 'attrezzatura', 'gls', 'gasolio', 'fatture', 'incassi', 'vendite', 'clienti', 'fornitori', 'magazzino', 'lyreco', 'amazon', 'preventivi', 'torental', 'analisi', 'dipendenti', 'impostazioni'];
+  const secTitle = k => k === 'piazzali' ? (settore().sede || [, 'Sedi'])[1] : k === 'attrezzatura' ? (settore().acq || 'Acquisti') : k === 'impostazioni' ? 'Impostazioni dell\'azienda' : TITLES[k];
+  async function renderDip() {
+    const el = $('#dp-body'); if (!el) return;
+    if (!window.CDC_DIP) { el.innerHTML = '<div class="card"><div class="empty">Carico i dipendenti…</div></div>'; try { await loadLib('dipendenti.js?v=127'); } catch { el.innerHTML = '<div class="card"><div class="empty">Sezione non disponibile: controlla la connessione e riprova</div></div>'; return; } if (view !== 'dipendenti') return; }
+    window.CDC_DIP.render(el, {
+      db: () => db, write, api, applyLocal: ops => { applyMany(ops); save(); render(); }, num, esc, eur, eur0, fmtNum, dIt, uid, toast, busy, sub, cfg, setConfig, centri,
+      openSheet, closeSheet, loadXlsx, loadPdf, logoPng, loadFonts, orgName: () => ORG.n, sedeWord: () => (settore().sede || ['Sede'])[0],
+      me: () => me, DEMO: () => DEMO, online: () => !DEMO && !isLocal() && navigator.onLine, isOwner: () => isOwnerU(), secPerm,
+      sections: () => PERM_SEC.filter(k => !MOD_K.includes(k) || (modAvail(k) && (() => { const c = cfg('moduli'), d = settore().mod || {}; return c && typeof c === 'object' && k in c ? !!c[k] : k in d ? !!d[k] : true; })())).map(k => ({ k, t: secTitle(k) })),
+      goGas: name => anOpen('gasolio', null, name)
     });
   }
 
