@@ -107,7 +107,7 @@
   }
 
   /* ================= navigazione ================= */
-  const TITLES = { panoramica: ['Panoramica', ''], clienti: ['Clienti', 'Gestionali delle aziende che usano il Centro di Costo'], utenti: ['Utenti e permessi', 'Chi entra, in quale gestionale e cosa può fare'], incassi: ['Abbonamenti', 'Pagamenti, rinnovi e scadenze'], accessi: ['Accessi', 'Dispositivi collegati e tentativi di accesso'], registro: ['Registro attività', 'Tutto quello che succede, in ordine di tempo'], team: ['Team', 'Gli agenti che controllano e fanno crescere il Centro di Costo'], impostazioni: ['Impostazioni', 'Il tuo account e la Console'] };
+  const TITLES = { panoramica: ['Panoramica', ''], clienti: ['Clienti', 'Gestionali delle aziende che usano il Centro di Costo'], utenti: ['Utenti e permessi', 'Chi entra, in quale gestionale e cosa può fare'], incassi: ['Abbonamenti', 'Pagamenti, rinnovi e scadenze'], accessi: ['Accessi', 'Dispositivi collegati e tentativi di accesso'], registro: ['Registro attività', 'Tutto quello che succede, in ordine di tempo'], team: ['Team', 'Gli agenti che controllano e fanno crescere il Centro di Costo'], mappa: ['Mappa del gestionale', 'Ogni parte del Centro di Costo e come è collegata'], impostazioni: ['Impostazioni', 'Il tuo account e la Console'] };
   function route() {
     const h = decodeURIComponent(location.hash.slice(1)), [v, id] = h.split('/');
     const nv = TITLES[v] ? v : 'panoramica';
@@ -126,7 +126,8 @@
     if (!D) return;
     const el = $('#view'), y = el.scrollTop;
     el.classList.toggle('still', !anim || RM);
-    el.innerHTML = ({ panoramica: vHome, clienti: vClienti, utenti: vUtenti, incassi: vIncassi, accessi: vAccessi, registro: vRegistro, team: vTeam, impostazioni: vImpost }[view])();
+    el.innerHTML = ({ panoramica: vHome, clienti: vClienti, utenti: vUtenti, incassi: vIncassi, accessi: vAccessi, registro: vRegistro, team: vTeam, mappa: () => '<div id="mp-root"></div>', impostazioni: vImpost }[view])();
+    if (view === 'mappa' && window.CDC_MAP) { if (!T) loadTeam(); window.CDC_MAP.mount($('#mp-root'), { D, team: k => T ? tRep(k)[0] : null }); }
     el.scrollTop = anim ? 0 : y;
     countUp(el);
     if (!$('#drawer').hidden) refreshDrawer();
