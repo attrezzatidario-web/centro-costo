@@ -5,7 +5,7 @@
 const { chromium } = require('/opt/npm-tools/node_modules/playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
-const BUDGET = { boot1: 1500, boot4: 3500, sez: 400, home: 700 };
+const BUDGET = { boot1: 1500, boot4: 3500, first4: 1500, sez: 400, home: 700 };
 global.window = {}; require(ROOT + '/console/stress.js'); const G = window.CDC_STRESS.gen();
 const mod = {}; ['piazzali', 'gls', 'gasolio', 'lyreco', 'amazon', 'incassi', 'clienti', 'fornitori', 'magazzino', 'vendite'].forEach(k => mod[k] = true);
 const L = s => G.sheets[s];
@@ -24,12 +24,15 @@ let bad = 0; const chk = (what, ms, max) => { const ok = ms <= max; if (!ok) bad
   await p.addInitScript(u => { localStorage.setItem('cdc_tok', JSON.stringify('T')); localStorage.setItem('cdc_me', JSON.stringify(u)); localStorage.setItem('cdc_splash_d', new Date().toISOString().slice(0, 10)); }, user);
   await p.goto('http://localhost:8160/#home');
   await p.waitForFunction(() => /Sincronizzato/.test((document.querySelector('#sync-side') || {}).textContent || ''), null, { timeout: 120000 });
-  await p.waitForTimeout(3000);
+  await p.waitForTimeout(5000); // la Dashboard «ferma» si salva 3,5 s dopo
   const cdp = await ctx.newCDPSession(p);
   const homeReady = () => p.waitForFunction(() => { const h = document.querySelector('#v-home'); return h && !h.hidden && h.innerText.length > 800; }, null, { timeout: 60000, polling: 30 });
   for (const thr of [1, 4]) {
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: thr });
-    await p.reload({ waitUntil: 'commit' }); const t0 = Date.now(); await homeReady();
+    await p.reload({ waitUntil: 'commit' }); const t0 = Date.now();
+    await p.waitForFunction(() => { const h = document.querySelector('#v-snap') || document.querySelector('#v-home'); return h && !h.hidden && h.innerText.length > 800; }, null, { timeout: 60000, polling: 20 });
+    if (thr === 4) chk('prima immagine della Dashboard CPU ×4', Date.now() - t0, BUDGET.first4);
+    await homeReady();
     chk(`apertura (copia sul dispositivo) CPU ×${thr}`, Date.now() - t0, thr === 1 ? BUDGET.boot1 : BUDGET.boot4);
     await p.waitForTimeout(1500);
   }

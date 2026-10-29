@@ -145,17 +145,18 @@
     clearTimeout(toast._t); toast._t = setTimeout(() => { t.classList.add('out'); setTimeout(() => (t.hidden = true), 250); }, 2600);
   }
   const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let countOff = false; // v132: numeri subito al valore finale (dopo la Dashboard «ferma» non devono ripartire da zero)
   function countTo(el, value, fmt = eur) {
     if (!el) return;
     const to = Number(value) || 0, from = el._v != null ? el._v : 0;
     el._v = to;
-    if (reduced() || Math.abs(to - from) < 0.005) { el.textContent = fmt(to); return; }
+    if (reduced() || countOff || Math.abs(to - from) < 0.005) { el.textContent = fmt(to); return; }
     const t0 = performance.now(), dur = 750;
     cancelAnimationFrame(el._raf);
     const step = now => {
       const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
       el.textContent = fmt(from + (to - from) * e);
-      if (k < 1) el._raf = requestAnimationFrame(step);
+      if (k < 1) el._raf = requestAnimationFrame(step); else el._raf = 0;
     };
     el._raf = requestAnimationFrame(step);
   }
@@ -201,6 +202,7 @@
   const dvMemo = (k, fn) => { let v = DVC.get(k); if (v === undefined) { v = fn(); DVC.set(k, v); } return v; };
   function applyMany(ops) {
     dbChanged();
+    if (!ops || !ops.length) return;
     // versione veloce per molte righe
     const idx = new Map(db.movimenti.map((r, i) => [String(r.id), i]));
     const del = new Set();
@@ -428,7 +430,7 @@
     me = null; DEMO = false; try { localStorage.removeItem('cdc_me'); } catch {}
     db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] }; dbChanged();
     try { localStorage.removeItem('cdc_data'); } catch {}
-    clearTimeout(idbT); idbT = null; IDB.clear().catch(() => {}); // uscendo, la copia dei dati sparisce dal dispositivo
+    clearTimeout(idbT); idbT = null; IDB.clear().catch(() => {}); try { localStorage.removeItem('cdc_snap'); } catch {} // uscendo, la copia dei dati sparisce dal dispositivo
     document.body.classList.remove('is-admin', 'is-demo', 'is-ro'); const bar = $('#demo-bar'); if (bar) bar.remove();
     showLogin(msg);
   }
@@ -1193,7 +1195,12 @@
   }
 
   /* ================= ARTICOLI ================= */
+  // v132: con tutti gli acquisti il risultato si ricorda finché i dati non cambiano (la Dashboard e i controlli lo chiedono più volte)
   function articoli(rows) {
+    if (rows === db.movimenti) return dvMemo('articoli|' + ivaOn, () => articoliCalc(rows)).slice();
+    return articoliCalc(rows);
+  }
+  function articoliCalc(rows) {
     const m = groupBy(rows, prodKey);
     return [...m].map(([k, v]) => {
       const prices = v.map(pu).filter(p => p > 0);
@@ -2864,7 +2871,12 @@
   /* =========================================================
      DASHBOARD GENERALE — tutte le aree di spesa
      ========================================================= */
-  let ovP = '', ovAnim = true;
+  let ovP = '', ovAnim = true, snapShown = false, snapT = null;
+  // v132: tiene l'ultima Dashboard (a animazioni finite) per mostrarla subito alla prossima apertura
+  function snapSave() {
+    clearTimeout(snapT);
+    snapT = setTimeout(() => { try { const h = $('#v-home'); if (view !== 'home' || ovP || DEMO || isLocal() || !h || h.hidden || document.hidden) return; if ([...h.querySelectorAll('*')].some(e => e._raf)) return snapSave(); const html = h.innerHTML; if (html.length < 1.5e6) LS.set('cdc_snap', { k: dbKey(), h: html, s: ($('#subtitle') || {}).textContent || '' }); } catch {} }, 3500);
+  }
   const AREAS_ALL = [
     { k: 'att', t: 'Attrezzatura', go: 'attrezzatura', ic: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>' },
     { k: 'gls', t: 'Spedizioni GLS', go: 'gls', ic: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>' },
@@ -2906,7 +2918,9 @@
     const PT = PV ? AREAS.reduce((s, a) => s + PV[a.k], 0) : 0;
     const lit = gSum(P.gas, 'litri'), noPrice = P.gas.length && !P.gas.some(r => gPrezzo(r) > 0);
     const per = ovP ? mLabel(ovP) : months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length - 1])}` : 'nessun dato';
-    const anim = ovAnim && !reduced(); ovAnim = false;
+    const anim = ovAnim && !reduced() && !snapShown; ovAnim = false;
+    if (snapShown) { countOff = true; setTimeout(() => { countOff = false; }, 0); } snapShown = false;
+    snapSave();
     const body = $('#ov-body');
     body.classList.toggle('cc-anim', anim);
     const byM = months.map(m => { const o = { m }; AREAS.forEach(a => { o[a.k] = ovVal[a.k](pick(a.k, m), m); }); o.t = AREAS.reduce((s, a) => s + o[a.k], 0); return o; });
@@ -3044,13 +3058,15 @@
     $('#ov-bars').innerHTML = byM.length ? byM.map((x, i) => `<div class="ov-b${x.m === ovP ? ' on' : ''}" data-ovm="${x.m}" title="${esc(mLabel(x.m))}: ${esc(eur(x.t))}\n${AREAS.filter(a => x[a.k]).map(a => `${ovShort[a.k]}: ${eur(x[a.k])}`).join('\n')}"><span class="ov-bv">${esc(eur0(x.t))}</span><div class="ov-bc" style="height:${Math.max(1.5, x.t / mx * 100).toFixed(1)}%;--d:${i * 45}ms">${AREAS.slice().reverse().map(a => x[a.k] > 0 ? `<i class="a-${a.k}" style="flex:${x[a.k]}"></i>` : '').join('')}</div><span class="ov-bl">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}${x.m.slice(0, 4) !== String(new Date().getFullYear()) ? ' ' + x.m.slice(2, 4) : ''}</span></div>`).join('') : '<div class="empty">Nessun dato con data</div>';
 
     // ultimi movimenti
+    // v132: per ogni area solo le 8 righe più recenti (prima si ordinavano tutte le righe di tutte le aree per tenerne 8)
+    const top8 = (L, dk = r => String(r.data || '')) => { const o = []; for (const r of L) { const d = dk(r); if (o.length < 8) { o.push([d, r]); o.sort((a, b) => b[0].localeCompare(a[0])); } else if (d > o[7][0]) { o[7] = [d, r]; o.sort((a, b) => b[0].localeCompare(a[0])); } } return o.map(x => x[1]); };
     const lyFeed = [...groupBy(P.ly, r => String(r.fattura))].map(([id, v]) => ({ a: 'ly', d: v[0].data, t: `Fattura Lyreco ${id}`, s: [...new Set(v.map(r => lyName(r.cdc || LY_NONE)))].slice(0, 2).join(', '), v: lySum(v), go: 'lyreco' }));
     const feed = [
-      ...P.att.filter(r => validD(r.data)).map(r => ({ a: 'att', d: r.data, t: r.descrizione, s: r.centro, v: tot(r), go: 'movimenti' })),
-      ...P.gls.map(r => ({ a: 'gls', d: r.data, t: `${r.destinatario}`, s: `${r.citta} (${r.prov})`, v: num(r.totale) * gMul(), go: 'gls' })),
-      ...P.gas.map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' })),
+      ...top8(P.att.filter(r => validD(r.data))).map(r => ({ a: 'att', d: r.data, t: r.descrizione, s: r.centro, v: tot(r), go: 'movimenti' })),
+      ...top8(P.gls).map(r => ({ a: 'gls', d: r.data, t: `${r.destinatario}`, s: `${r.citta} (${r.prov})`, v: num(r.totale) * gMul(), go: 'gls' })),
+      ...top8(P.gas).map(r => ({ a: 'gas', d: r.data, t: `${plateFmt(plate(r.targa))} · ${fmtNum(num(r.litri), 1)} L`, s: r.uso || r.operatore, v: gPrezzo(r) ? num(r.litri) * gPrezzo(r) * gMul() : null, go: 'gasolio' })),
       ...lyFeed,
-      ...P.am.map(o => ({ a: 'am', d: o.data, t: String(o.articoli || 'Ordine Amazon').split(/\s*\|\s*/)[0], s: lyName(o.cdc || LY_NONE), v: amV(o), go: 'amazon' }))
+      ...top8(P.am).map(o => ({ a: 'am', d: o.data, t: String(o.articoli || 'Ordine Amazon').split(/\s*\|\s*/)[0], s: lyName(o.cdc || LY_NONE), v: amV(o), go: 'amazon' }))
     ].filter(x => areaOn(x.a)).sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 8);
     $('#ov-feed').innerHTML = feed.length ? feed.map((x, i) => `<a class="ov-fr a-${x.a}" href="#${x.go}" style="--d:${250 + i * 50}ms"><span class="ov-fi"><svg viewBox="0 0 24 24">${AREAS.find(a => a.k === x.a).ic}</svg></span><span class="ov-fm"><b>${esc(x.t)}</b><small>${esc(shortDate(x.d))}${x.s ? ' · ' + esc(x.s) : ''}</small></span><b class="ov-fv">${x.v == null ? '—' : esc(eur(x.v))}</b></a>`).join('') : '<div class="empty">Nessun movimento</div>';
 
@@ -5430,16 +5446,16 @@
   const faSoon = r => !faPaid(r) && validD(r.scadenza) && !faLate(r) && (parseD(r.scadenza) - parseD(today())) / 864e5 <= 7;
   const faRighe = r => { try { const x = JSON.parse(r.righe || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } };
   const faDdt = r => String(r.ddt || '').split(/[,;\s]+/).map(x => x.replace(/[^0-9a-z]/gi, '').toUpperCase()).filter(x => x.length > 2);
-  const normDoc = s => String(s || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
+  const normDoc = memo(s => String(s || '').replace(/[^0-9a-z]/gi, '').toUpperCase());
   const fornKey = s => String(s || '').toUpperCase().replace(/S\.?R\.?L\.?|S\.?P\.?A\.?|ITALIA|[^A-Z0-9 ]/g, ' ').trim().split(/\s+/)[0] || '';
   // v117: indice degli acquisti per numero di documento e per codice (prima ogni fattura scorreva tutti gli acquisti: con 1.500 fatture e 12.000 acquisti la sezione impiegava ~10 s)
   // vale solo per l'operazione in corso: si ricostruisce alla successiva, così segue sempre le modifiche
   let faIx = null;
   function faIndex() {
-    if (faIx && faIx.M === db.movimenti) return faIx;
+    if (faIx && faIx.M === db.movimenti && faIx.dv === dv) return faIx; // v132: tenuto finché i dati non cambiano
     const doc = new Map(), code = new Map(), pos = new Map(), add = (m, k, v) => { if (!k) return; let a = m.get(k); if (!a) m.set(k, a = []); a.push(v); };
     db.movimenti.forEach((m, i) => { pos.set(m, i); add(doc, m.ndoc ? normDoc(m.ndoc) : '', m); add(code, String(m.codice || '').trim().toUpperCase(), m); });
-    faIx = { M: db.movimenti, doc, code, pos }; setTimeout(() => { faIx = null; }, 0);
+    faIx = { M: db.movimenti, doc, code, pos, dv };
     return faIx;
   }
   const faByIdx = (a, b) => faIndex().pos.get(a) - faIndex().pos.get(b);
@@ -8848,7 +8864,7 @@
       ${pts.map((p, i) => `<circle class="pl-p${CH[i].ut < 0 ? ' neg' : ''}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.6"/>`).join('')}
     </svg><div class="pl-x">${CH.map(x => `<span class="${x.m === ovP ? 'on' : ''}" data-ovm="${x.m}" title="${esc(mLabel(x.m))}: ricavi ${esc(eur0(x.ric))} · costi ${esc(eur0(x.cost))} · utile ${esc(eur0(x.ut))}">${esc(MESI[Number(x.m.slice(5)) - 1].slice(0, 3))}</span>`).join('')}</div>`;
     // per sede: incassi della sede contro gli acquisti dello stesso centro
-    const inP = r => ovP ? String(r.data).slice(0, 7) === ovP : sel.some(x => x.m === String(r.data).slice(0, 7));
+    const selM = new Set(sel.map(x => x.m)), inP = r => ovP ? String(r.data).slice(0, 7) === ovP : selM.has(String(r.data).slice(0, 7));
     const SD = new Map(), up = s => String(s || '').trim().toUpperCase();
     if (modOn('incassi')) INC().filter(inP).forEach(r => { const k = up(r.sede); if (!k) return; const o = SD.get(k) || { r: 0, c: 0 }; o.r += incNet(r); SD.set(k, o); });
     if (SD.size) { const keep = ivaOn; ivaOn = false; try { (db.movimenti || []).filter(r => validD(r.data) && inP(r)).forEach(r => { const k = up(r.centro); if (SD.has(k)) SD.get(k).c += tot(r); }); } finally { ivaOn = keep; } }
@@ -9428,6 +9444,11 @@
     if (me) applyMe(me);
     $('#setup').hidden = true; $('#app').hidden = false;
     if (!DEMO && !isLocal()) {
+      // v132: mentre legge la copia dei dati mostra subito l'ultima Dashboard vista (immagine «ferma», non cliccabile), poi la sostituisce
+      try {
+        const hv = location.hash.slice(1) || 'home', sn = hv === 'home' && LS.get('cdc_snap', null), h0 = $('#v-home');
+        if (sn && sn.k === dbKey() && sn.h && h0) { const c = h0.cloneNode(false); c.id = 'v-snap'; c.removeAttribute('data-v'); c.innerHTML = sn.h; c.inert = true; c.hidden = false; $$('.view').forEach(v => { v.hidden = true; }); h0.after(c); snapShown = true; const t = $('#title'), st = $('#subtitle'); if (t) t.textContent = TITLES.home; if (st && sn.s) st.textContent = sn.s; }
+      } catch {}
       // apre subito con la copia salvata sul dispositivo; intanto chiede gli aggiornamenti al Foglio Google
       const legacy = localStorage.getItem('cdc_data') != null;
       const cached = await Promise.race([IDB.get(dbKey()).catch(() => null), new Promise(r => setTimeout(() => r(null), 4000))]);
@@ -9436,6 +9457,7 @@
       if (legacy) { if (!cached) idbSave(); try { localStorage.removeItem('cdc_data'); } catch {} }
     }
     setSync(); go();
+    const sv = $('#v-snap'); if (sv) sv.remove();
     if (!isLocal()) pull();
     if (DEMO && !LS.get('cdc_demo_set', '')) setTimeout(() => setForm(true), 400);
     else if (me && me.mustPw && !DEMO) setTimeout(() => pwForm(true), 900); // v95: la demo chiede quale attività provare
