@@ -69,7 +69,7 @@
   let queue = LS.get('cdc_queue', []);
   let syncing = false, online = navigator.onLine;
   const isLocal = () => url === 'local' || DEMO;
-  const save = () => { prodIdx = null; if (DEMO) return; LS.set('cdc_queue', queue); clearTimeout(idbT); idbT = setTimeout(idbSave, 1200); };
+  const save = () => { prodIdx = null; dbChanged(); if (DEMO) return; LS.set('cdc_queue', queue); clearTimeout(idbT); idbT = setTimeout(idbSave, 1200); };
   addEventListener('pagehide', () => { if (idbT) idbSave(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && idbT) idbSave(); });
 
@@ -96,7 +96,13 @@
   const today = () => ymd(new Date());
   const ymOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
   const parseD = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
-  const validD = s => /^\d{4}-\d{2}-\d{2}/.test(String(s || ''));
+  // v131: stessa regola di /^\d{4}-\d{2}-\d{2}/ ma senza espressione regolare (chiamata centinaia di migliaia di volte con tanti dati)
+  const validD = s => {
+    if (typeof s !== 'string') s = String(s || '');
+    if (s.length < 10 || s.charCodeAt(4) !== 45 || s.charCodeAt(7) !== 45) return false;
+    for (const i of [0, 1, 2, 3, 5, 6, 8, 9]) { const c = s.charCodeAt(i); if (c < 48 || c > 57) return false; }
+    return true;
+  };
   const monthName = key => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }); };
   const monthShort = key => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'short' }).replace('.', ''); };
   const shortDate = s => validD(s) ? parseD(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -189,7 +195,12 @@
     const i = db[k].findIndex(r => String(r.id) === String(op.row.id));
     if (i >= 0) db[k][i] = op.row; else db[k].push(op.row);
   }
+  // v131: «versione» dei dati: ogni modifica la fa avanzare e svuota i risultati ricordati (mesi, raggruppamenti…)
+  let dv = 0; const DVC = new Map();
+  const dbChanged = () => { dv++; DVC.clear(); };
+  const dvMemo = (k, fn) => { let v = DVC.get(k); if (v === undefined) { v = fn(); DVC.set(k, v); } return v; };
   function applyMany(ops) {
+    dbChanged();
     // versione veloce per molte righe
     const idx = new Map(db.movimenti.map((r, i) => [String(r.id), i]));
     const del = new Set();
@@ -408,14 +419,14 @@
   }
   function setSession(u, t) {
     const same = me && me.email === u.email && me.ws === u.ws && !me.demo && !u.demo;
-    if (!same) { queue = []; LS.set('cdc_queue', []); try { localStorage.removeItem('cdc_data'); } catch {} db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] }; }
+    if (!same) { queue = []; LS.set('cdc_queue', []); try { localStorage.removeItem('cdc_data'); } catch {} db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] }; dbChanged(); }
     tok = t; LS.set('cdc_tok', tok);
     me = null; DEMO = !!u.demo; applyMe(u);
   }
   function lockApp(msg) {
     tok = ''; LS.set('cdc_tok', '');
     me = null; DEMO = false; try { localStorage.removeItem('cdc_me'); } catch {}
-    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] };
+    db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], pdf: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [] }; dbChanged();
     try { localStorage.removeItem('cdc_data'); } catch {}
     clearTimeout(idbT); idbT = null; IDB.clear().catch(() => {}); // uscendo, la copia dei dati sparisce dal dispositivo
     document.body.classList.remove('is-admin', 'is-demo', 'is-ro'); const bar = $('#demo-bar'); if (bar) bar.remove();
@@ -586,11 +597,17 @@
     try {
       setSync('Aggiorno…');
       if (!tok) { showLogin(); return; }
-      const j = await post('all');
-      db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [], incassi: j.data.incassi || [], fornitori: j.data.fornitori || [], dipendenti: j.data.dipendenti || [], presenze: j.data.presenze || [], assenze: j.data.assenze || [], staff: j.data.staff || [] };
+      // v131: con lo script cdc-5.4 si scaricano solo le righe cambiate dall'ultima volta («since»).
+      // Tutto da capo: col pulsante «Aggiorna», la prima volta, o se l'ultima lettura completa ha più di 6 ore (modifiche fatte a mano nei fogli)
+      const since = !showToast && db.syncT && Date.now() - (db.fullT || 0) < 6 * 3600e3 ? db.syncT : 0;
+      const j = await post('all', since ? { since } : {});
+      let changed = true;
+      if (j.data && j.data.delta) changed = mergeDelta(j.data, j.v);
+      else db = { movimenti: j.data.movimenti || [], config: j.data.config || {}, ai: !!j.data.ai, aik: j.data.aiKeys || { gemini: !!j.data.ai }, aiFirst: j.data.aiFirst || 'gemini', v: j.v, gls: j.data.gls || (j.v >= 'cdc-1.1' ? [] : db.gls || []), gasolio: j.data.gasolio || (j.v >= 'cdc-1.2' ? [] : db.gasolio || []), pdf: j.data.pdf || [], fatture: j.data.fatture || (j.v >= 'cdc-1.4' ? [] : db.fatture || []), lyreco: j.data.lyreco || (j.v >= 'cdc-1.6' ? [] : db.lyreco || []), lyfatture: j.data.lyfatture || (j.v >= 'cdc-1.6' ? [] : db.lyfatture || []), amazon: j.data.amazon || (j.v >= 'cdc-1.7' ? [] : db.amazon || []), amazonart: j.data.amazonart || (j.v >= 'cdc-1.7' ? [] : db.amazonart || []) , clienti: j.data.clienti || [], articoli: j.data.articoli || [], magmov: j.data.magmov || [], ddt: j.data.ddt || [], vendite: j.data.vendite || [], incassi: j.data.incassi || [], fornitori: j.data.fornitori || [], dipendenti: j.data.dipendenti || [], presenze: j.data.presenze || [], assenze: j.data.assenze || [], staff: j.data.staff || [], fullT: j.data.t ? Date.now() : 0 };
+      db.syncT = j.data.t || 0;
       if (j.data.user) applyMe(j.data.user);
-      applyMany(queue);
-      pulledAt = Date.now(); online = true; save(); render();
+      pulledAt = Date.now(); online = true;
+      if (changed) { applyMany(queue); save(); render(); } else { clearTimeout(idbT); idbT = setTimeout(idbSave, 1200); } // niente di nuovo: la pagina non si ridisegna
       if (showToast) toast('Dati aggiornati');
     } catch (e) {
       if (e instanceof AuthError) return;
@@ -598,6 +615,25 @@
       if (showToast) toast('Impossibile collegarsi');
     }
     setSync(); flush();
+  }
+  // v131: unisce le righe cambiate (upsert per id), toglie quelle eliminate, sostituisce i fogli riletti per intero
+  function mergeDelta(d, v) {
+    const full = new Set(d.full || []), del = d.del || {};
+    let ch = full.size > 0 || !!(d.config && Object.keys(d.config).length) || !!(del.config && del.config.length) || JSON.stringify(d.pdf || []) !== JSON.stringify(db.pdf || []) || (!!d.staff && JSON.stringify(d.staff) !== JSON.stringify(db.staff || []));
+    Object.values(KEY).forEach(k => {
+      if (full.has(k)) { db[k] = d[k] || []; return; }
+      const up = d[k] || [], dl = new Set((del[k] || []).map(String));
+      if (!up.length && !dl.size) return;
+      ch = true;
+      const L = db[k] || (db[k] = []), ix = new Map(L.map((r, i) => [String(r.id), i]));
+      up.forEach(r => { const i = ix.get(String(r.id)); if (i != null) L[i] = r; else { ix.set(String(r.id), L.length); L.push(r); } });
+      if (dl.size) db[k] = L.filter(r => !dl.has(String(r.id)));
+    });
+    if (full.has('config')) db.config = d.config || {};
+    else { if (d.config) Object.assign(db.config || (db.config = {}), d.config); (del.config || []).forEach(x => { delete db.config[x]; }); }
+    Object.assign(db, { ai: !!d.ai, aik: d.aiKeys || db.aik || { gemini: !!d.ai }, aiFirst: d.aiFirst || db.aiFirst || 'gemini', v, pdf: d.pdf || db.pdf || [] });
+    if (d.staff) db.staff = d.staff;
+    return ch;
   }
   function setSync(txt) {
     ['#sync', '#sync-side'].forEach(s => {
@@ -1257,7 +1293,7 @@
     openSheet(demoPick ? 'Che attività vuoi provare?' : 'Tipo di attività', `<p class="pvx-intro">${demoPick ? 'La demo si adatta all\'attività che scegli: nomi delle sedi, sezioni, categorie di spesa e dati di prova. Puoi cambiarla quando vuoi dalla barra in alto.' : 'Cambiando attività cambiano i nomi delle sedi, le categorie di spesa proposte e le sezioni accese di partenza. I dati già inseriti restano tutti.'}</p>${setGrid(sel)}`, async () => {
       if (DEMO) {
         LS.set('cdc_demo_set', sel);
-        try { await loadLib('demo.js'); db = window.CDC_DEMO(sel); } catch {}
+        try { await loadLib('demo.js'); db = window.CDC_DEMO(sel); } catch {} dbChanged();
         applySettore(true); prodIdx = null; ovAnim = true; render(); renderDemoBar(); toast(`Demo · ${settore().s || settore().n}`); return true;
       }
       if (sel === settoreId()) return true;
@@ -2469,7 +2505,7 @@
   const plate = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const plateFmt = p => /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(p) ? `${p.slice(0, 2)} ${p.slice(2, 5)} ${p.slice(5)}` : p;
   const L = (v, d = 0) => fmtNum(v, d) + ' L';
-  const gasMonths = () => [...new Set(gasRows().map(r => String(r.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort();
+  const gasMonths = () => dvMemo('gasMonths', () => [...new Set(gasRows().map(r => String(r.data).slice(0, 7)).filter(k => /^\d{4}-\d\d$/.test(k)))].sort()).slice();
   const gasNorm = s => String(s || '').trim().replace(/\s+/g, ' ').toUpperCase();
   const gasRange = () => { const m = gasMonths(); return m.length ? monthSpan(m[0], m[m.length - 1]) : []; };
   const rentMonths = p => p ? (gasRange().includes(p) ? [p] : []) : gasRange();
@@ -2861,7 +2897,7 @@
     const opts = ['', ...months.slice().reverse()], ix = opts.indexOf(ovP);
     $('#ov-prev').disabled = ix >= opts.length - 1; $('#ov-next').disabled = ix <= 0;
     sub(modOn('incassi') || modOn('vendite') ? `${ivaLbl()} · ricavi, spese e utile` : `${ivaLbl()} · tutte le aree di spesa`);
-    const pick = (k, m) => m ? D[k].filter(r => ovMonthOf[k](r) === m) : D[k];
+    const grpM = {}, pick = (k, m) => m ? ((grpM[k] || (grpM[k] = groupBy(D[k], ovMonthOf[k]))).get(m) || []) : D[k]; // v131: rows raggruppate per mese una volta sola
     const P = {}, V = {};
     AREAS_ALL.forEach(a => { const on = areaOn(a.k); P[a.k] = on ? pick(a.k, ovP) : []; V[a.k] = on ? ovVal[a.k](P[a.k], ovP) : 0; });
     const T = AREAS.reduce((s, a) => s + V[a.k], 0);
@@ -9388,7 +9424,7 @@
   async function start() {
     if (top !== self) { try { top.location = self.location; } catch { document.body.innerHTML = ''; } return; }
     if (url !== 'local' && (!me || (!tok && !me.demo))) { showLogin(); return; }
-    if (DEMO) { try { await loadLib('demo.js'); db = window.CDC_DEMO(settoreId()); } catch { db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [], pdf: [] }; } }
+    if (DEMO) { try { await loadLib('demo.js'); db = window.CDC_DEMO(settoreId()); } catch { db = { movimenti: [], config: {}, ai: false, gls: [], gasolio: [], fatture: [], lyreco: [], lyfatture: [], amazon: [], amazonart: [], pdf: [] }; dbChanged(); } }
     if (me) applyMe(me);
     $('#setup').hidden = true; $('#app').hidden = false;
     if (!DEMO && !isLocal()) {
@@ -9396,6 +9432,7 @@
       const legacy = localStorage.getItem('cdc_data') != null;
       const cached = await Promise.race([IDB.get(dbKey()).catch(() => null), new Promise(r => setTimeout(() => r(null), 4000))]);
       if (cached && cached.movimenti && !pulledAt) { db = cached; applyMany(queue); }
+      dbChanged();
       if (legacy) { if (!cached) idbSave(); try { localStorage.removeItem('cdc_data'); } catch {} }
     }
     setSync(); go();
@@ -9454,9 +9491,11 @@
     };
     sp.addEventListener('click', () => { skip = true; });
 
-    if (reduced()) {
+    // v131: l'animazione completa (circa 3 secondi) solo alla prima apertura della giornata; le altre volte il logo compare e va subito al suo posto
+    let seen = false; try { seen = localStorage.getItem('cdc_splash_d') === today(); localStorage.setItem('cdc_splash_d', today()); } catch {}
+    if (reduced() || seen) {
       bars.forEach(b => set(b, { opacity: 0 })); set(ic, { opacity: 1 }); [sq, ring, hand, slice].forEach(e => set(e, { opacity: 1, strokeDashoffset: 0, transform: 'none' })); sq.setAttribute('rx', 116);
-      letters.forEach(l => set(l, { opacity: 1 })); set(tag, { opacity: 1, letterSpacing: '.24em' }); return setTimeout(finish, 600);
+      letters.forEach(l => set(l, { opacity: 1 })); set(tag, { opacity: 1, letterSpacing: '.24em' }); return setTimeout(finish, seen && !reduced() ? 120 : 600);
     }
 
     // 1 · sfondo: puntinato e alone
